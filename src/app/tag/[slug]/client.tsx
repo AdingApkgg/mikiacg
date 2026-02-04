@@ -1,12 +1,12 @@
 "use client";
 
-import { useEffect } from "react";
+import { useState } from "react";
 import { trpc } from "@/lib/trpc";
 import { VideoGrid } from "@/components/video/video-grid";
 import { Button } from "@/components/ui/button";
-import { useInView } from "react-intersection-observer";
 import Link from "next/link";
 import { Tag } from "lucide-react";
+import { Pagination } from "@/components/ui/pagination";
 import type { SerializedTag } from "./page";
 
 interface TagPageClientProps {
@@ -15,7 +15,7 @@ interface TagPageClientProps {
 }
 
 export function TagPageClient({ slug, initialTag }: TagPageClientProps) {
-  const { ref, inView } = useInView();
+  const [page, setPage] = useState(1);
 
   // 客户端获取标签数据（如果需要刷新）
   const { data: tag, isLoading: tagLoading } = trpc.tag.getBySlug.useQuery(
@@ -33,24 +33,16 @@ export function TagPageClient({ slug, initialTag }: TagPageClientProps) {
   const {
     data,
     isLoading,
-    fetchNextPage,
-    hasNextPage,
-    isFetchingNextPage,
-  } = trpc.video.list.useInfiniteQuery(
-    { limit: 20, tagId: displayTag?.id },
+  } = trpc.video.list.useQuery(
+    { limit: 20, page, tagId: displayTag?.id },
     {
-      getNextPageParam: (lastPage) => lastPage.nextCursor,
       enabled: !!displayTag?.id,
+      placeholderData: (prev) => prev,
     }
   );
 
-  useEffect(() => {
-    if (inView && hasNextPage && !isFetchingNextPage) {
-      fetchNextPage();
-    }
-  }, [inView, hasNextPage, isFetchingNextPage, fetchNextPage]);
-
-  const videos = data?.pages.flatMap((page) => page.videos) ?? [];
+  const videos = data?.videos ?? [];
+  const totalPages = data?.totalPages ?? 1;
 
   // 标签不存在
   if (!initialTag && !displayTag && !tagLoading) {
@@ -83,17 +75,13 @@ export function TagPageClient({ slug, initialTag }: TagPageClientProps) {
 
       <VideoGrid videos={videos} isLoading={isLoading || (!initialTag && tagLoading)} />
 
-      {hasNextPage && (
-        <div ref={ref} className="flex justify-center py-8">
-          {isFetchingNextPage ? (
-            <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary" />
-          ) : (
-            <Button variant="outline" onClick={() => fetchNextPage()}>
-              加载更多
-            </Button>
-          )}
-        </div>
-      )}
+      {/* 分页器 */}
+      <Pagination
+        currentPage={page}
+        totalPages={totalPages}
+        onPageChange={setPage}
+        className="mt-8"
+      />
 
       {!isLoading && videos.length === 0 && displayTag && (
         <div className="text-center py-12">

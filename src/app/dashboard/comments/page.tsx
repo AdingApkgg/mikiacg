@@ -464,7 +464,7 @@ export default function AdminCommentsPage() {
                       {/* 视频链接和互动数据 */}
                       <div className="mt-2 flex items-center gap-4 text-xs text-muted-foreground">
                         <Link
-                          href={`/video/${comment.video.id}`}
+                          href={`/v/${comment.video.id}`}
                           className="hover:underline flex items-center gap-1"
                         >
                           <ExternalLink className="h-3 w-3" />

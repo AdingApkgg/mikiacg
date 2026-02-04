@@ -4,12 +4,13 @@ import { memo } from "react";
 import Link from "next/link";
 import { VideoCover } from "./video-cover";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
+import { Badge } from "@/components/ui/badge";
 import {
   HoverCard,
   HoverCardContent,
   HoverCardTrigger,
 } from "@/components/ui/hover-card";
-import { Play, Eye, Heart, User, Clock } from "lucide-react";
+import { Play, Eye, ThumbsUp, User, Clock } from "lucide-react";
 import { formatDuration, formatViews, formatRelativeTime } from "@/lib/format";
 
 interface VideoCardProps {
@@ -19,23 +20,34 @@ interface VideoCardProps {
     coverUrl?: string | null;
     duration?: number | null;
     views: number;
-    createdAt: Date;
+    createdAt: Date | string;
     uploader: {
       id: string;
       username: string;
       nickname?: string | null;
       avatar?: string | null;
     };
+    tags?: { tag: { id: string; name: string; slug: string } }[];
     _count: {
       likes: number;
-      favorites: number;
+      dislikes?: number;
+      favorites?: number;
     };
   };
   index?: number;
+  showTags?: boolean;
 }
 
-function VideoCardComponent({ video, index = 0 }: VideoCardProps) {
+function VideoCardComponent({ video, index = 0, showTags = false }: VideoCardProps) {
   const uploaderName = video.uploader.nickname || video.uploader.username;
+  
+  // 计算好评率（参考 hanime1.me 的 thumb_up 百分比）
+  const totalVotes = video._count.likes + (video._count.dislikes || 0);
+  const likeRatio = totalVotes > 0 ? Math.round((video._count.likes / totalVotes) * 100) : 100;
+  const likeRatioColor = likeRatio >= 90 ? "text-green-400" : likeRatio >= 70 ? "text-yellow-400" : "text-red-400";
+  
+  // 获取前3个标签
+  const displayTags = video.tags?.slice(0, 3) || [];
   
   return (
     <div 
@@ -44,10 +56,11 @@ function VideoCardComponent({ video, index = 0 }: VideoCardProps) {
         animationDelay: `${index * 50}ms`,
       }}
     >
-      <Link href={`/video/${video.id}`} className="block">
+      <Link href={`/v/${video.id}`} className="block">
         {/* 封面容器 */}
         <div className="relative aspect-video overflow-hidden rounded-xl bg-muted shadow-sm group-hover:shadow-xl transition-shadow duration-300">
           <VideoCover
+            videoId={video.id}
             coverUrl={video.coverUrl}
             title={video.title}
             className="transition-transform duration-500 ease-out group-hover:scale-105"
@@ -71,17 +84,34 @@ function VideoCardComponent({ video, index = 0 }: VideoCardProps) {
             </div>
           )}
 
-          {/* 统计信息 - 左下角 */}
-          <div className="absolute bottom-2.5 left-2.5 flex items-center gap-2.5 text-white/90 text-xs">
+          {/* 统计信息 - 左下角：好评率 + 观看次数 */}
+          <div className="absolute bottom-2.5 left-2.5 flex items-center gap-2 text-white/90 text-xs">
+            {/* 好评率（类似 hanime1.me 的 thumb_up 100%） */}
+            <span className={`flex items-center gap-1 bg-black/60 backdrop-blur-sm px-1.5 py-0.5 rounded ${likeRatioColor}`}>
+              <ThumbsUp className="h-3 w-3" />
+              {likeRatio}%
+            </span>
+            {/* 观看次数 */}
             <span className="flex items-center gap-1 bg-black/50 backdrop-blur-sm px-1.5 py-0.5 rounded">
               <Eye className="h-3 w-3" />
               {formatViews(video.views)}
             </span>
-            <span className="flex items-center gap-1 bg-black/50 backdrop-blur-sm px-1.5 py-0.5 rounded">
-              <Heart className="h-3 w-3" />
-              {video._count.likes}
-            </span>
           </div>
+          
+          {/* 标签展示 - 顶部（可选） */}
+          {showTags && displayTags.length > 0 && (
+            <div className="absolute top-2 left-2 right-12 flex flex-wrap gap-1 overflow-hidden max-h-6">
+              {displayTags.map(({ tag }) => (
+                <Badge 
+                  key={tag.id} 
+                  variant="secondary" 
+                  className="text-[10px] px-1.5 py-0 h-5 bg-black/60 text-white/90 border-0 backdrop-blur-sm"
+                >
+                  {tag.name}
+                </Badge>
+              ))}
+            </div>
+          )}
         </div>
 
         {/* 信息区域 */}

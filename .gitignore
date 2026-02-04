@@ -53,3 +53,6 @@ deploy/rathole-server.toml
 *.tsbuildinfo
 next-env.d.ts
 .history
+
+# Cache covers
+public/cache/covers/

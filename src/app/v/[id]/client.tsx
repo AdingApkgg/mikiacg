@@ -269,7 +269,7 @@ export function VideoPageClient({ id, initialVideo }: VideoPageClientProps) {
       <BreadcrumbJsonLd
         items={[
           { name: "首页", url: baseUrl },
-          { name: displayVideo.title, url: `${baseUrl}/video/${displayVideo.id}` },
+          { name: displayVideo.title, url: `${baseUrl}/v/${displayVideo.id}` },
         ]}
       />
 
@@ -296,7 +296,7 @@ export function VideoPageClient({ id, initialVideo }: VideoPageClientProps) {
                   </DropdownMenuTrigger>
                   <DropdownMenuContent align="end">
                     <DropdownMenuItem asChild>
-                      <Link href={`/video/edit/${id}`}>
+                      <Link href={`/v/edit/${id}`}>
                         <Edit className="mr-2 h-4 w-4" />
                         编辑视频
                       </Link>
@@ -480,7 +480,7 @@ export function VideoPageClient({ id, initialVideo }: VideoPageClientProps) {
                   return (
                     <Link
                       key={ep.video.id}
-                      href={`/video/${ep.video.id}`}
+                      href={`/v/${ep.video.id}`}
                       className={`flex items-center gap-3 p-3 border-b last:border-b-0 transition-colors ${
                         isCurrentVideo ? "bg-primary/10" : "hover:bg-muted/50"
                       }`}
@@ -604,7 +604,7 @@ function MoreVideosContent({ videoId }: { videoId: string }) {
         {videos.map((video) => (
           <Link
             key={video.id}
-            href={`/video/${video.id}`}
+            href={`/v/${video.id}`}
             className="flex gap-3 group"
           >
             {/* 封面 */}

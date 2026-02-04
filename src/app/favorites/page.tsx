@@ -218,7 +218,7 @@ export default function FavoritesPage() {
 
                 {/* 封面 */}
                 <Link
-                  href={`/video/${video.id}`}
+                  href={`/v/${video.id}`}
                   className="relative w-40 h-24 flex-shrink-0 rounded-md overflow-hidden bg-muted"
                 >
                   {video.coverUrl ? (
@@ -243,7 +243,7 @@ export default function FavoritesPage() {
                 {/* 信息 */}
                 <div className="flex-1 min-w-0">
                   <Link
-                    href={`/video/${video.id}`}
+                    href={`/v/${video.id}`}
                     className="font-medium hover:text-primary line-clamp-2"
                   >
                     {video.title}

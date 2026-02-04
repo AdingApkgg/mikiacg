@@ -407,7 +407,7 @@ export default function MyVideosPage() {
 
                 {/* 封面 */}
                 <Link
-                  href={`/video/${video.id}`}
+                  href={`/v/${video.id}`}
                   className="relative w-40 h-24 flex-shrink-0 rounded-md overflow-hidden bg-muted"
                 >
                   {video.coverUrl ? (
@@ -434,7 +434,7 @@ export default function MyVideosPage() {
                   <div className="flex items-start justify-between gap-2">
                     <div className="min-w-0 flex-1">
                       <Link
-                        href={`/video/${video.id}`}
+                        href={`/v/${video.id}`}
                         className="font-medium hover:text-primary line-clamp-2"
                       >
                         {video.title}
@@ -487,13 +487,13 @@ export default function MyVideosPage() {
                         </DropdownMenuTrigger>
                         <DropdownMenuContent align="end">
                           <DropdownMenuItem asChild>
-                            <Link href={`/video/${video.id}`} target="_blank">
+                            <Link href={`/v/${video.id}`} target="_blank">
                               <ExternalLink className="h-4 w-4 mr-2" />
                               查看视频
                             </Link>
                           </DropdownMenuItem>
                           <DropdownMenuItem asChild>
-                            <Link href={`/video/edit/${video.id}`}>
+                            <Link href={`/v/edit/${video.id}`}>
                               <Edit className="h-4 w-4 mr-2" />
                               编辑视频
                             </Link>

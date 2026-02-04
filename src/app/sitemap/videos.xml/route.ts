@@ -19,7 +19,7 @@ export async function GET() {
 ${videos
   .map(
     (video) => `  <url>
-    <loc>${baseUrl}/video/${video.id}</loc>
+    <loc>${baseUrl}/v/${video.id}</loc>
     <lastmod>${video.updatedAt.toISOString()}</lastmod>
     <changefreq>weekly</changefreq>
     <priority>0.9</priority>

@@ -74,7 +74,7 @@ export async function generateMetadata({ params }: VideoPageProps): Promise<Meta
       type: "video.other",
       title: video.title,
       description,
-      url: `${baseUrl}/video/${id}`,
+      url: `${baseUrl}/v/${id}`,
       images: video.coverUrl ? [
         {
           url: video.coverUrl,

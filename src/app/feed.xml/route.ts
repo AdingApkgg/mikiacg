@@ -45,8 +45,8 @@ export async function GET() {
         (video) => `
     <item>
       <title>${escapeXml(video.title)}</title>
-      <link>${baseUrl}/video/${video.id}</link>
-      <guid isPermaLink="true">${baseUrl}/video/${video.id}</guid>
+      <link>${baseUrl}/v/${video.id}</link>
+      <guid isPermaLink="true">${baseUrl}/v/${video.id}</guid>
       <description><![CDATA[${video.description || video.title}]]></description>
       <pubDate>${new Date(video.createdAt).toUTCString()}</pubDate>
       <author>${escapeXml(video.uploader.nickname || video.uploader.username)}</author>

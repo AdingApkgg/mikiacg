@@ -13,7 +13,7 @@ import { useIsMounted } from "@/components/motion";
 const SIDEBAR_COLLAPSED_KEY = "acgn-flow-sidebar-collapsed";
 
 // 这些页面侧边栏覆盖模式（展开时覆盖内容，不推移）
-const overlaySidebarPaths = ["/video/"];
+const overlaySidebarPaths = ["/v/"];
 
 // 这些页面完全不显示侧边栏
 const noSidebarPaths = ["/login", "/register", "/forgot-password"];

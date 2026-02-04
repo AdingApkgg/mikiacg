@@ -162,7 +162,7 @@ enum VerificationType {
 // ==================== 视频相关 ====================
 
 model Video {
-  id          String      @id // 使用短 ID (nanoid 10位)
+  id          String      @id // 随机 6 位数字 ID (000000-999999)
   title       String
   description String?     @db.Text
   coverUrl    String?     // 可选，不填则显示默认封面

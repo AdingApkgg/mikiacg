@@ -64,7 +64,7 @@ ${popularTags.map((tag) => `- [${tag.name}](${baseUrl}/tag/${tag.slug}) (${tag._
 ${recentVideos
   .map(
     (video) => `### ${video.title}
-- URL: ${baseUrl}/video/${video.id}
+- URL: ${baseUrl}/v/${video.id}
 - 上传者: ${video.uploader.nickname || video.uploader.username}
 - 观看次数: ${video.views}
 - 上传时间: ${new Date(video.createdAt).toISOString().split("T")[0]}
@@ -120,7 +120,7 @@ ${statsSection}${tagsSection}${recentVideosSection}
 ### 页面结构
 
 - 首页 (${baseUrl}): 展示最新和热门视频
-- 视频页 (${baseUrl}/video/{id}): 单个视频详情
+- 视频页 (${baseUrl}/v/{id}): 单个视频详情
 - 标签页 (${baseUrl}/tag/{slug}): 按标签浏览视频
 - 用户页 (${baseUrl}/user/{id}): 用户主页和上传视频
 - 搜索页 (${baseUrl}/search?q={query}): 搜索视频

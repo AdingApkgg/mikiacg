@@ -3,6 +3,99 @@ import { TRPCError } from "@trpc/server";
 import { router, publicProcedure, protectedProcedure } from "../trpc";
 
 export const seriesRouter = router({
+  // 获取所有公开合集（首页用，页码分页）
+  list: publicProcedure
+    .input(z.object({
+      limit: z.number().min(1).max(50).default(12),
+      page: z.number().min(1).default(1),
+      sortBy: z.enum(["latest", "videoCount", "views"]).default("latest"),
+    }))
+    .query(async ({ ctx, input }) => {
+      const { limit, page, sortBy } = input;
+
+      // 构建排序条件
+      const orderBy = sortBy === "videoCount"
+        ? { episodes: { _count: "desc" as const } }
+        : sortBy === "views"
+        ? { updatedAt: "desc" as const } // 暂时用更新时间代替
+        : { updatedAt: "desc" as const };
+
+      const skip = (page - 1) * limit;
+
+      const [series, totalCount] = await Promise.all([
+        ctx.prisma.series.findMany({
+          include: {
+            creator: {
+              select: {
+                id: true,
+                username: true,
+                nickname: true,
+                avatar: true,
+              },
+            },
+            _count: { select: { episodes: true } },
+            episodes: {
+              take: 4,
+              orderBy: { episodeNum: "asc" },
+              include: {
+                video: {
+                  select: {
+                    id: true,
+                    coverUrl: true,
+                    title: true,
+                    views: true,
+                  },
+                },
+              },
+            },
+          },
+          orderBy,
+          take: limit,
+          skip,
+        }),
+        ctx.prisma.series.count(),
+      ]);
+
+      // 计算合集总播放量
+      const seriesWithStats = await Promise.all(
+        series.map(async (s) => {
+          const totalViews = await ctx.prisma.video.aggregate({
+            where: {
+              seriesEpisodes: {
+                some: { seriesId: s.id },
+              },
+            },
+            _sum: { views: true },
+          });
+
+          return {
+            id: s.id,
+            title: s.title,
+            description: s.description,
+            coverUrl: s.coverUrl || s.episodes[0]?.video.coverUrl || null,
+            creator: s.creator,
+            episodeCount: s._count.episodes,
+            totalViews: totalViews._sum.views || 0,
+            previewVideos: s.episodes.map(ep => ({
+              id: ep.video.id,
+              coverUrl: ep.video.coverUrl,
+              title: ep.video.title,
+            })),
+            updatedAt: s.updatedAt,
+          };
+        })
+      );
+
+      const totalPages = Math.ceil(totalCount / limit);
+
+      return {
+        items: seriesWithStats,
+        totalCount,
+        totalPages,
+        currentPage: page,
+      };
+    }),
+
   // 获取用户的所有合集
   listByUser: publicProcedure
     .input(z.object({

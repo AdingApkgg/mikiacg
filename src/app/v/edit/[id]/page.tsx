@@ -1,27 +1,27 @@
 "use client";
 
-import { useState } from "react";
-import { useRouter } from "next/navigation";
+import { use, useEffect, useState } from "react";
 import { useSession } from "next-auth/react";
+import { useRouter } from "next/navigation";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
+import { trpc } from "@/lib/trpc";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage, FormDescription } from "@/components/ui/form";
-import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Separator } from "@/components/ui/separator";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
+import { Skeleton } from "@/components/ui/skeleton";
 import { toast } from "sonner";
 import {
   Loader2,
-  Upload,
-  Layers,
+  ArrowLeft,
   Plus,
   X,
   Eye,
@@ -38,12 +38,9 @@ import {
   ListVideo,
   AlertCircle,
   Trash2,
-  FileText,
-  CheckCircle,
-  XCircle,
-  FolderOpen,
+  Save,
+  Layers,
 } from "lucide-react";
-import { trpc } from "@/lib/trpc";
 import {
   Select,
   SelectContent,
@@ -56,196 +53,60 @@ import { VideoPlayer } from "@/components/video/video-player";
 import { cn } from "@/lib/utils";
 import type { VideoExtraInfo } from "@/lib/shortcode-parser";
 
-const uploadSchema = z.object({
-  title: z.string().min(1, "请输入标题").max(100, "标题最多100个字符"),
+const editSchema = z.object({
+  title: z.string().min(1, "标题不能为空").max(100, "标题最多100个字符"),
   description: z.string().max(5000, "简介最多5000个字符").optional().or(z.literal("")),
   coverUrl: z.string().url("请输入有效的封面URL").optional().or(z.literal("")),
   videoUrl: z.string().url("请输入有效的视频URL"),
 });
 
-type UploadForm = z.infer<typeof uploadSchema>;
+type EditForm = z.infer<typeof editSchema>;
 
-// 批量导入数据结构
-interface ParsedVideo {
-  title: string;
-  description: string;
-  coverUrl: string;
-  videoUrl: string;
-  tags: string[];
+interface EditVideoPageProps {
+  params: Promise<{ id: string }>;
 }
 
-interface ParsedSeries {
-  seriesTitle: string;
-  videos: ParsedVideo[];
-}
-
-interface ParsedBatchData {
-  series: ParsedSeries[];
-  totalVideos: number;
-}
-
-/**
- * 解析批量导入文本
- * 
- * 格式（每行一个字段，用前缀标识）：
- * 
- * 合集：作者名
- * 
- * 标题：视频标题1
- * 描述：视频描述（可选）
- * 封面：封面URL（可选）
- * 视频：视频URL
- * 标签：标签1,标签2,标签3（可选）
- * 
- * 标题：视频标题2
- * 视频：视频URL
- * 标签：标签1,标签2
- * 
- * 合集：另一个作者
- * 
- * 标题：视频标题3
- * ...
- */
-function parseBatchInput(input: string): ParsedBatchData {
-  const lines = input.split('\n');
-  const series: ParsedSeries[] = [];
-  let currentSeries: ParsedSeries | null = null;
-  let currentVideo: Partial<ParsedVideo> = {};
-
-  // 解析带前缀的行
-  const parseField = (line: string): { key: string; value: string } | null => {
-    const trimmed = line.trim();
-    // 支持中英文冒号
-    const match = trimmed.match(/^(合集|标题|描述|封面|视频|标签)[：:]\s*(.*)$/);
-    if (match) {
-      return { key: match[1], value: match[2].trim() };
-    }
-    return null;
-  };
-
-  // 保存当前视频
-  const saveCurrentVideo = () => {
-    if (currentVideo.title && currentVideo.videoUrl) {
-      if (!currentSeries) {
-        currentSeries = { seriesTitle: '', videos: [] };
-      }
-      currentSeries.videos.push({
-        title: currentVideo.title || '',
-        description: currentVideo.description || '',
-        coverUrl: currentVideo.coverUrl || '',
-        videoUrl: currentVideo.videoUrl || '',
-        tags: currentVideo.tags || [],
-      });
-    }
-    currentVideo = {};
-  };
-
-  for (const line of lines) {
-    const field = parseField(line);
-    
-    if (!field) {
-      // 空行时保存当前视频
-      if (line.trim() === '' && currentVideo.title) {
-        saveCurrentVideo();
-      }
-      continue;
-    }
-
-    switch (field.key) {
-      case '合集':
-        // 保存之前的视频和合集
-        saveCurrentVideo();
-        if (currentSeries && currentSeries.videos.length > 0) {
-          series.push(currentSeries);
-        }
-        // 开始新合集
-        currentSeries = {
-          seriesTitle: field.value,
-          videos: [],
-        };
-        break;
-      case '标题':
-        // 新视频开始前，保存之前的视频
-        if (currentVideo.title) {
-          saveCurrentVideo();
-        }
-        currentVideo.title = field.value;
-        break;
-      case '描述':
-        currentVideo.description = field.value;
-        break;
-      case '封面':
-        currentVideo.coverUrl = field.value;
-        break;
-      case '视频':
-        currentVideo.videoUrl = field.value;
-        break;
-      case '标签':
-        currentVideo.tags = field.value.split(/[,，]/).map(t => t.trim()).filter(Boolean);
-        break;
-    }
-  }
-
-  // 处理最后一个视频和合集
-  saveCurrentVideo();
-  if (currentSeries && currentSeries.videos.length > 0) {
-    series.push(currentSeries);
-  }
-
-  const totalVideos = series.reduce((sum, s) => sum + s.videos.length, 0);
-
-  return { series, totalVideos };
-}
-
-export default function UploadPage() {
+export default function EditVideoPage({ params }: EditVideoPageProps) {
+  const { id } = use(params);
+  const { data: session, status: authStatus } = useSession();
   const router = useRouter();
-  const { data: session, status } = useSession();
-  const [isLoading, setIsLoading] = useState(false);
+  const [isSubmitting, setIsSubmitting] = useState(false);
   const [selectedTags, setSelectedTags] = useState<{ id: string; name: string }[]>([]);
   const [newTags, setNewTags] = useState<string[]>([]);
   const [tagSearch, setTagSearch] = useState("");
   const [newTagInput, setNewTagInput] = useState("");
   const [showPreview, setShowPreview] = useState(false);
-  
+
   // 合集相关状态
   const [selectedSeriesId, setSelectedSeriesId] = useState<string | null>(null);
   const [episodeNum, setEpisodeNum] = useState<number>(1);
   const [showCreateSeries, setShowCreateSeries] = useState(false);
   const [newSeriesTitle, setNewSeriesTitle] = useState("");
+  const [originalSeriesId, setOriginalSeriesId] = useState<string | null>(null);
 
   // 扩展信息
   const [extraInfo, setExtraInfo] = useState<VideoExtraInfo>({});
   const [showExtraInfo, setShowExtraInfo] = useState(false);
 
-  // 批量导入相关状态
-  const [uploadMode, setUploadMode] = useState<"single" | "batch">("single");
-  const [batchMode, setBatchMode] = useState<"manual" | "legacy">("manual");
-  const [batchInput, setBatchInput] = useState("");
-  const [parsedBatch, setParsedBatch] = useState<ParsedBatchData | null>(null);
-  const [batchImporting, setBatchImporting] = useState(false);
-  const [batchResults, setBatchResults] = useState<{ title: string; seriesTitle?: string; id?: string; error?: string }[]>([]);
-  
-  // 旧站导入相关状态
-  const [legacyUrl, setLegacyUrl] = useState("");
-  const [legacyFetching, setLegacyFetching] = useState(false);
-  const [legacyVideos, setLegacyVideos] = useState<{
-    title: string;
-    description: string;
-    coverUrl: string;
-    videoUrl: string;
-    tags: string[];
-    episodes: { num: number; title: string; videoUrl: string }[];
-    pageUrl: string;
-  }[]>([]);
+  const { data: video, isLoading: videoLoading } = trpc.video.getForEdit.useQuery(
+    { id },
+    { enabled: !!session }
+  );
 
   const { data: allTags } = trpc.tag.list.useQuery({ limit: 100 });
-  
+
   // 获取用户的合集列表
   const { data: userSeries, refetch: refetchSeries } = trpc.series.listByUser.useQuery(
     { limit: 50 },
     { enabled: !!session }
   );
-  
+
+  // 获取视频当前所在的合集
+  const { data: videoSeries } = trpc.series.getByVideoId.useQuery(
+    { videoId: id },
+    { enabled: !!session }
+  );
+
   // 创建合集
   const createSeriesMutation = trpc.series.create.useMutation({
     onSuccess: (newSeries) => {
@@ -259,189 +120,25 @@ export default function UploadPage() {
       toast.error("创建合集失败", { description: error.message });
     },
   });
-  
+
   // 添加视频到合集
   const addToSeriesMutation = trpc.series.addVideo.useMutation();
-  
-  const createMutation = trpc.video.create.useMutation({
+
+  // 从合集中移除视频
+  const removeFromSeriesMutation = trpc.series.removeVideo.useMutation();
+
+  const updateMutation = trpc.video.update.useMutation({
+    onSuccess: () => {
+      toast.success("视频更新成功");
+      router.push(`/v/${id}`);
+    },
     onError: (error) => {
-      toast.error("发布失败", { description: error.message });
+      toast.error("更新失败", { description: error.message });
     },
   });
 
-  // 从旧站抓取数据
-  const fetchLegacyMutation = trpc.video.fetchFromLegacySite.useMutation({
-    onSuccess: (data) => {
-      setLegacyVideos(data.videos);
-      if (data.count > 0) {
-        toast.success(`成功抓取 ${data.count} 个视频合集`);
-      } else {
-        toast.error("未能抓取到任何视频");
-      }
-    },
-    onError: (error) => {
-      toast.error("抓取失败", { description: error.message });
-    },
-  });
-
-  // 从旧站抓取
-  const handleFetchLegacy = async (fetchAll: boolean) => {
-    setLegacyFetching(true);
-    try {
-      await fetchLegacyMutation.mutateAsync({
-        url: fetchAll ? undefined : legacyUrl || undefined,
-        fetchAll,
-      });
-    } finally {
-      setLegacyFetching(false);
-    }
-  };
-
-  // 将旧站数据转换为批量导入格式
-  const convertLegacyToBatch = () => {
-    if (legacyVideos.length === 0) {
-      toast.error("没有可导入的视频");
-      return;
-    }
-
-    // 按作者分组
-    const grouped: Record<string, typeof legacyVideos> = {};
-    legacyVideos.forEach(video => {
-      // 从标题提取作者名（如 【3D】ViciNeko「120帧」-> ViciNeko）
-      const match = video.title.match(/【[^】]+】\s*([^「【\s]+)/);
-      const author = match ? match[1] : '其他';
-      if (!grouped[author]) {
-        grouped[author] = [];
-      }
-      grouped[author].push(video);
-    });
-
-    // 生成批量导入格式（新格式：每行带前缀）
-    let importText = '';
-    Object.entries(grouped).forEach(([author, videos]) => {
-      importText += `合集：${author}\n\n`;
-      videos.forEach(video => {
-        // 如果有多个剧集，为每个剧集生成一条记录
-        if (video.episodes.length > 1) {
-          video.episodes.forEach(ep => {
-            importText += `标题：${video.title} - ${ep.title}\n`;
-            if (video.description) importText += `描述：${video.description}\n`;
-            if (video.coverUrl) importText += `封面：${video.coverUrl}\n`;
-            importText += `视频：${ep.videoUrl}\n`;
-            if (video.tags.length > 0) importText += `标签：${video.tags.join(',')}\n`;
-            importText += '\n';
-          });
-        } else {
-          importText += `标题：${video.title}\n`;
-          if (video.description) importText += `描述：${video.description}\n`;
-          if (video.coverUrl) importText += `封面：${video.coverUrl}\n`;
-          importText += `视频：${video.videoUrl}\n`;
-          if (video.tags.length > 0) importText += `标签：${video.tags.join(',')}\n`;
-          importText += '\n';
-        }
-      });
-    });
-
-    setBatchInput(importText);
-    setBatchMode("manual");
-    toast.success("已转换为批量导入格式，请点击预览解析");
-  };
-
-  // 解析批量输入
-  const handleParseBatch = () => {
-    if (!batchInput.trim()) {
-      toast.error("请输入批量导入内容");
-      return;
-    }
-    const parsed = parseBatchInput(batchInput);
-    if (parsed.totalVideos === 0) {
-      toast.error("未能解析出任何视频，请检查格式");
-      return;
-    }
-    setParsedBatch(parsed);
-    toast.success(`解析成功：${parsed.series.length} 个合集，${parsed.totalVideos} 个视频`);
-  };
-
-  // 批量导入
-  const handleBatchImport = async () => {
-    if (!parsedBatch || parsedBatch.totalVideos === 0) {
-      toast.error("请先解析内容");
-      return;
-    }
-
-    setBatchImporting(true);
-    setBatchResults([]);
-    const results: typeof batchResults = [];
-
-    try {
-      for (const series of parsedBatch.series) {
-        let seriesId: string | null = null;
-
-        // 如果有合集标题，先创建合集
-        if (series.seriesTitle) {
-          try {
-            const newSeries = await createSeriesMutation.mutateAsync({
-              title: series.seriesTitle,
-            });
-            seriesId = newSeries.id;
-          } catch (error) {
-            console.error("创建合集失败:", error);
-          }
-        }
-
-        // 导入该合集下的所有视频
-        for (let i = 0; i < series.videos.length; i++) {
-          const video = series.videos[i];
-          try {
-            const result = await createMutation.mutateAsync({
-              title: video.title,
-              description: video.description || undefined,
-              coverUrl: video.coverUrl || "",
-              videoUrl: video.videoUrl,
-              tagNames: video.tags,
-              skipIndexNow: true, // 批量导入时跳过 IndexNow
-            });
-
-            // 如果有合集，添加到合集
-            if (seriesId) {
-              try {
-                await addToSeriesMutation.mutateAsync({
-                  seriesId,
-                  videoId: result.id,
-                  episodeNum: i + 1,
-                });
-              } catch (error) {
-                console.error("添加到合集失败:", error);
-              }
-            }
-
-            results.push({
-              title: video.title,
-              seriesTitle: series.seriesTitle || undefined,
-              id: result.id,
-            });
-          } catch (error) {
-            results.push({
-              title: video.title,
-              seriesTitle: series.seriesTitle || undefined,
-              error: error instanceof Error ? error.message : "未知错误",
-            });
-          }
-        }
-      }
-
-      const successCount = results.filter(r => r.id).length;
-      const failCount = results.filter(r => r.error).length;
-      toast.success(`导入完成：${successCount} 成功，${failCount} 失败`);
-      setBatchResults(results);
-      refetchSeries(); // 刷新合集列表
-    } finally {
-      setBatchImporting(false);
-    }
-  };
-
-  const form = useForm<UploadForm>({
-    resolver: zodResolver(uploadSchema),
+  const form = useForm<EditForm>({
+    resolver: zodResolver(editSchema),
     defaultValues: {
       title: "",
       description: "",
@@ -497,62 +194,127 @@ export default function UploadPage() {
     );
   };
 
-  async function onSubmit(data: UploadForm) {
-    setIsLoading(true);
+  // 加载视频数据
+  useEffect(() => {
+    if (video) {
+      form.reset({
+        title: video.title,
+        description: video.description || "",
+        coverUrl: video.coverUrl || "",
+        videoUrl: video.videoUrl,
+      });
+      setSelectedTags(video.tags.map((t) => ({ id: t.tag.id, name: t.tag.name })));
+      
+      // 加载扩展信息
+      if (video.extraInfo && typeof video.extraInfo === 'object' && !Array.isArray(video.extraInfo)) {
+        setExtraInfo(video.extraInfo as VideoExtraInfo);
+        // 如果有扩展信息，自动展开
+        const info = video.extraInfo as VideoExtraInfo;
+        if (info.intro || info.author || info.downloads?.length || info.episodes?.length) {
+          setShowExtraInfo(true);
+        }
+      }
+    }
+  }, [video, form]);
+
+  // 加载视频所在合集
+  useEffect(() => {
+    if (videoSeries) {
+      setSelectedSeriesId(videoSeries.series.id);
+      setOriginalSeriesId(videoSeries.series.id);
+      setEpisodeNum(videoSeries.currentEpisode);
+    }
+  }, [videoSeries]);
+
+  useEffect(() => {
+    if (authStatus === "unauthenticated") {
+      router.push("/login?callbackUrl=/v/edit/" + id);
+    }
+  }, [authStatus, router, id]);
+
+  async function onSubmit(data: EditForm) {
+    setIsSubmitting(true);
     try {
-      const result = await createMutation.mutateAsync({
+      // 更新视频基本信息
+      await updateMutation.mutateAsync({
+        id,
         title: data.title,
-        description: data.description,
-        coverUrl: data.coverUrl || "",
+        description: data.description || undefined,
+        coverUrl: data.coverUrl || undefined,
         videoUrl: data.videoUrl,
         tagIds: selectedTags.map((t) => t.id),
         tagNames: newTags,
-        ...(hasExtraInfo() ? { extraInfo } : {}),
+        ...(hasExtraInfo() ? { extraInfo } : { extraInfo: null }),
       });
-      
-      // 如果选择了合集，添加视频到合集
-      if (selectedSeriesId) {
+
+      // 处理合集变更
+      if (selectedSeriesId !== originalSeriesId) {
+        // 如果原来在合集中，先移除
+        if (originalSeriesId) {
+          try {
+            await removeFromSeriesMutation.mutateAsync({
+              seriesId: originalSeriesId,
+              videoId: id,
+            });
+          } catch (error) {
+            console.error("移除合集失败:", error);
+          }
+        }
+        // 如果选择了新合集，添加进去
+        if (selectedSeriesId) {
+          try {
+            await addToSeriesMutation.mutateAsync({
+              seriesId: selectedSeriesId,
+              videoId: id,
+              episodeNum,
+            });
+          } catch (error) {
+            console.error("添加到合集失败:", error);
+          }
+        }
+      } else if (selectedSeriesId && videoSeries && episodeNum !== videoSeries.currentEpisode) {
+        // 如果合集没变但集数变了，更新集数
         try {
+          await removeFromSeriesMutation.mutateAsync({
+            seriesId: selectedSeriesId,
+            videoId: id,
+          });
           await addToSeriesMutation.mutateAsync({
             seriesId: selectedSeriesId,
-            videoId: result.id,
+            videoId: id,
             episodeNum,
           });
         } catch (error) {
-          console.error("添加到合集失败:", error);
+          console.error("更新集数失败:", error);
         }
       }
-      
-      toast.success("发布成功");
-      router.push(`/v/${result.id}`);
-    } catch {
-      // onError 回调已处理错误提示
     } finally {
-      setIsLoading(false);
+      setIsSubmitting(false);
     }
   }
 
-  if (status === "loading") {
+  if (authStatus === "loading" || videoLoading) {
     return (
-      <div className="min-h-[60vh] flex items-center justify-center">
-        <Loader2 className="h-8 w-8 animate-spin text-primary" />
+      <div className="container py-6 max-w-5xl">
+        <div className="flex items-center gap-4 mb-6">
+          <Skeleton className="h-10 w-10" />
+          <Skeleton className="h-8 w-48" />
+        </div>
+        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+          <div className="lg:col-span-2 space-y-6">
+            <Skeleton className="h-[300px] w-full rounded-lg" />
+            <Skeleton className="h-[200px] w-full rounded-lg" />
+          </div>
+          <div className="space-y-6">
+            <Skeleton className="h-[250px] w-full rounded-lg" />
+          </div>
+        </div>
       </div>
     );
   }
 
-  if (!session) {
-    return (
-      <div className="min-h-[60vh] flex flex-col items-center justify-center gap-4">
-        <div className="p-4 rounded-full bg-muted">
-          <Upload className="h-12 w-12 text-muted-foreground" />
-        </div>
-        <h1 className="text-2xl font-bold">请先登录</h1>
-        <p className="text-muted-foreground">登录后才能发布视频</p>
-        <Button asChild size="lg">
-          <Link href="/login?callbackUrl=/upload">去登录</Link>
-        </Button>
-      </div>
-    );
+  if (!session || !video) {
+    return null;
   }
 
   if (!session.user.canUpload) {
@@ -561,12 +323,12 @@ export default function UploadPage() {
         <div className="p-4 rounded-full bg-destructive/10">
           <AlertCircle className="h-12 w-12 text-destructive" />
         </div>
-        <h1 className="text-2xl font-bold">暂无投稿权限</h1>
+        <h1 className="text-2xl font-bold">暂无编辑权限</h1>
         <p className="text-muted-foreground text-center max-w-md">
-          您的账号暂未开通投稿功能，请联系管理员申请开通
+          您的账号暂未开通投稿功能，无法编辑视频
         </p>
         <Button asChild variant="outline">
-          <Link href="/">返回首页</Link>
+          <Link href="/my-videos">返回我的视频</Link>
         </Button>
       </div>
     );
@@ -575,340 +337,31 @@ export default function UploadPage() {
   return (
     <div className="container py-6 max-w-5xl">
       {/* 页面标题 */}
-      <div className="mb-6">
-        <h1 className="text-2xl font-bold flex items-center gap-2">
-          <Upload className="h-6 w-6" />
-          发布视频
-        </h1>
-        <p className="text-muted-foreground mt-1">
-          填写视频信息，支持单个发布或批量导入
-        </p>
+      <div className="flex items-center gap-4 mb-6">
+        <Button variant="ghost" size="icon" asChild>
+          <Link href={`/v/${id}`}>
+            <ArrowLeft className="h-5 w-5" />
+          </Link>
+        </Button>
+        <div>
+          <h1 className="text-2xl font-bold">编辑视频</h1>
+          <p className="text-sm text-muted-foreground">ID: {id}</p>
+        </div>
       </div>
 
-      {/* 模式切换 */}
-      <Tabs value={uploadMode} onValueChange={(v) => setUploadMode(v as "single" | "batch")} className="mb-6">
-        <TabsList className="grid w-full max-w-md grid-cols-2">
-          <TabsTrigger value="single" className="gap-2">
-            <FileVideo className="h-4 w-4" />
-            单个发布
-          </TabsTrigger>
-          <TabsTrigger value="batch" className="gap-2">
-            <FolderOpen className="h-4 w-4" />
-            批量导入
-          </TabsTrigger>
-        </TabsList>
-
-        {/* 批量导入模式 */}
-        <TabsContent value="batch" className="space-y-6 mt-6">
-          {/* 批量导入子模式选择 */}
-          <Tabs value={batchMode} onValueChange={(v) => setBatchMode(v as "manual" | "legacy")}>
-            <TabsList className="grid w-full max-w-md grid-cols-2">
-              <TabsTrigger value="manual" className="gap-2">
-                <FileText className="h-4 w-4" />
-                手动输入
-              </TabsTrigger>
-              <TabsTrigger value="legacy" className="gap-2">
-                <Download className="h-4 w-4" />
-                从旧站导入
-              </TabsTrigger>
-            </TabsList>
-
-            {/* 从旧站导入 */}
-            <TabsContent value="legacy" className="space-y-4 mt-4">
+      <Form {...form}>
+        <form onSubmit={form.handleSubmit(onSubmit)}>
+          <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+            {/* 左侧：主要信息 */}
+            <div className="lg:col-span-2 space-y-6">
+              {/* 基本信息卡片 */}
               <Card>
-                <CardHeader>
+                <CardHeader className="pb-4">
                   <CardTitle className="text-lg flex items-center gap-2">
-                    <Download className="h-5 w-5" />
-                    从旧站导入
+                    <FileVideo className="h-5 w-5" />
+                    基本信息
                   </CardTitle>
-                  <CardDescription>
-                    自动抓取 tv.mikiacg.org 的视频数据
-                  </CardDescription>
                 </CardHeader>
-                <CardContent className="space-y-4">
-                  <div className="flex gap-2">
-                    <Input
-                      value={legacyUrl}
-                      onChange={(e) => setLegacyUrl(e.target.value)}
-                      placeholder="输入旧站视频页面 URL（可选）"
-                      className="flex-1"
-                    />
-                    <Button
-                      type="button"
-                      variant="outline"
-                      onClick={() => handleFetchLegacy(false)}
-                      disabled={legacyFetching || !legacyUrl.trim()}
-                    >
-                      {legacyFetching ? (
-                        <Loader2 className="h-4 w-4 animate-spin" />
-                      ) : (
-                        <Download className="h-4 w-4" />
-                      )}
-                    </Button>
-                  </div>
-                  
-                  <div className="flex items-center gap-4">
-                    <Separator className="flex-1" />
-                    <span className="text-xs text-muted-foreground">或</span>
-                    <Separator className="flex-1" />
-                  </div>
-
-                  <Button
-                    type="button"
-                    variant="secondary"
-                    className="w-full"
-                    onClick={() => handleFetchLegacy(true)}
-                    disabled={legacyFetching}
-                  >
-                    {legacyFetching ? (
-                      <>
-                        <Loader2 className="h-4 w-4 mr-2 animate-spin" />
-                        正在抓取...
-                      </>
-                    ) : (
-                      <>
-                        <Layers className="h-4 w-4 mr-2" />
-                        一键抓取全部视频
-                      </>
-                    )}
-                  </Button>
-
-                  {legacyVideos.length > 0 && (
-                    <div className="pt-4 border-t">
-                      <div className="flex items-center justify-between mb-3">
-                        <span className="text-sm font-medium">
-                          已抓取 {legacyVideos.length} 个视频合集
-                        </span>
-                        <Button
-                          type="button"
-                          size="sm"
-                          onClick={convertLegacyToBatch}
-                        >
-                          <FileText className="h-4 w-4 mr-2" />
-                          转换并导入
-                        </Button>
-                      </div>
-                      <ScrollArea className="max-h-[300px]">
-                        <div className="space-y-2">
-                          {legacyVideos.map((video, index) => (
-                            <div
-                              key={index}
-                              className="p-3 rounded-lg bg-muted/50 text-sm"
-                            >
-                              <div className="font-medium">{video.title}</div>
-                              <div className="text-muted-foreground text-xs mt-1">
-                                {video.episodes.length > 0 
-                                  ? `${video.episodes.length} 集` 
-                                  : video.videoUrl ? '1 个视频' : '无视频'}
-                              </div>
-                              {video.tags.length > 0 && (
-                                <div className="flex flex-wrap gap-1 mt-2">
-                                  {video.tags.slice(0, 5).map((tag, tIndex) => (
-                                    <Badge key={tIndex} variant="outline" className="text-xs">
-                                      {tag}
-                                    </Badge>
-                                  ))}
-                                </div>
-                              )}
-                            </div>
-                          ))}
-                        </div>
-                      </ScrollArea>
-                    </div>
-                  )}
-                </CardContent>
-              </Card>
-            </TabsContent>
-
-            {/* 手动输入 */}
-            <TabsContent value="manual" className="space-y-4 mt-4">
-              <Card>
-                <CardHeader>
-                  <CardTitle className="text-lg flex items-center gap-2">
-                    <FileText className="h-5 w-5" />
-                    手动输入
-                  </CardTitle>
-                  <CardDescription>
-                    按格式粘贴内容，自动创建合集并导入视频
-                  </CardDescription>
-                </CardHeader>
-                <CardContent className="space-y-4">
-                  <div className="space-y-2">
-                    <Label>导入内容</Label>
-                    <Textarea
-                      value={batchInput}
-                      onChange={(e) => setBatchInput(e.target.value)}
-                      placeholder={`合集：作者名1
-
-标题：视频标题1
-描述：视频描述（可选）
-封面：https://example.com/cover1.jpg（可选）
-视频：https://example.com/video1.mp4
-标签：标签1,标签2,标签3
-
-标题：视频标题2
-视频：https://example.com/video2.mp4
-标签：标签1,标签2
-
-合集：作者名2
-
-标题：视频标题3
-描述：另一个视频
-视频：https://example.com/video3.mp4
-标签：标签1`}
-                      className="min-h-[300px] font-mono text-sm"
-                    />
-                    <p className="text-xs text-muted-foreground">
-                      格式说明：每行用前缀标识字段（合集:、标题:、描述:、封面:、视频:、标签:），支持中英文冒号，视频之间用空行分隔
-                    </p>
-                  </div>
-
-                  <div className="flex gap-2">
-                    <Button
-                      type="button"
-                      variant="outline"
-                      onClick={handleParseBatch}
-                      disabled={!batchInput.trim()}
-                    >
-                      <Eye className="h-4 w-4 mr-2" />
-                      预览解析
-                    </Button>
-                    <Button
-                      type="button"
-                      onClick={handleBatchImport}
-                      disabled={!parsedBatch || parsedBatch.totalVideos === 0 || batchImporting}
-                    >
-                      {batchImporting ? (
-                        <Loader2 className="h-4 w-4 mr-2 animate-spin" />
-                      ) : (
-                        <Upload className="h-4 w-4 mr-2" />
-                      )}
-                      开始导入 {parsedBatch ? `(${parsedBatch.totalVideos} 个视频)` : ""}
-                    </Button>
-                  </div>
-                </CardContent>
-              </Card>
-            </TabsContent>
-          </Tabs>
-
-          {/* 解析预览 */}
-          {parsedBatch && parsedBatch.totalVideos > 0 && (
-            <Card>
-              <CardHeader>
-                <CardTitle className="text-lg">解析预览</CardTitle>
-                <CardDescription>
-                  共 {parsedBatch.series.length} 个合集，{parsedBatch.totalVideos} 个视频
-                </CardDescription>
-              </CardHeader>
-              <CardContent>
-                <ScrollArea className="max-h-[400px]">
-                  <div className="space-y-4">
-                    {parsedBatch.series.map((series, sIndex) => (
-                      <div key={sIndex} className="space-y-2">
-                        <div className="flex items-center gap-2">
-                          <Layers className="h-4 w-4 text-primary" />
-                          <span className="font-medium">
-                            {series.seriesTitle || "无合集"}
-                          </span>
-                          <Badge variant="secondary">{series.videos.length} 个视频</Badge>
-                        </div>
-                        <div className="ml-6 space-y-2">
-                          {series.videos.map((video, vIndex) => (
-                            <div
-                              key={vIndex}
-                              className="p-2 rounded-lg bg-muted/50 text-sm"
-                            >
-                              <div className="font-medium">{video.title}</div>
-                              {video.description && (
-                                <div className="text-muted-foreground text-xs truncate">
-                                  {video.description}
-                                </div>
-                              )}
-                              <div className="flex flex-wrap gap-1 mt-1">
-                                {video.tags.map((tag, tIndex) => (
-                                  <Badge key={tIndex} variant="outline" className="text-xs">
-                                    {tag}
-                                  </Badge>
-                                ))}
-                              </div>
-                            </div>
-                          ))}
-                        </div>
-                      </div>
-                    ))}
-                  </div>
-                </ScrollArea>
-              </CardContent>
-            </Card>
-          )}
-
-          {/* 导入结果 */}
-          {batchResults.length > 0 && (
-            <Card>
-              <CardHeader>
-                <CardTitle className="text-lg">导入结果</CardTitle>
-                <CardDescription>
-                  成功 {batchResults.filter(r => r.id).length}，失败 {batchResults.filter(r => r.error).length}
-                </CardDescription>
-              </CardHeader>
-              <CardContent>
-                <ScrollArea className="max-h-[300px]">
-                  <div className="space-y-2">
-                    {batchResults.map((result, index) => (
-                      <div
-                        key={index}
-                        className="flex items-center justify-between p-2 rounded-lg bg-muted/50"
-                      >
-                        <div className="flex items-center gap-2 min-w-0">
-                          {result.id ? (
-                            <CheckCircle className="h-4 w-4 text-green-500 shrink-0" />
-                          ) : (
-                            <XCircle className="h-4 w-4 text-red-500 shrink-0" />
-                          )}
-                          <div className="min-w-0">
-                            <div className="truncate text-sm">{result.title}</div>
-                            {result.seriesTitle && (
-                              <div className="text-xs text-muted-foreground">
-                                {result.seriesTitle}
-                              </div>
-                            )}
-                          </div>
-                        </div>
-                        {result.id ? (
-                          <Link href={`/v/${result.id}`}>
-                            <Badge variant="secondary" className="text-xs">
-                              {result.id}
-                            </Badge>
-                          </Link>
-                        ) : (
-                          <Badge variant="destructive" className="text-xs">
-                            {result.error}
-                          </Badge>
-                        )}
-                      </div>
-                    ))}
-                  </div>
-                </ScrollArea>
-              </CardContent>
-            </Card>
-          )}
-        </TabsContent>
-
-        {/* 单个发布模式 */}
-        <TabsContent value="single" className="mt-6">
-          <Form {...form}>
-            <form onSubmit={form.handleSubmit(onSubmit)}>
-              <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-                {/* 左侧：主要信息 */}
-                <div className="lg:col-span-2 space-y-6">
-                  {/* 基本信息卡片 */}
-                  <Card>
-                    <CardHeader className="pb-4">
-                      <CardTitle className="text-lg flex items-center gap-2">
-                        <FileVideo className="h-5 w-5" />
-                        基本信息
-                      </CardTitle>
-                    </CardHeader>
                 <CardContent className="space-y-4">
                   {/* 标题 */}
                   <FormField
@@ -1321,11 +774,11 @@ export default function UploadPage() {
                         </TabsContent>
 
                         <TabsContent value="related" className="space-y-4 mt-4">
-                <div className="flex items-center justify-between">
-                  <FormLabel className="flex items-center gap-2">
+                          <div className="flex items-center justify-between">
+                            <FormLabel className="flex items-center gap-2">
                               <ListVideo className="h-4 w-4" />
                               相关视频
-                  </FormLabel>
+                            </FormLabel>
                             <Button
                               type="button"
                               variant="outline"
@@ -1371,7 +824,7 @@ export default function UploadPage() {
               </Collapsible>
             </div>
 
-            {/* 右侧：封面和合集 */}
+            {/* 右侧：封面 */}
             <div className="space-y-6">
               {/* 封面卡片 */}
               <Card>
@@ -1441,151 +894,154 @@ export default function UploadPage() {
                       <Layers className="h-5 w-5" />
                       合集
                     </CardTitle>
-                  {selectedSeriesId && (
-                    <Button
-                      type="button"
-                      variant="ghost"
-                      size="sm"
-                      onClick={() => {
-                        setSelectedSeriesId(null);
-                        setEpisodeNum(1);
-                      }}
-                    >
-                      取消
-                    </Button>
-                  )}
-                </div>
+                    {selectedSeriesId && (
+                      <Button
+                        type="button"
+                        variant="ghost"
+                        size="sm"
+                        onClick={() => {
+                          setSelectedSeriesId(null);
+                          setEpisodeNum(1);
+                        }}
+                      >
+                        取消
+                      </Button>
+                    )}
+                  </div>
                   <CardDescription>
                     将视频添加到合集（可选）
                   </CardDescription>
                 </CardHeader>
                 <CardContent className="space-y-4">
-                {!showCreateSeries ? (
+                  {!showCreateSeries ? (
                     <>
-                    <Select
-                      value={selectedSeriesId || ""}
-                      onValueChange={(value) => {
-                        setSelectedSeriesId(value || null);
-                        const series = userSeries?.items.find(s => s.id === value);
-                        if (series) {
-                          setEpisodeNum(series.episodeCount + 1);
-                        }
-                      }}
-                    >
-                      <SelectTrigger>
-                        <SelectValue placeholder="选择合集..." />
-                      </SelectTrigger>
-                      <SelectContent>
-                        {userSeries?.items.map((series) => (
-                          <SelectItem key={series.id} value={series.id}>
-                            <div className="flex items-center gap-2">
-                              <span>{series.title}</span>
+                      <Select
+                        value={selectedSeriesId || ""}
+                        onValueChange={(value) => {
+                          setSelectedSeriesId(value || null);
+                          const series = userSeries?.items.find(s => s.id === value);
+                          if (series) {
+                            setEpisodeNum(series.episodeCount + 1);
+                          }
+                        }}
+                      >
+                        <SelectTrigger>
+                          <SelectValue placeholder="选择合集..." />
+                        </SelectTrigger>
+                        <SelectContent>
+                          {userSeries?.items.map((series) => (
+                            <SelectItem key={series.id} value={series.id}>
+                              <div className="flex items-center gap-2">
+                                <span>{series.title}</span>
                                 <Badge variant="secondary" className="text-xs">
                                   {series.episodeCount}集
                                 </Badge>
+                              </div>
+                            </SelectItem>
+                          ))}
+                          {(!userSeries?.items || userSeries.items.length === 0) && (
+                            <div className="px-2 py-1.5 text-sm text-muted-foreground">
+                              暂无合集
                             </div>
-                          </SelectItem>
-                        ))}
-                        {(!userSeries?.items || userSeries.items.length === 0) && (
-                          <div className="px-2 py-1.5 text-sm text-muted-foreground">
-                            暂无合集
-                          </div>
-                        )}
-                      </SelectContent>
-                    </Select>
-                    
-                    {selectedSeriesId && (
-                      <div className="flex items-center gap-2">
-                        <FormLabel className="shrink-0">第</FormLabel>
-                        <Input
-                          type="number"
-                          min={1}
-                          value={episodeNum}
-                          onChange={(e) => setEpisodeNum(parseInt(e.target.value) || 1)}
-                          className="w-20"
-                        />
-                        <FormLabel className="shrink-0">集</FormLabel>
-                      </div>
-                    )}
-                    
-                    <Button
-                      type="button"
-                      variant="outline"
-                      size="sm"
-                      onClick={() => setShowCreateSeries(true)}
-                      className="w-full"
-                    >
-                      <Plus className="h-4 w-4 mr-1" />
-                      创建新合集
-                    </Button>
-                    </>
-                ) : (
-                  <div className="space-y-3">
-                    <Input
-                      placeholder="合集名称"
-                      value={newSeriesTitle}
-                      onChange={(e) => setNewSeriesTitle(e.target.value)}
-                    />
-                    <div className="flex gap-2">
+                          )}
+                        </SelectContent>
+                      </Select>
+
+                      {selectedSeriesId && (
+                        <div className="flex items-center gap-2">
+                          <FormLabel className="shrink-0">第</FormLabel>
+                          <Input
+                            type="number"
+                            min={1}
+                            value={episodeNum}
+                            onChange={(e) => setEpisodeNum(parseInt(e.target.value) || 1)}
+                            className="w-20"
+                          />
+                          <FormLabel className="shrink-0">集</FormLabel>
+                        </div>
+                      )}
+
                       <Button
                         type="button"
                         variant="outline"
                         size="sm"
-                          className="flex-1"
-                        onClick={() => {
-                          setShowCreateSeries(false);
-                          setNewSeriesTitle("");
-                        }}
+                        onClick={() => setShowCreateSeries(true)}
+                        className="w-full"
                       >
-                        取消
+                        <Plus className="h-4 w-4 mr-1" />
+                        创建新合集
                       </Button>
-                      <Button
-                        type="button"
-                        size="sm"
+                    </>
+                  ) : (
+                    <div className="space-y-3">
+                      <Input
+                        placeholder="合集名称"
+                        value={newSeriesTitle}
+                        onChange={(e) => setNewSeriesTitle(e.target.value)}
+                      />
+                      <div className="flex gap-2">
+                        <Button
+                          type="button"
+                          variant="outline"
+                          size="sm"
                           className="flex-1"
-                        disabled={!newSeriesTitle.trim() || createSeriesMutation.isPending}
-                        onClick={() => {
-                          if (newSeriesTitle.trim()) {
-                            createSeriesMutation.mutate({ title: newSeriesTitle.trim() });
-                          }
-                        }}
-                      >
-                        {createSeriesMutation.isPending && (
-                          <Loader2 className="h-4 w-4 mr-1 animate-spin" />
-                        )}
-                        创建
-                      </Button>
+                          onClick={() => {
+                            setShowCreateSeries(false);
+                            setNewSeriesTitle("");
+                          }}
+                        >
+                          取消
+                        </Button>
+                        <Button
+                          type="button"
+                          size="sm"
+                          className="flex-1"
+                          disabled={!newSeriesTitle.trim() || createSeriesMutation.isPending}
+                          onClick={() => {
+                            if (newSeriesTitle.trim()) {
+                              createSeriesMutation.mutate({ title: newSeriesTitle.trim() });
+                            }
+                          }}
+                        >
+                          {createSeriesMutation.isPending && (
+                            <Loader2 className="h-4 w-4 mr-1 animate-spin" />
+                          )}
+                          创建
+                        </Button>
+                      </div>
                     </div>
-                  </div>
-                )}
+                  )}
                 </CardContent>
               </Card>
 
-              {/* 发布按钮 */}
-              <Button 
-                type="submit" 
-                className="w-full h-12 text-base" 
-                disabled={isLoading}
-                size="lg"
-              >
-                {isLoading ? (
-                  <>
-                    <Loader2 className="mr-2 h-5 w-5 animate-spin" />
-                    发布中...
-                  </>
-                ) : (
-                  <>
-                    <Upload className="mr-2 h-5 w-5" />
-                    发布视频
-                  </>
-                )}
-              </Button>
+              {/* 操作按钮 */}
+              <div className="space-y-3">
+                <Button 
+                  type="submit" 
+                  className="w-full h-12 text-base" 
+                  disabled={isSubmitting}
+                  size="lg"
+                >
+                  {isSubmitting ? (
+                    <>
+                      <Loader2 className="mr-2 h-5 w-5 animate-spin" />
+                      保存中...
+                    </>
+                  ) : (
+                    <>
+                      <Save className="mr-2 h-5 w-5" />
+                      保存更改
+                    </>
+                  )}
+                </Button>
+                <Button type="button" variant="outline" className="w-full" asChild>
+                  <Link href={`/v/${id}`}>取消</Link>
+                </Button>
+              </div>
             </div>
           </div>
-            </form>
-          </Form>
-        </TabsContent>
-      </Tabs>
+        </form>
+      </Form>
     </div>
   );
 }

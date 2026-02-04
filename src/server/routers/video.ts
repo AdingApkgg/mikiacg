@@ -1,12 +1,40 @@
 import { z } from "zod";
-import { Prisma } from "@/generated/prisma/client";
+import { Prisma, PrismaClient } from "@/generated/prisma/client";
 import { router, publicProcedure, protectedProcedure, adminProcedure } from "../trpc";
 import { TRPCError } from "@trpc/server";
 import { getCache, setCache, deleteCachePattern } from "@/lib/redis";
 import { submitVideoToIndexNow, submitVideosToIndexNow } from "@/lib/indexnow";
-import { nanoid } from "nanoid";
 
 const VIDEO_CACHE_TTL = 60; // 1 minute
+
+/**
+ * 生成随机 6 位数字视频 ID (000000 - 999999)
+ * 随机生成并检查是否已存在
+ */
+async function generateVideoId(prisma: PrismaClient): Promise<string> {
+  const maxAttempts = 100;
+  
+  for (let i = 0; i < maxAttempts; i++) {
+    // 生成随机 6 位数字
+    const randomNum = Math.floor(Math.random() * 1000000);
+    const id = randomNum.toString().padStart(6, "0");
+    
+    // 检查是否已存在
+    const existing = await prisma.video.findUnique({
+      where: { id },
+      select: { id: true },
+    });
+    
+    if (!existing) {
+      return id;
+    }
+  }
+  
+  throw new TRPCError({
+    code: "INTERNAL_SERVER_ERROR",
+    message: "无法生成唯一视频 ID，请稍后重试",
+  });
+}
 const STATS_CACHE_TTL = 15; // 15 seconds - 短缓存，仅防止并发请求
 const SEARCH_SUGGESTIONS_CACHE_TTL = 300; // 5 minutes
 
@@ -215,12 +243,12 @@ export const videoRouter = router({
     return stats;
   }),
 
-  // 获取视频列表
+  // 获取视频列表（支持页码分页）
   list: publicProcedure
     .input(
       z.object({
         limit: z.number().min(1).max(50).default(20),
-        cursor: z.string().optional(),
+        page: z.number().min(1).default(1), // 页码分页
         tagId: z.string().optional(),
         search: z.string().optional(),
         sortBy: z.enum(["latest", "views", "likes"]).default("latest"),
@@ -228,7 +256,7 @@ export const videoRouter = router({
       })
     )
     .query(async ({ ctx, input }) => {
-      const { limit, cursor, tagId, search, sortBy, timeRange } = input;
+      const { limit, page, tagId, search, sortBy, timeRange } = input;
 
       // 计算时间范围
       const getTimeFilter = () => {
@@ -271,30 +299,32 @@ export const videoRouter = router({
         likes: { createdAt: "desc" as const }, // 简化处理
       }[sortBy];
 
-      // 并行获取视频和总数量（仅首页请求时计算总数）
+      // 计算偏移量
+      const skip = (page - 1) * limit;
+
+      // 并行获取视频和总数量
       const [videos, totalCount] = await Promise.all([
         ctx.prisma.video.findMany({
-          take: limit + 1,
-          cursor: cursor ? { id: cursor } : undefined,
+          take: limit,
+          skip,
           where: baseWhere,
           orderBy,
           include: {
             uploader: {
               select: { id: true, username: true, nickname: true, avatar: true },
             },
-            _count: { select: { likes: true, favorites: true } },
+            tags: {
+              include: { tag: { select: { id: true, name: true, slug: true } } },
+            },
+            _count: { select: { likes: true, dislikes: true, favorites: true } },
           },
         }),
-        cursor ? Promise.resolve(undefined) : ctx.prisma.video.count({ where: baseWhere }),
+        ctx.prisma.video.count({ where: baseWhere }),
       ]);
 
-      let nextCursor: string | undefined;
-      if (videos.length > limit) {
-        const nextItem = videos.pop();
-        nextCursor = nextItem?.id;
-      }
+      const totalPages = Math.ceil(totalCount / limit);
 
-      return { videos, nextCursor, totalCount };
+      return { videos, totalCount, totalPages, currentPage: page };
     }),
 
   // 获取单个视频
@@ -348,7 +378,7 @@ export const videoRouter = router({
           tags: {
             include: { tag: { select: { id: true, name: true, slug: true } } },
           },
-          _count: { select: { likes: true, favorites: true, comments: true } },
+          _count: { select: { likes: true, dislikes: true, favorites: true, comments: true } },
         },
       });
 
@@ -409,7 +439,7 @@ export const videoRouter = router({
   create: protectedProcedure
     .input(
       z.object({
-        customId: z.string().regex(/^av\d+$/i, "自定义ID格式必须为 av+数字").optional(), // B站AV号作为ID
+        customId: z.string().min(1).max(20).optional(), // 自定义 ID（可选，默认自动生成 6 位数字）
         title: z.string().min(1).max(100),
         description: z.string().max(5000).optional(),
         coverUrl: z.string().url().optional().or(z.literal("")),
@@ -514,10 +544,12 @@ export const videoRouter = router({
       // 去重标签ID
       const uniqueTagIds = [...new Set(allTagIds)];
 
+      // 生成 6 位数字 ID
+      const videoId = customId ? customId.toLowerCase() : await generateVideoId(ctx.prisma);
+
       const video = await ctx.prisma.video.create({
         data: {
-          // 使用自定义ID（如B站AV号）或生成短ID (10位 nanoid)
-          id: customId ? customId.toLowerCase() : nanoid(10),
+          id: videoId,
           title: data.title,
           description: data.description,
           videoUrl: data.videoUrl,
@@ -1034,7 +1066,10 @@ export const videoRouter = router({
               uploader: {
                 select: { id: true, username: true, nickname: true, avatar: true },
               },
-              _count: { select: { likes: true, favorites: true } },
+              tags: {
+                include: { tag: { select: { id: true, name: true, slug: true } } },
+              },
+              _count: { select: { likes: true, dislikes: true, favorites: true } },
             },
           },
         },
@@ -1077,7 +1112,10 @@ export const videoRouter = router({
               uploader: {
                 select: { id: true, username: true, nickname: true, avatar: true },
               },
-              _count: { select: { likes: true, favorites: true } },
+              tags: {
+                include: { tag: { select: { id: true, name: true, slug: true } } },
+              },
+              _count: { select: { likes: true, dislikes: true, favorites: true } },
             },
           },
         },
@@ -1213,8 +1251,162 @@ export const videoRouter = router({
           tags: {
             include: { tag: { select: { id: true, name: true, slug: true } } },
           },
-          _count: { select: { likes: true, favorites: true } },
+          _count: { select: { likes: true, dislikes: true, favorites: true } },
         },
       });
+    }),
+
+  // 从旧站抓取视频数据
+  fetchFromLegacySite: protectedProcedure
+    .input(z.object({
+      url: z.string().url().optional(),
+      fetchAll: z.boolean().default(false),
+    }))
+    .mutation(async ({ input }) => {
+      const baseUrl = 'https://tv.mikiacg.org';
+      const results: {
+        title: string;
+        description: string;
+        coverUrl: string;
+        videoUrl: string;
+        tags: string[];
+        episodes: { num: number; title: string; videoUrl: string }[];
+        pageUrl: string;
+      }[] = [];
+
+      // 从 HTML 中提取视频信息
+      async function extractFromPage(pageUrl: string) {
+        try {
+          const response = await fetch(pageUrl, {
+            headers: {
+              'User-Agent': 'Mozilla/5.0 (compatible; MikiacgBot/1.0)',
+            },
+          });
+          const html = await response.text();
+
+          // 提取标题
+          const titleMatch = html.match(/<h1[^>]*class="[^"]*joe_detail__title[^"]*"[^>]*>([^<]+)<\/h1>/i)
+            || html.match(/<title>([^<]+)<\/title>/);
+          const title = titleMatch ? titleMatch[1].split(' - ')[0].trim() : '';
+
+          // 提取描述
+          const descMatch = html.match(/<div[^>]*class="[^"]*joe_detail__abstract[^"]*"[^>]*>([^<]+)<\/div>/i)
+            || html.match(/<meta[^>]*name="description"[^>]*content="([^"]+)"/i);
+          const description = descMatch ? descMatch[1].trim() : '';
+
+          // 提取标签
+          const tagMatches = html.matchAll(/<a[^>]*href="[^"]*\/tag\/[^"]*"[^>]*>#?\s*([^<]+)<\/a>/gi);
+          const tags = [...tagMatches].map(m => m[1].trim()).filter(Boolean);
+
+          // 提取封面图 - og:image
+          const ogImageMatch = html.match(/<meta[^>]*property="og:image"[^>]*content="([^"]+)"/i);
+          const coverUrl = ogImageMatch ? ogImageMatch[1] : '';
+
+          // 提取所有视频 URL (CDN 格式: https://cdn.mikiacg.vip/Video/...)
+          const videoMatches = html.matchAll(/["'](https?:\/\/cdn\.mikiacg\.vip\/[^"']+\.mp4)["']/gi);
+          const videoUrls = [...new Set([...videoMatches].map(m => m[1]))];
+
+          // 提取剧集信息
+          const episodes: { num: number; title: string; videoUrl: string }[] = [];
+          
+          // 尝试从 DPlayer 配置中提取剧集列表
+          const dpConfigMatch = html.match(/var\s+dp\s*=\s*new\s+DPlayer\s*\(\s*\{[\s\S]*?video\s*:\s*\{[\s\S]*?\}\s*\}/);
+          if (dpConfigMatch) {
+            // 从配置中提取当前视频 URL
+            const urlMatch = dpConfigMatch[0].match(/url\s*:\s*["']([^"']+)["']/);
+            if (urlMatch && urlMatch[1].includes('.mp4')) {
+              const url = urlMatch[1];
+              const numMatch = url.match(/\/(\d+)\.mp4$/);
+              episodes.push({
+                num: numMatch ? parseInt(numMatch[1]) : 1,
+                title: `第${numMatch ? numMatch[1] : 1}集`,
+                videoUrl: url,
+              });
+            }
+          }
+
+          // 补充从 URL 列表中提取的剧集
+          videoUrls.forEach(url => {
+            const numMatch = url.match(/\/(\d+)\.mp4$/);
+            const num = numMatch ? parseInt(numMatch[1]) : 0;
+            if (num > 0 && !episodes.find(e => e.num === num)) {
+              episodes.push({
+                num,
+                title: `第${num}集`,
+                videoUrl: url,
+              });
+            }
+          });
+
+          // 排序
+          episodes.sort((a, b) => a.num - b.num);
+
+          return {
+            title,
+            description,
+            coverUrl,
+            videoUrl: videoUrls[0] || '',
+            tags: [...new Set(tags)],
+            episodes,
+            pageUrl,
+          };
+        } catch (error) {
+          console.error('抓取失败:', pageUrl, error);
+          return null;
+        }
+      }
+
+      // 获取视频列表页的所有链接
+      async function getVideoLinks(page: number) {
+        const listUrl = page === 1
+          ? `${baseUrl}/index.php/category/Video/`
+          : `${baseUrl}/index.php/category/Video/${page}/`;
+        
+        try {
+          const response = await fetch(listUrl, {
+            headers: {
+              'User-Agent': 'Mozilla/5.0 (compatible; MikiacgBot/1.0)',
+            },
+          });
+          const html = await response.text();
+          
+          // 提取所有文章链接
+          const linkMatches = html.matchAll(/href="([^"]*\/archives\/\d+\.html)"/gi);
+          return [...new Set([...linkMatches].map(m => 
+            m[1].startsWith('http') ? m[1] : baseUrl + m[1]
+          ))];
+        } catch (error) {
+          console.error('获取列表失败:', listUrl, error);
+          return [];
+        }
+      }
+
+      if (input.fetchAll) {
+        // 抓取所有视频
+        const allLinks: string[] = [];
+        for (let page = 1; page <= 3; page++) {
+          const links = await getVideoLinks(page);
+          allLinks.push(...links);
+        }
+        
+        const uniqueLinks = [...new Set(allLinks)];
+        
+        for (const link of uniqueLinks) {
+          const info = await extractFromPage(link);
+          if (info && info.title) {
+            results.push(info);
+          }
+          // 延迟避免请求过快
+          await new Promise(r => setTimeout(r, 200));
+        }
+      } else if (input.url) {
+        // 抓取单个页面
+        const info = await extractFromPage(input.url);
+        if (info && info.title) {
+          results.push(info);
+        }
+      }
+
+      return { videos: results, count: results.length };
     }),
 });

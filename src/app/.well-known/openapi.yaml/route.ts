@@ -47,7 +47,7 @@ paths:
               schema:
                 type: string
 
-  /video/{id}:
+  /v/{id}:
     get:
       operationId: getVideo
       summary: 视频详情页

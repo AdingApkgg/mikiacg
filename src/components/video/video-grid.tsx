@@ -9,16 +9,18 @@ interface Video {
   coverUrl?: string | null;
   duration?: number | null;
   views: number;
-  createdAt: Date;
+  createdAt: Date | string;
   uploader: {
     id: string;
     username: string;
     nickname?: string | null;
     avatar?: string | null;
   };
+  tags?: { tag: { id: string; name: string; slug: string } }[];
   _count: {
     likes: number;
-    favorites: number;
+    dislikes?: number;
+    favorites?: number;
   };
 }
 

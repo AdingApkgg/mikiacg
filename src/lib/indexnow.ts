@@ -97,7 +97,7 @@ export async function submitVideoToIndexNow(videoId: string): Promise<boolean> {
   const appUrl = env.NEXT_PUBLIC_APP_URL;
   if (!appUrl) return false;
   
-  const videoUrl = `${appUrl}/video/${videoId}`;
+  const videoUrl = `${appUrl}/v/${videoId}`;
   return submitToIndexNow(videoUrl);
 }
 
@@ -112,7 +112,7 @@ export async function submitVideosToIndexNow(videoIds: string[]): Promise<{ succ
     return { success: 0, failed: videoIds.length };
   }
 
-  const urls = videoIds.map((id) => `${appUrl}/video/${id}`);
+  const urls = videoIds.map((id) => `${appUrl}/v/${id}`);
   
   // IndexNow 限制每次最多 10000 个 URL，分批提交
   const batchSize = 10000;

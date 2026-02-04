@@ -3,8 +3,7 @@
 import { trpc } from "@/lib/trpc";
 import { VideoGrid } from "@/components/video/video-grid";
 import { Button } from "@/components/ui/button";
-import { useInView } from "react-intersection-observer";
-import { useEffect, useState } from "react";
+import { useState, useEffect } from "react";
 import { Search, ArrowUpDown, Clock } from "lucide-react";
 import {
   Select,
@@ -14,6 +13,7 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { Badge } from "@/components/ui/badge";
+import { Pagination } from "@/components/ui/pagination";
 
 interface SearchContentProps {
   query: string;
@@ -36,32 +36,29 @@ const TIME_RANGE_OPTIONS: { value: TimeRange; label: string }[] = [
 ];
 
 export function SearchContent({ query }: SearchContentProps) {
-  const { ref, inView } = useInView();
   const [sortBy, setSortBy] = useState<SortBy>("latest");
   const [timeRange, setTimeRange] = useState<TimeRange>("all");
+  const [page, setPage] = useState(1);
 
   const {
     data,
     isLoading,
-    fetchNextPage,
-    hasNextPage,
-    isFetchingNextPage,
-  } = trpc.video.list.useInfiniteQuery(
-    { limit: 20, search: query, sortBy, timeRange },
+  } = trpc.video.list.useQuery(
+    { limit: 20, page, search: query, sortBy, timeRange },
     {
-      getNextPageParam: (lastPage) => lastPage.nextCursor,
       enabled: !!query,
+      placeholderData: (prev) => prev,
     }
   );
 
+  // 切换排序或时间范围时重置页码
   useEffect(() => {
-    if (inView && hasNextPage && !isFetchingNextPage) {
-      fetchNextPage();
-    }
-  }, [inView, hasNextPage, isFetchingNextPage, fetchNextPage]);
+    setPage(1);
+  }, [sortBy, timeRange, query]);
 
-  const videos = data?.pages.flatMap((page) => page.videos) ?? [];
-  const totalCount = data?.pages[0]?.totalCount ?? 0;
+  const videos = data?.videos ?? [];
+  const totalCount = data?.totalCount ?? 0;
+  const totalPages = data?.totalPages ?? 1;
   const hasFilters = sortBy !== "latest" || timeRange !== "all";
 
   const resetFilters = () => {
@@ -162,17 +159,13 @@ export function SearchContent({ query }: SearchContentProps) {
 
       <VideoGrid videos={videos} isLoading={isLoading} />
 
-      {hasNextPage && (
-        <div ref={ref} className="flex justify-center py-8">
-          {isFetchingNextPage ? (
-            <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary" />
-          ) : (
-            <Button variant="outline" onClick={() => fetchNextPage()}>
-              加载更多
-            </Button>
-          )}
-        </div>
-      )}
+      {/* 分页器 */}
+      <Pagination
+        currentPage={page}
+        totalPages={totalPages}
+        onPageChange={setPage}
+        className="mt-8"
+      />
 
       {!isLoading && videos.length === 0 && (
         <div className="text-center py-12">

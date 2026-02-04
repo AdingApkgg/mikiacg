@@ -168,7 +168,7 @@ export function Header({ onMenuClick }: HeaderProps) {
   const handleSuggestionClick = (type: "video" | "tag", value: string) => {
     setShowSuggestions(false);
     if (type === "video") {
-      router.push(`/video/${value}`);
+      router.push(`/v/${value}`);
     } else {
       router.push(`/tag/${value}`);
     }
