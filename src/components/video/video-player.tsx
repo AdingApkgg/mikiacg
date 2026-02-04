@@ -155,6 +155,7 @@ export const VideoPlayer = forwardRef<VideoPlayerRef, VideoPlayerProps>(
     // 播放器状态
     const [isReady, setIsReady] = useState(false);
     const [hasError, setHasError] = useState(false);
+    const [errorInfo, setErrorInfo] = useState<string | null>(null);
     const [showPlayer, setShowPlayer] = useState(autoStart || !poster);
     const [isPlaying, setIsPlaying] = useState(false);
     const [isMuted, setIsMuted] = useState(false);
@@ -190,6 +191,7 @@ export const VideoPlayer = forwardRef<VideoPlayerRef, VideoPlayerProps>(
       // eslint-disable-next-line react-hooks/set-state-in-effect -- 需要在 URL 变化时重置播放器状态
       setIsReady(false);
       setHasError(false);
+      setErrorInfo(null);
       setPlayed(0);
       setPlayedSeconds(0);
       setDuration(0);
@@ -559,15 +561,68 @@ export const VideoPlayer = forwardRef<VideoPlayerRef, VideoPlayerProps>(
       gestureActiveRef.current = "none";
     }, [handlePlaybackRateChange, showGestureHint]);
 
-    // 初始进度
+    // 监听视频元素事件（更可靠的方式）
     useEffect(() => {
-      if (isReady && initialProgress > 0) {
-        const video = getVideoElement();
-        if (video) {
+      if (!isReady) return;
+      
+      const video = getVideoElement();
+      if (!video) return;
+
+      const handleTimeUpdate = () => {
+        const played = video.duration > 0 ? video.currentTime / video.duration : 0;
+        setPlayed(played);
+        setPlayedSeconds(video.currentTime);
+        onProgress?.({ played, playedSeconds: video.currentTime });
+      };
+
+      const handleDurationChange = () => {
+        if (video.duration && isFinite(video.duration)) {
+          setDuration(video.duration);
+        }
+      };
+
+      const handleLoadedMetadata = () => {
+        if (video.duration && isFinite(video.duration)) {
+          setDuration(video.duration);
+        }
+        // 设置初始进度
+        if (initialProgress > 0) {
           video.currentTime = initialProgress;
         }
-      }
-    }, [isReady, initialProgress, getVideoElement]);
+      };
+
+      const handleWaiting = () => setIsBuffering(true);
+      const handlePlaying = () => setIsBuffering(false);
+      const handleCanPlay = () => setIsBuffering(false);
+
+      video.addEventListener("timeupdate", handleTimeUpdate);
+      video.addEventListener("durationchange", handleDurationChange);
+      video.addEventListener("loadedmetadata", handleLoadedMetadata);
+      video.addEventListener("waiting", handleWaiting);
+      video.addEventListener("playing", handlePlaying);
+      video.addEventListener("canplay", handleCanPlay);
+
+      // 如果视频已经加载（缓存命中），手动触发一次初始化
+      // 使用 requestAnimationFrame 避免同步 setState
+      const initFrame = requestAnimationFrame(() => {
+        if (video.duration && isFinite(video.duration)) {
+          handleDurationChange();
+        }
+        if (video.currentTime > 0) {
+          handleTimeUpdate();
+        }
+      });
+
+      return () => {
+        cancelAnimationFrame(initFrame);
+        video.removeEventListener("timeupdate", handleTimeUpdate);
+        video.removeEventListener("durationchange", handleDurationChange);
+        video.removeEventListener("loadedmetadata", handleLoadedMetadata);
+        video.removeEventListener("waiting", handleWaiting);
+        video.removeEventListener("playing", handlePlaying);
+        video.removeEventListener("canplay", handleCanPlay);
+      };
+    }, [isReady, initialProgress, getVideoElement, onProgress]);
 
     // 加载 skeleton
     if (!isMounted) {
@@ -614,52 +669,54 @@ export const VideoPlayer = forwardRef<VideoPlayerRef, VideoPlayerProps>(
         onTouchEnd={handleTouchEnd}
       >
         {/* 播放器 */}
-        {/* @ts-expect-error - dynamic import loses type info */}
         <ReactPlayer
           ref={playerRef}
-          url={currentUrl}
+          src={currentUrl}
           width="100%"
           height="100%"
           playing={isPlaying}
           volume={volume}
           muted={isMuted}
           playbackRate={playbackRate}
+          playsInline
           onReady={() => setIsReady(true)}
-          onError={() => setHasError(true)}
+          onError={(error: unknown) => {
+            setHasError(true);
+            // 尝试获取详细错误信息
+            const video = getVideoElement();
+            if (video?.error) {
+              const mediaError = video.error;
+              const errorMessages: Record<number, string> = {
+                1: "视频加载被中止",
+                2: "网络错误，无法加载视频",
+                3: "视频解码失败，可能是编码不兼容",
+                4: "视频格式不支持",
+              };
+              setErrorInfo(errorMessages[mediaError.code] || `未知错误 (${mediaError.code})`);
+            } else if (error instanceof Error) {
+              setErrorInfo(error.message);
+            }
+            console.error("Video error:", error);
+          }}
           onPlay={() => setIsPlaying(true)}
           onPause={() => setIsPlaying(false)}
-          onBuffer={() => setIsBuffering(true)}
-          onBufferEnd={() => setIsBuffering(false)}
-          onProgress={(state: { played: number; playedSeconds: number; loaded: number; loadedSeconds: number }) => {
-            setPlayed(state.played);
-            setPlayedSeconds(state.playedSeconds);
-            onProgress?.(state);
-          }}
-          onDuration={setDuration}
           onEnded={() => {
             setIsPlaying(false);
             onEnded?.();
           }}
           config={{
-            file: {
-              attributes: {
-                crossOrigin: "anonymous",
-              },
-              forceHLS: false, // 自动检测 HLS
-              forceVideo: true,
-              hlsOptions: {
-                enableWorker: true,
-                lowLatencyMode: false,
-                backBufferLength: 90,
-                maxBufferLength: 30,
-                maxMaxBufferLength: 600,
-                maxBufferSize: 60 * 1000 * 1000, // 60MB
-                maxBufferHole: 0.5,
-                startLevel: -1, // 自动选择起始画质
-                abrEwmaDefaultEstimate: 500000, // 默认带宽估计
-                abrBandWidthFactor: 0.95,
-                abrBandWidthUpFactor: 0.7,
-              },
+            hls: {
+              enableWorker: true,
+              lowLatencyMode: false,
+              backBufferLength: 90,
+              maxBufferLength: 30,
+              maxMaxBufferLength: 600,
+              maxBufferSize: 60 * 1000 * 1000, // 60MB
+              maxBufferHole: 0.5,
+              startLevel: -1, // 自动选择起始画质
+              abrEwmaDefaultEstimate: 500000, // 默认带宽估计
+              abrBandWidthFactor: 0.95,
+              abrBandWidthUpFactor: 0.7,
             },
           }}
         />
@@ -673,19 +730,38 @@ export const VideoPlayer = forwardRef<VideoPlayerRef, VideoPlayerProps>(
 
         {/* 错误状态 */}
         {hasError && (
-          <div className="absolute inset-0 flex flex-col items-center justify-center bg-black/80 text-white">
+          <div className="absolute inset-0 flex flex-col items-center justify-center bg-black/80 text-white p-4">
             <AlertCircle className="h-12 w-12 mb-4 text-destructive" />
-            <p className="text-lg">视频加载失败</p>
-            <Button
-              variant="outline"
-              className="mt-4"
-              onClick={() => {
-                setHasError(false);
-                setIsReady(false);
-              }}
-            >
-              重试
-            </Button>
+            <p className="text-lg font-medium">视频加载失败</p>
+            {errorInfo && (
+              <p className="text-sm text-destructive/80 mt-1">{errorInfo}</p>
+            )}
+            <p className="text-sm text-white/70 mt-2 text-center max-w-md">
+              {errorInfo?.includes("解码") || errorInfo?.includes("格式")
+                ? "该视频编码可能不被当前浏览器支持（H.265/HEVC 需要 Safari，AV1 需要较新版 Chrome/Firefox）"
+                : "请检查网络连接或尝试刷新页面"}
+            </p>
+            <div className="flex gap-2 mt-4">
+              <Button
+                variant="outline"
+                onClick={() => {
+                  setHasError(false);
+                  setErrorInfo(null);
+                  setIsReady(false);
+                }}
+              >
+                重试
+              </Button>
+              <Button
+                variant="secondary"
+                onClick={() => {
+                  // 直接在新窗口打开视频链接
+                  window.open(currentUrl, "_blank");
+                }}
+              >
+                直接播放
+              </Button>
+            </div>
           </div>
         )}
 

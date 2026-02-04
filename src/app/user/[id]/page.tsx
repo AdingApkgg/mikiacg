@@ -54,7 +54,7 @@ export async function generateMetadata({ params }: UserPageProps): Promise<Metad
     : `${displayName} 的个人主页，已发布 ${user._count.videos} 个视频`;
 
   const siteName = process.env.NEXT_PUBLIC_APP_NAME || "Mikiacg";
-  const baseUrl = process.env.NEXT_PUBLIC_APP_URL || "https://af.saop.cc";
+  const baseUrl = process.env.NEXT_PUBLIC_APP_URL || "https://mikiacg.vip";
 
   return {
     title: displayName,

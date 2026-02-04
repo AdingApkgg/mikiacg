@@ -4,7 +4,7 @@ import { prisma } from "@/lib/prisma";
 export const revalidate = 3600;
 
 export async function GET() {
-  const baseUrl = process.env.NEXT_PUBLIC_APP_URL || "https://af.saop.cc";
+  const baseUrl = process.env.NEXT_PUBLIC_APP_URL || "https://mikiacg.vip";
 
   try {
     const users = await prisma.user.findMany({

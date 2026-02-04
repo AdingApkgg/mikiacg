@@ -1,7 +1,7 @@
 import type { MetadataRoute } from "next";
 
 export default function robots(): MetadataRoute.Robots {
-  const baseUrl = process.env.NEXT_PUBLIC_APP_URL || "https://af.saop.cc";
+  const baseUrl = process.env.NEXT_PUBLIC_APP_URL || "https://mikiacg.vip";
 
   // AI 爬虫允许访问的路径
   const aiAllowPaths = ["/", "/video/", "/tag/", "/user/", "/tags", "/search", "/llms.txt", "/llms-full.txt", "/feed.xml"];

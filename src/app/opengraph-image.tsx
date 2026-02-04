@@ -25,8 +25,8 @@ export default function Image() {
         }}
       >
         <div style={{ display: "flex", alignItems: "center", gap: 16 }}>
-          <span style={{ fontWeight: "bold" }}>ACGN</span>
-          <span style={{ color: "#8b5cf6" }}>Flow</span>
+          <span style={{ fontWeight: "bold" }}>Miki</span>
+          <span style={{ color: "#8b5cf6" }}>acg</span>
         </div>
         <div
           style={{
@@ -35,7 +35,7 @@ export default function Image() {
             opacity: 0.8,
           }}
         >
-          ACGN Fans 流式媒体内容分享平台
+          Mikiacg H内容分享平台
         </div>
       </div>
     ),

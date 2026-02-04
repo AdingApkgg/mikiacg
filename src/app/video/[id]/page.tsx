@@ -63,7 +63,7 @@ export async function generateMetadata({ params }: VideoPageProps): Promise<Meta
     : `由 ${uploaderName} 上传的视频`;
   const keywords = video.tags.map(({ tag }) => tag.name);
 
-  const baseUrl = process.env.NEXT_PUBLIC_APP_URL || "https://af.saop.cc";
+  const baseUrl = process.env.NEXT_PUBLIC_APP_URL || "https://mikiacg.vip";
 
   return {
     title: video.title,
@@ -110,6 +110,7 @@ function serializeVideo(video: NonNullable<Awaited<ReturnType<typeof getVideo>>>
     tags: video.tags,
     _count: video._count,
     pages: video.pages as { page: number; title: string; cid?: number }[] | null,
+    extraInfo: video.extraInfo as import("@/lib/shortcode-parser").VideoExtraInfo | null,
   };
 }
 

@@ -75,13 +75,15 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
         // 从数据库获取最新的用户信息
         const dbUser = await prisma.user.findUnique({
           where: { id: token.sub },
-          select: { nickname: true, avatar: true, username: true, role: true },
+          select: { nickname: true, avatar: true, username: true, role: true, canUpload: true },
         });
         
         if (dbUser) {
           session.user.name = dbUser.nickname || dbUser.username;
           session.user.image = dbUser.avatar;
           session.user.role = dbUser.role;
+          // ADMIN/OWNER 默认可以投稿，或者用户有 canUpload 权限
+          session.user.canUpload = dbUser.role === "ADMIN" || dbUser.role === "OWNER" || dbUser.canUpload;
         }
       }
       return session;
@@ -123,6 +125,7 @@ declare module "next-auth" {
       name?: string | null;
       image?: string | null;
       role?: "USER" | "ADMIN" | "OWNER";
+      canUpload?: boolean; // 是否可以投稿
     };
     jti?: string; // JWT ID，用于会话管理
   }

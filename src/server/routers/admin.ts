@@ -3,6 +3,8 @@ import { router, protectedProcedure, adminProcedure, ownerProcedure } from "../t
 import { TRPCError } from "@trpc/server";
 import { ADMIN_SCOPES, type AdminScope } from "@/lib/constants";
 import { Prisma } from "@/generated/prisma/client";
+import { nanoid } from "nanoid";
+import { parseShortcode } from "@/lib/shortcode-parser";
 
 // 检查用户是否有特定权限
 async function hasScope(
@@ -507,7 +509,24 @@ export const adminRouter = router({
         throw new TRPCError({ code: "FORBIDDEN", message: "无视频管理权限" });
       }
 
+      // 获取视频所在的合集ID（删除前）
+      const episodes = await ctx.prisma.seriesEpisode.findMany({
+        where: { videoId: input.videoId },
+        select: { seriesId: true },
+      });
+      const seriesIds = episodes.map((e) => e.seriesId);
+
       await ctx.prisma.video.delete({ where: { id: input.videoId } });
+
+      // 清理空合集
+      if (seriesIds.length > 0) {
+        await ctx.prisma.series.deleteMany({
+          where: {
+            id: { in: seriesIds },
+            episodes: { none: {} },
+          },
+        });
+      }
 
       return { success: true };
     }),
@@ -543,11 +562,126 @@ export const adminRouter = router({
         throw new TRPCError({ code: "FORBIDDEN", message: "无视频管理权限" });
       }
 
+      // 获取视频所在的合集ID（删除前）
+      const episodes = await ctx.prisma.seriesEpisode.findMany({
+        where: { videoId: { in: input.videoIds } },
+        select: { seriesId: true },
+      });
+      const seriesIds = [...new Set(episodes.map((e) => e.seriesId))];
+
       const result = await ctx.prisma.video.deleteMany({
         where: { id: { in: input.videoIds } },
       });
 
+      // 清理空合集
+      if (seriesIds.length > 0) {
+        await ctx.prisma.series.deleteMany({
+          where: {
+            id: { in: seriesIds },
+            episodes: { none: {} },
+          },
+        });
+      }
+
       return { success: true, count: result.count };
+    }),
+
+  // ========== 批量导入 ==========
+
+  // 批量导入视频（解析短代码）
+  batchImportVideos: adminProcedure
+    .input(z.object({
+      videos: z.array(z.object({
+        title: z.string().min(1).max(100),
+        videoUrl: z.string().url(),
+        coverUrl: z.string().url().optional().or(z.literal("")),
+        description: z.string().max(5000).optional(),
+        shortcodeContent: z.string().optional(), // 原始短代码内容
+        tagNames: z.array(z.string()).optional(),
+        customId: z.string().optional(),
+      })).min(1).max(100),
+    }))
+    .mutation(async ({ ctx, input }) => {
+      const canManage = await hasScope(ctx.prisma, ctx.session.user.id, "video:manage");
+      if (!canManage) {
+        throw new TRPCError({ code: "FORBIDDEN", message: "无视频管理权限" });
+      }
+
+      const results: { title: string; id?: string; error?: string }[] = [];
+
+      for (const videoData of input.videos) {
+        try {
+          // 解析短代码内容
+          let extraInfo = null;
+          if (videoData.shortcodeContent) {
+            extraInfo = parseShortcode(videoData.shortcodeContent);
+          }
+
+          // 处理标签
+          const tagIds: string[] = [];
+          if (videoData.tagNames && videoData.tagNames.length > 0) {
+            for (const tagName of videoData.tagNames) {
+              const slug = tagName
+                .toLowerCase()
+                .replace(/\s+/g, "-")
+                .replace(/[^a-z0-9\u4e00-\u9fa5-]/g, "") || `tag-${Date.now()}`;
+              
+              const tag = await ctx.prisma.tag.upsert({
+                where: { name: tagName },
+                update: {},
+                create: { name: tagName, slug },
+              });
+              tagIds.push(tag.id);
+            }
+          }
+
+          // 检查自定义 ID 是否已存在
+          if (videoData.customId) {
+            const existing = await ctx.prisma.video.findUnique({
+              where: { id: videoData.customId.toLowerCase() },
+            });
+            if (existing) {
+              results.push({ title: videoData.title, error: `ID ${videoData.customId} 已存在` });
+              continue;
+            }
+          }
+
+          // 创建视频
+          const video = await ctx.prisma.video.create({
+            data: {
+              id: videoData.customId ? videoData.customId.toLowerCase() : nanoid(10),
+              title: videoData.title,
+              description: videoData.description,
+              videoUrl: videoData.videoUrl,
+              coverUrl: videoData.coverUrl || null,
+              status: "PUBLISHED",
+              extraInfo: extraInfo ? JSON.parse(JSON.stringify(extraInfo)) : undefined,
+              uploader: { connect: { id: ctx.session.user.id } },
+              ...(tagIds.length > 0 
+                ? { tags: { create: tagIds.map((tagId) => ({ tag: { connect: { id: tagId } } })) } }
+                : {}),
+            },
+          });
+
+          results.push({ title: videoData.title, id: video.id });
+        } catch (error) {
+          results.push({ 
+            title: videoData.title, 
+            error: error instanceof Error ? error.message : "未知错误" 
+          });
+        }
+      }
+
+      const successCount = results.filter(r => r.id).length;
+      const failCount = results.filter(r => r.error).length;
+
+      return { 
+        success: true, 
+        total: input.videos.length,
+        successCount,
+        failCount,
+        results,
+      };
     }),
 
   // ========== 标签管理 ==========
@@ -967,5 +1101,93 @@ export const adminRouter = router({
       });
 
       return { success: true, count: result.count };
+    }),
+
+  // ========== 网站配置 ==========
+
+  // 获取网站配置
+  getSiteConfig: adminProcedure.query(async ({ ctx }) => {
+    const canManage = await hasScope(ctx.prisma, ctx.session.user.id, "settings:manage");
+    if (!canManage) {
+      throw new TRPCError({ code: "FORBIDDEN", message: "无系统设置权限" });
+    }
+
+    // 获取或创建默认配置
+    let config = await ctx.prisma.siteConfig.findUnique({
+      where: { id: "default" },
+    });
+
+    if (!config) {
+      config = await ctx.prisma.siteConfig.create({
+        data: { id: "default" },
+      });
+    }
+
+    return config;
+  }),
+
+  // 更新网站配置
+  updateSiteConfig: adminProcedure
+    .input(z.object({
+      // 基本信息
+      siteName: z.string().min(1).max(100).optional(),
+      siteDescription: z.string().max(500).optional().nullable(),
+      siteLogo: z.string().url().optional().nullable().or(z.literal("")),
+      siteFavicon: z.string().url().optional().nullable().or(z.literal("")),
+      siteKeywords: z.string().max(500).optional().nullable(),
+      
+      // 公告
+      announcement: z.string().max(2000).optional().nullable(),
+      announcementEnabled: z.boolean().optional(),
+      
+      // 功能开关
+      allowRegistration: z.boolean().optional(),
+      allowUpload: z.boolean().optional(),
+      allowComment: z.boolean().optional(),
+      allowGuestbook: z.boolean().optional(),
+      requireEmailVerify: z.boolean().optional(),
+      
+      // 内容设置
+      videosPerPage: z.number().int().min(5).max(100).optional(),
+      commentsPerPage: z.number().int().min(5).max(100).optional(),
+      maxUploadSize: z.number().int().min(10).max(10000).optional(),
+      allowedVideoFormats: z.string().max(200).optional(),
+      
+      // 联系方式
+      contactEmail: z.string().email().optional().nullable().or(z.literal("")),
+      socialLinks: z.record(z.string(), z.string()).optional().nullable(),
+      
+      // 页脚
+      footerText: z.string().max(1000).optional().nullable(),
+      footerLinks: z.array(z.object({
+        label: z.string().min(1).max(50),
+        url: z.string().url(),
+      })).max(10).optional().nullable(),
+      
+      // 备案
+      icpBeian: z.string().max(100).optional().nullable(),
+      publicSecurityBeian: z.string().max(100).optional().nullable(),
+    }))
+    .mutation(async ({ ctx, input }) => {
+      const canManage = await hasScope(ctx.prisma, ctx.session.user.id, "settings:manage");
+      if (!canManage) {
+        throw new TRPCError({ code: "FORBIDDEN", message: "无系统设置权限" });
+      }
+
+      // 清理空字符串为 null
+      const cleanedInput = Object.fromEntries(
+        Object.entries(input).map(([key, value]) => [
+          key,
+          value === "" ? null : value,
+        ])
+      );
+
+      const config = await ctx.prisma.siteConfig.upsert({
+        where: { id: "default" },
+        create: { id: "default", ...cleanedInput },
+        update: cleanedInput,
+      });
+
+      return config;
     }),
 });

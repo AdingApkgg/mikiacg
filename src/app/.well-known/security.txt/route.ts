@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 
 export async function GET() {
-  const baseUrl = process.env.NEXT_PUBLIC_APP_URL || "https://af.saop.cc";
+  const baseUrl = process.env.NEXT_PUBLIC_APP_URL || "https://mikiacg.vip";
   
   // 安全联系信息（符合 RFC 9116 规范）
   const securityTxt = `# Security Policy for Mikiacg

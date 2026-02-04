@@ -10,7 +10,7 @@ import { Badge } from "@/components/ui/badge";
 import { Separator } from "@/components/ui/separator";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Markdown } from "@/components/ui/markdown";
-import { Heart, ThumbsDown, HelpCircle, Star, Share2, Eye, Calendar, Edit, MoreVertical, Trash2, List, Play, Layers } from "lucide-react";
+import { Heart, ThumbsDown, HelpCircle, Star, Share2, Eye, Calendar, Edit, MoreVertical, Trash2, List, Play, Layers, User, Download, ExternalLink, Info, AlertCircle, CheckCircle, AlertTriangle } from "lucide-react";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -260,7 +260,7 @@ export function VideoPageClient({ id, initialVideo }: VideoPageClientProps) {
     );
   }
 
-  const baseUrl = process.env.NEXT_PUBLIC_APP_URL || "https://af.saop.cc";
+  const baseUrl = process.env.NEXT_PUBLIC_APP_URL || "https://mikiacg.vip";
 
   return (
     <>
@@ -447,6 +447,9 @@ export function VideoPageClient({ id, initialVideo }: VideoPageClientProps) {
                 <Markdown content={displayVideo.description} />
               </div>
             )}
+
+            {/* 扩展信息 */}
+            {displayVideo.extraInfo && <VideoExtraInfoSection extraInfo={displayVideo.extraInfo} />}
           </div>
 
           <Separator className="my-6" />
@@ -640,6 +643,170 @@ function MoreVideosContent({ videoId }: { videoId: string }) {
           </Link>
         ))}
       </div>
+    </div>
+  );
+}
+
+// 扩展信息展示组件
+function VideoExtraInfoSection({ extraInfo }: { extraInfo: import("@/lib/shortcode-parser").VideoExtraInfo }) {
+  const hasContent = extraInfo.intro || extraInfo.author || extraInfo.authorIntro ||
+    (extraInfo.keywords && extraInfo.keywords.length > 0) ||
+    (extraInfo.downloads && extraInfo.downloads.length > 0) ||
+    (extraInfo.episodes && extraInfo.episodes.length > 0) ||
+    (extraInfo.relatedVideos && extraInfo.relatedVideos.length > 0) ||
+    (extraInfo.notices && extraInfo.notices.length > 0);
+
+  if (!hasContent) return null;
+
+  const noticeIcons = {
+    info: Info,
+    success: CheckCircle,
+    warning: AlertTriangle,
+    error: AlertCircle,
+  };
+
+  const noticeStyles = {
+    info: "bg-blue-500/10 border-blue-500/20 text-blue-600 dark:text-blue-400",
+    success: "bg-green-500/10 border-green-500/20 text-green-600 dark:text-green-400",
+    warning: "bg-yellow-500/10 border-yellow-500/20 text-yellow-600 dark:text-yellow-400",
+    error: "bg-red-500/10 border-red-500/20 text-red-600 dark:text-red-400",
+  };
+
+  return (
+    <div className="space-y-4 pt-4 border-t">
+      {/* 公告/提示 */}
+      {extraInfo.notices && extraInfo.notices.length > 0 && (
+        <div className="space-y-2">
+          {extraInfo.notices.map((notice, index) => {
+            const IconComponent = noticeIcons[notice.type];
+            return (
+              <div 
+                key={index}
+                className={`flex items-start gap-2 p-3 rounded-lg border ${noticeStyles[notice.type]}`}
+              >
+                <IconComponent className="h-4 w-4 mt-0.5 shrink-0" />
+                <p className="text-sm">{notice.content}</p>
+              </div>
+            );
+          })}
+        </div>
+      )}
+
+      {/* 作品介绍 */}
+      {extraInfo.intro && (
+        <div className="space-y-2">
+          <h3 className="font-medium flex items-center gap-2">
+            <Info className="h-4 w-4" />
+            作品介绍
+          </h3>
+          <div className="text-sm text-muted-foreground whitespace-pre-wrap">
+            {extraInfo.intro}
+          </div>
+        </div>
+      )}
+
+      {/* 剧集介绍 */}
+      {extraInfo.episodes && extraInfo.episodes.length > 0 && (
+        <div className="space-y-2">
+          <h3 className="font-medium flex items-center gap-2">
+            <List className="h-4 w-4" />
+            剧集介绍
+          </h3>
+          <div className="space-y-3">
+            {extraInfo.episodes.map((episode, index) => (
+              <div key={index} className="p-3 rounded-lg bg-muted/50">
+                <h4 className="font-medium text-sm">{episode.title}</h4>
+                <p className="text-sm text-muted-foreground mt-1">{episode.content}</p>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+
+      {/* 作者信息 */}
+      {(extraInfo.author || extraInfo.authorIntro) && (
+        <div className="space-y-2">
+          <h3 className="font-medium flex items-center gap-2">
+            <User className="h-4 w-4" />
+            作者信息
+          </h3>
+          <div className="p-3 rounded-lg bg-muted/50">
+            {extraInfo.author && (
+              <p className="text-sm">
+                <span className="text-muted-foreground">原作者：</span>
+                <span className="font-medium">{extraInfo.author}</span>
+              </p>
+            )}
+            {extraInfo.authorIntro && (
+              <p className="text-sm text-muted-foreground mt-2">{extraInfo.authorIntro}</p>
+            )}
+          </div>
+        </div>
+      )}
+
+      {/* 搜索关键词 */}
+      {extraInfo.keywords && extraInfo.keywords.length > 0 && (
+        <div className="space-y-2">
+          <h3 className="font-medium text-sm">搜索关键词</h3>
+          <div className="flex flex-wrap gap-1.5">
+            {extraInfo.keywords.map((keyword, index) => (
+              <Badge key={index} variant="secondary" className="text-xs">
+                {keyword}
+              </Badge>
+            ))}
+          </div>
+        </div>
+      )}
+
+      {/* 下载链接 */}
+      {extraInfo.downloads && extraInfo.downloads.length > 0 && (
+        <div className="space-y-2">
+          <h3 className="font-medium flex items-center gap-2">
+            <Download className="h-4 w-4" />
+            下载链接
+          </h3>
+          <div className="space-y-2">
+            {extraInfo.downloads.map((download, index) => (
+              <a
+                key={index}
+                href={download.url}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="flex items-center justify-between p-3 rounded-lg bg-muted/50 hover:bg-muted transition-colors group"
+              >
+                <div className="flex items-center gap-2">
+                  <Download className="h-4 w-4 text-muted-foreground" />
+                  <span className="text-sm font-medium">{download.name}</span>
+                  {download.password && (
+                    <Badge variant="outline" className="text-xs">
+                      密码: {download.password}
+                    </Badge>
+                  )}
+                </div>
+                <ExternalLink className="h-4 w-4 text-muted-foreground group-hover:text-foreground transition-colors" />
+              </a>
+            ))}
+          </div>
+        </div>
+      )}
+
+      {/* 相关视频 */}
+      {extraInfo.relatedVideos && extraInfo.relatedVideos.length > 0 && (
+        <div className="space-y-2">
+          <h3 className="font-medium flex items-center gap-2">
+            <Layers className="h-4 w-4" />
+            相关视频
+          </h3>
+          <ul className="space-y-1 text-sm text-muted-foreground">
+            {extraInfo.relatedVideos.map((video, index) => (
+              <li key={index} className="flex items-center gap-2">
+                <span className="text-xs">•</span>
+                {video}
+              </li>
+            ))}
+          </ul>
+        </div>
+      )}
     </div>
   );
 }

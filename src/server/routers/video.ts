@@ -4,6 +4,7 @@ import { router, publicProcedure, protectedProcedure, adminProcedure } from "../
 import { TRPCError } from "@trpc/server";
 import { getCache, setCache, deleteCachePattern } from "@/lib/redis";
 import { submitVideoToIndexNow, submitVideosToIndexNow } from "@/lib/indexnow";
+import { nanoid } from "nanoid";
 
 const VIDEO_CACHE_TTL = 60; // 1 minute
 const STATS_CACHE_TTL = 15; // 15 seconds - 短缓存，仅防止并发请求
@@ -422,10 +423,49 @@ export const videoRouter = router({
           cid: z.number().optional(),
         })).optional(), // B站分P信息
         skipIndexNow: z.boolean().optional(), // 批量导入时跳过 IndexNow
+        // 扩展信息
+        extraInfo: z.object({
+          intro: z.string().optional(),
+          episodes: z.array(z.object({
+            title: z.string(),
+            content: z.string(),
+          })).optional(),
+          author: z.string().optional(),
+          authorIntro: z.string().optional(),
+          keywords: z.array(z.string()).optional(),
+          downloads: z.array(z.object({
+            name: z.string(),
+            url: z.string(),
+            password: z.string().optional(),
+          })).optional(),
+          relatedVideos: z.array(z.string()).optional(),
+          notices: z.array(z.object({
+            type: z.enum(['info', 'success', 'warning', 'error']),
+            content: z.string(),
+          })).optional(),
+        }).optional(),
       })
     )
     .mutation(async ({ ctx, input }) => {
-      const { customId, tagIds, tagNames, coverUrl, pages, skipIndexNow, ...data } = input;
+      const { customId, tagIds, tagNames, coverUrl, pages, skipIndexNow, extraInfo, ...data } = input;
+
+      // 检查投稿权限：ADMIN/OWNER 或有 canUpload 权限的用户
+      const user = await ctx.prisma.user.findUnique({
+        where: { id: ctx.session.user.id },
+        select: { role: true, canUpload: true },
+      });
+      
+      if (!user) {
+        throw new TRPCError({ code: "UNAUTHORIZED", message: "用户不存在" });
+      }
+      
+      const canUpload = user.role === "ADMIN" || user.role === "OWNER" || user.canUpload;
+      if (!canUpload) {
+        throw new TRPCError({ 
+          code: "FORBIDDEN", 
+          message: "您暂无投稿权限，请联系管理员开通" 
+        });
+      }
 
       // 如果提供了自定义ID，检查是否已存在
       if (customId) {
@@ -476,8 +516,8 @@ export const videoRouter = router({
 
       const video = await ctx.prisma.video.create({
         data: {
-          // 使用自定义ID（如B站AV号）或自动生成
-          ...(customId ? { id: customId.toLowerCase() } : {}),
+          // 使用自定义ID（如B站AV号）或生成短ID (10位 nanoid)
+          id: customId ? customId.toLowerCase() : nanoid(10),
           title: data.title,
           description: data.description,
           videoUrl: data.videoUrl,
@@ -485,6 +525,7 @@ export const videoRouter = router({
           status: "PUBLISHED", // 直接发布，无需审核
           ...(coverUrl ? { coverUrl } : {}),
           ...(pages && pages.length > 1 ? { pages } : {}), // 只有多P时才保存
+          ...(extraInfo ? { extraInfo } : {}), // 扩展信息
           uploader: { connect: { id: ctx.session.user.id } },
           ...(uniqueTagIds.length > 0 
             ? { tags: { create: uniqueTagIds.map((tagId) => ({ tag: { connect: { id: tagId } } })) } }
@@ -511,10 +552,49 @@ export const videoRouter = router({
         videoUrl: z.string().url().optional(),
         tagIds: z.array(z.string()).optional(),
         tagNames: z.array(z.string()).optional(), // 新建标签名称
+        // 扩展信息
+        extraInfo: z.object({
+          intro: z.string().optional(),
+          episodes: z.array(z.object({
+            title: z.string(),
+            content: z.string(),
+          })).optional(),
+          author: z.string().optional(),
+          authorIntro: z.string().optional(),
+          keywords: z.array(z.string()).optional(),
+          downloads: z.array(z.object({
+            name: z.string(),
+            url: z.string(),
+            password: z.string().optional(),
+          })).optional(),
+          relatedVideos: z.array(z.string()).optional(),
+          notices: z.array(z.object({
+            type: z.enum(['info', 'success', 'warning', 'error']),
+            content: z.string(),
+          })).optional(),
+        }).optional().nullable(),
       })
     )
     .mutation(async ({ ctx, input }) => {
-      const { id, tagIds, tagNames, ...data } = input;
+      const { id, tagIds, tagNames, extraInfo, ...data } = input;
+
+      // 检查编辑权限：ADMIN/OWNER 或有 canUpload 权限的用户
+      const user = await ctx.prisma.user.findUnique({
+        where: { id: ctx.session.user.id },
+        select: { role: true, canUpload: true },
+      });
+      
+      if (!user) {
+        throw new TRPCError({ code: "UNAUTHORIZED", message: "用户不存在" });
+      }
+      
+      const canUpload = user.role === "ADMIN" || user.role === "OWNER" || user.canUpload;
+      if (!canUpload) {
+        throw new TRPCError({ 
+          code: "FORBIDDEN", 
+          message: "您暂无编辑权限，请联系管理员开通" 
+        });
+      }
 
       const video = await ctx.prisma.video.findUnique({
         where: { id },
@@ -525,14 +605,18 @@ export const videoRouter = router({
         throw new TRPCError({ code: "NOT_FOUND" });
       }
 
-      if (video.uploaderId !== ctx.session.user.id) {
-        throw new TRPCError({ code: "FORBIDDEN" });
+      if (video.uploaderId !== ctx.session.user.id && user.role === "USER") {
+        throw new TRPCError({ code: "FORBIDDEN", message: "只能编辑自己的视频" });
       }
 
       // 更新视频基本信息
+      const updateData = {
+        ...data,
+        ...(extraInfo !== undefined ? { extraInfo: extraInfo || null } : {}),
+      };
       const updated = await ctx.prisma.video.update({
         where: { id },
-        data,
+        data: updateData,
       });
 
       // 更新标签关联
@@ -613,6 +697,13 @@ export const videoRouter = router({
 
       const tagIds = video.tags.map((t) => t.tagId);
 
+      // 获取视频所在的合集ID（删除前）
+      const episodes = await ctx.prisma.seriesEpisode.findMany({
+        where: { videoId: input.id },
+        select: { seriesId: true },
+      });
+      const seriesIds = episodes.map((e) => e.seriesId);
+
       // 真删除视频（关联记录会通过 CASCADE 自动删除）
       await ctx.prisma.video.delete({ where: { id: input.id } });
 
@@ -622,6 +713,16 @@ export const videoRouter = router({
           where: {
             id: { in: tagIds },
             videos: { none: {} },
+          },
+        });
+      }
+
+      // 清理空合集（没有关联任何视频的合集）
+      if (seriesIds.length > 0) {
+        await ctx.prisma.series.deleteMany({
+          where: {
+            id: { in: seriesIds },
+            episodes: { none: {} },
           },
         });
       }
@@ -650,6 +751,13 @@ export const videoRouter = router({
       const videoIds = videos.map(v => v.id);
       const tagIds = [...new Set(videos.flatMap(v => v.tags.map(t => t.tagId)))];
 
+      // 获取视频所在的合集ID（删除前）
+      const episodes = await ctx.prisma.seriesEpisode.findMany({
+        where: { videoId: { in: videoIds } },
+        select: { seriesId: true },
+      });
+      const seriesIds = [...new Set(episodes.map((e) => e.seriesId))];
+
       // 批量删除
       await ctx.prisma.video.deleteMany({
         where: { id: { in: videoIds } },
@@ -661,6 +769,16 @@ export const videoRouter = router({
           where: {
             id: { in: tagIds },
             videos: { none: {} },
+          },
+        });
+      }
+
+      // 清理空合集
+      if (seriesIds.length > 0) {
+        await ctx.prisma.series.deleteMany({
+          where: {
+            id: { in: seriesIds },
+            episodes: { none: {} },
           },
         });
       }

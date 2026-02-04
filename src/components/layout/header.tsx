@@ -221,8 +221,8 @@ export function Header({ onMenuClick }: HeaderProps) {
                     className="flex items-center gap-1 font-bold text-xl"
                     onClick={() => setMobileMenuOpen(false)}
                   >
-                    <span className="text-gradient-anime">ACGN</span>
-                    <span>Flow</span>
+                    <span className="text-gradient-anime">Miki</span>
+                    <span>acg</span>
                   </Link>
                 </SheetTitle>
               </SheetHeader>
@@ -233,10 +233,10 @@ export function Header({ onMenuClick }: HeaderProps) {
           {/* Logo */}
           <Link href="/" className="flex items-center gap-1 font-bold text-xl group">
             <span className="text-gradient-anime transition-transform duration-200 hover:scale-105 active:scale-95">
-              ACGN
+              Miki
             </span>
             <span className="text-foreground group-hover:text-primary transition-colors hidden sm:inline">
-              Flow
+              acg
             </span>
           </Link>
         </div>

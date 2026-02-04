@@ -1,7 +1,12 @@
 import { PrismaPg } from "@prisma/adapter-pg";
 import { Pool } from "pg";
 import bcrypt from "bcryptjs";
-import "dotenv/config";
+import { config } from "dotenv";
+import path from "node:path";
+
+// 动态加载环境变量
+const envFile = process.env.NODE_ENV === "production" ? ".env.production" : ".env.development";
+config({ path: path.join(__dirname, "..", envFile) });
 
 // 站长用户配置 - 请修改以下信息
 const OWNER_CONFIG = {

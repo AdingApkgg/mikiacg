@@ -24,8 +24,8 @@ export default function Icon() {
           borderRadius: 36,
         }}
       >
-        <span style={{ fontWeight: "bold" }}>A</span>
-        <span style={{ fontSize: 24, color: "#8b5cf6", marginTop: -8 }}>Flow</span>
+        <span style={{ fontWeight: "bold" }}>Miki</span>
+        <span style={{ fontSize: 24, color: "#8b5cf6", marginTop: -8 }}>acg</span>
       </div>
     ),
     { ...size }

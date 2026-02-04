@@ -333,7 +333,19 @@ export const seriesRouter = router({
         },
       });
 
-      return { success: true };
+      // 检查合集是否还有视频，没有则自动删除合集
+      const remainingCount = await ctx.prisma.seriesEpisode.count({
+        where: { seriesId: input.seriesId },
+      });
+
+      if (remainingCount === 0) {
+        await ctx.prisma.series.delete({
+          where: { id: input.seriesId },
+        });
+        return { success: true, seriesDeleted: true };
+      }
+
+      return { success: true, seriesDeleted: false };
     }),
 
   // 更新剧集信息

@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useRef } from "react";
+import { useState } from "react";
 import { UseFormReturn } from "react-hook-form";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
@@ -14,9 +14,8 @@ import {
   FormMessage,
 } from "@/components/ui/form";
 import { VideoPlayer } from "@/components/video/video-player";
-import { Eye, EyeOff, Image as ImageIcon, Upload, Loader2, X } from "lucide-react";
+import { Eye, EyeOff, Image as ImageIcon, X } from "lucide-react";
 import { cn } from "@/lib/utils";
-import { toast } from "sonner";
 
 interface VideoFormFieldsProps {
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -25,44 +24,9 @@ interface VideoFormFieldsProps {
 
 export function VideoFormFields({ form }: VideoFormFieldsProps) {
   const [showPreview, setShowPreview] = useState(false);
-  const [uploadingCover, setUploadingCover] = useState(false);
-  
-  const coverInputRef = useRef<HTMLInputElement>(null);
 
   const coverUrl = form.watch("coverUrl");
   const videoUrl = form.watch("videoUrl");
-  
-  // 封面上传处理
-  const handleCoverUpload = async (file: File) => {
-    setUploadingCover(true);
-    try {
-      const formData = new FormData();
-      formData.append("file", file);
-      formData.append("type", "cover");
-      
-      const response = await fetch("/api/upload", {
-        method: "POST",
-        body: formData,
-      });
-      
-      const data = await response.json();
-      
-      if (!response.ok) {
-        throw new Error(data.error || "上传失败");
-      }
-      
-      form.setValue("coverUrl", data.url);
-      toast.success("封面上传成功", {
-        description: `格式: ${data.format}, 压缩: ${data.compressionRatio}`,
-      });
-    } catch (error) {
-      toast.error("上传失败", {
-        description: error instanceof Error ? error.message : "请稍后重试",
-      });
-    } finally {
-      setUploadingCover(false);
-    }
-  };
 
   return (
     <div className="space-y-6">
@@ -103,7 +67,7 @@ export function VideoFormFields({ form }: VideoFormFieldsProps) {
           />
         </div>
 
-        {/* 右列：封面预览和上传 */}
+        {/* 右列：封面预览 */}
         <div className="space-y-4">
           <FormField
             control={form.control}
@@ -111,39 +75,9 @@ export function VideoFormFields({ form }: VideoFormFieldsProps) {
             render={({ field }) => (
               <FormItem>
                 <FormLabel>封面</FormLabel>
-                <div className="flex gap-2">
-                  <FormControl>
-                    <Input placeholder="封面图片链接（可选）" {...field} />
-                  </FormControl>
-                  <input
-                    ref={coverInputRef}
-                    type="file"
-                    accept="image/jpeg,image/png,image/gif,image/webp,image/avif"
-                    className="hidden"
-                    onChange={(e) => {
-                      const file = e.target.files?.[0];
-                      if (file) {
-                        handleCoverUpload(file);
-                      }
-                      e.target.value = "";
-                    }}
-                  />
-                  <Button
-                    type="button"
-                    variant="outline"
-                    size="icon"
-                    onClick={() => coverInputRef.current?.click()}
-                    disabled={uploadingCover}
-                    title="上传封面"
-                  >
-                    {uploadingCover ? (
-                      <Loader2 className="h-4 w-4 animate-spin" />
-                    ) : (
-                      <Upload className="h-4 w-4" />
-                    )}
-                  </Button>
-                </div>
-                <FormDescription>自动转换为 AVIF 无损压缩</FormDescription>
+                <FormControl>
+                  <Input placeholder="封面图片链接（可选）" {...field} />
+                </FormControl>
                 <FormMessage />
               </FormItem>
             )}
@@ -152,10 +86,9 @@ export function VideoFormFields({ form }: VideoFormFieldsProps) {
           {/* 封面预览 */}
           <div
             className={cn(
-              "relative aspect-video rounded-lg border-2 border-dashed overflow-hidden transition-colors cursor-pointer group",
-              coverUrl ? "border-transparent" : "border-muted-foreground/25 hover:border-primary/50"
+              "relative aspect-video rounded-lg border-2 border-dashed overflow-hidden transition-colors group",
+              coverUrl ? "border-transparent" : "border-muted-foreground/25"
             )}
-            onClick={() => !coverUrl && coverInputRef.current?.click()}
           >
             {coverUrl ? (
               <>
@@ -184,12 +117,8 @@ export function VideoFormFields({ form }: VideoFormFieldsProps) {
               </>
             ) : (
               <div className="absolute inset-0 flex flex-col items-center justify-center text-muted-foreground">
-                {uploadingCover ? (
-                  <Loader2 className="h-12 w-12 mb-2 animate-spin opacity-50" />
-                ) : (
-                  <ImageIcon className="h-12 w-12 mb-2 opacity-50" />
-                )}
-                <span className="text-sm">{uploadingCover ? "上传中..." : "点击上传或拖入封面"}</span>
+                <ImageIcon className="h-12 w-12 mb-2 opacity-50" />
+                <span className="text-sm">输入封面链接预览</span>
               </div>
             )}
           </div>

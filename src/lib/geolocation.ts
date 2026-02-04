@@ -54,7 +54,7 @@ export async function reverseGeocode(latitude: number, longitude: number): Promi
       `https://nominatim.openstreetmap.org/reverse?format=json&lat=${latitude}&lon=${longitude}&zoom=18&addressdetails=1&accept-language=zh-CN,zh,en`,
       {
         headers: {
-          "User-Agent": "ACGN-Flow/1.0", // Nominatim 要求提供 User-Agent
+          "User-Agent": "Mikiacg/1.0", // Nominatim 要求提供 User-Agent
         },
       }
     );

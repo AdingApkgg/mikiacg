@@ -17,6 +17,9 @@ export default function HomePage() {
   const [sortBy, setSortBy] = useState<SortBy>("latest");
   const [selectedTag, setSelectedTag] = useState<string | null>(null);
   const [showAnnouncement, setShowAnnouncement] = useState(true);
+  
+  // 获取网站配置
+  const { data: siteConfig } = trpc.site.getConfig.useQuery();
   const [showLeftArrow, setShowLeftArrow] = useState(false);
   const [showRightArrow, setShowRightArrow] = useState(false);
   const scrollContainerRef = useRef<HTMLDivElement>(null);
@@ -112,24 +115,26 @@ export default function HomePage() {
 
       <div className="px-4 md:px-6 py-4 overflow-x-hidden">
         {/* 公告横幅 */}
-        <div 
-          className={`mb-4 relative overflow-hidden transition-all duration-300 ${
-            showAnnouncement ? "max-h-20 opacity-100" : "max-h-0 opacity-0"
-          }`}
-        >
-          <div className="bg-yellow-500/10 border border-yellow-500/30 rounded-lg px-4 py-3 flex items-center gap-3">
-            <AlertTriangle className="h-5 w-5 text-yellow-500 flex-shrink-0" />
-            <p className="text-sm text-yellow-600 dark:text-yellow-400 flex-1">
-              本站目前处于开发阶段，对你的数据无 SLA 保证！
-            </p>
-            <button
-              onClick={() => setShowAnnouncement(false)}
-              className="text-yellow-500 hover:text-yellow-600 dark:hover:text-yellow-300 transition-all hover:scale-110 active:scale-90"
-            >
-              <X className="h-4 w-4" />
-            </button>
+        {siteConfig?.announcementEnabled && siteConfig.announcement && (
+          <div 
+            className={`mb-4 relative overflow-hidden transition-all duration-300 ${
+              showAnnouncement ? "max-h-20 opacity-100" : "max-h-0 opacity-0"
+            }`}
+          >
+            <div className="bg-yellow-500/10 border border-yellow-500/30 rounded-lg px-4 py-3 flex items-center gap-3">
+              <AlertTriangle className="h-5 w-5 text-yellow-500 flex-shrink-0" />
+              <p className="text-sm text-yellow-600 dark:text-yellow-400 flex-1">
+                {siteConfig.announcement}
+              </p>
+              <button
+                onClick={() => setShowAnnouncement(false)}
+                className="text-yellow-500 hover:text-yellow-600 dark:hover:text-yellow-300 transition-all hover:scale-110 active:scale-90"
+              >
+                <X className="h-4 w-4" />
+              </button>
+            </div>
           </div>
-        </div>
+        )}
 
         {/* 网站统计 */}
         <FadeIn delay={0.1}>

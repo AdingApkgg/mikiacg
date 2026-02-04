@@ -79,7 +79,7 @@ rathole -s deploy/rathole-server.toml
 ```bash
 sudo cp deploy/nginx-public.conf /etc/nginx/sites-available/acgn-flow.conf
 sudo ln -s /etc/nginx/sites-available/acgn-flow.conf /etc/nginx/sites-enabled/
-sudo certbot certonly --webroot -w /var/www/certbot -d af.saop.cc
+sudo certbot certonly --webroot -w /var/www/certbot -d mikiacg.vip
 sudo nginx -t && sudo systemctl reload nginx
 ```
 

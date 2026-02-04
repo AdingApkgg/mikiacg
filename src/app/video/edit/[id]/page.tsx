@@ -128,6 +128,21 @@ export default function EditVideoPage({ params }: EditVideoPageProps) {
     return null;
   }
 
+  // 检查编辑权限
+  if (!session.user.canUpload) {
+    return (
+      <div className="container py-12 text-center">
+        <h1 className="text-2xl font-bold">暂无编辑权限</h1>
+        <p className="text-muted-foreground mt-2">
+          您的账号暂未开通投稿功能，无法编辑视频
+        </p>
+        <Button asChild className="mt-4">
+          <Link href="/my-videos">返回我的视频</Link>
+        </Button>
+      </div>
+    );
+  }
+
   return (
     <div className="container py-6 max-w-3xl">
       <div className="flex items-center gap-4 mb-6">

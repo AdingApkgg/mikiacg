@@ -25,6 +25,7 @@ model User {
   location      String?   // 所在地
   socialLinks   Json?     // 社交账号 { twitter?: string, github?: string, ... }
   role          Role      @default(USER)
+  canUpload     Boolean   @default(false)  // 是否可以投稿（ADMIN/OWNER 默认可以）
   adminScopes   Json?     // 管理员权限范围 ["video:moderate", "user:manage", ...]
   isBanned      Boolean   @default(false)  // 是否被封禁
   banReason     String?   // 封禁原因
@@ -161,7 +162,7 @@ enum VerificationType {
 // ==================== 视频相关 ====================
 
 model Video {
-  id          String      @id @default(cuid())
+  id          String      @id // 使用短 ID (nanoid 10位)
   title       String
   description String?     @db.Text
   coverUrl    String?     // 可选，不填则显示默认封面
@@ -170,6 +171,18 @@ model Video {
   views       Int         @default(0)
   status      VideoStatus @default(PENDING)
   pages       Json?       // B站分P信息 [{ page: number, title: string, cid?: number }]
+  
+  // 扩展信息 (结构化)
+  extraInfo   Json?       // { 
+                          //   intro?: string,           // 作品介绍
+                          //   episodes?: { title: string, content: string }[], // 剧集介绍
+                          //   author?: string,          // 原作者
+                          //   authorIntro?: string,     // 作者介绍
+                          //   keywords?: string[],      // 搜索关键词
+                          //   downloads?: { name: string, url: string, password?: string }[], // 下载链接
+                          //   relatedVideos?: string[], // 相关视频标题
+                          //   notices?: { type: 'info'|'success'|'warning'|'error', content: string }[] // 公告
+                          // }
   
   tags        TagOnVideo[]
   
@@ -516,4 +529,49 @@ model SearchRecord {
   @@index([keyword])
   @@index([createdAt])
   @@index([userId])
+}
+
+// ==================== 网站配置 ====================
+
+model SiteConfig {
+  id        String   @id @default("default") // 单例模式，只有一条记录
+  
+  // 基本信息
+  siteName        String   @default("Mikiacg")
+  siteDescription String?  @db.Text
+  siteLogo        String?  // Logo URL
+  siteFavicon     String?  // Favicon URL
+  siteKeywords    String?  // SEO 关键词，逗号分隔
+  
+  // 公告
+  announcement    String?  @db.Text  // 公告内容（支持 Markdown）
+  announcementEnabled Boolean @default(false)
+  
+  // 功能开关
+  allowRegistration   Boolean @default(true)   // 允许注册
+  allowUpload         Boolean @default(true)   // 允许上传
+  allowComment        Boolean @default(true)   // 允许评论
+  allowGuestbook      Boolean @default(true)   // 允许留言
+  requireEmailVerify  Boolean @default(false)  // 注册需要邮箱验证
+  
+  // 内容设置
+  videosPerPage       Int     @default(20)     // 每页视频数
+  commentsPerPage     Int     @default(20)     // 每页评论数
+  maxUploadSize       Int     @default(500)    // 最大上传大小 (MB)
+  allowedVideoFormats String  @default("mp4,webm,m3u8") // 允许的视频格式
+  
+  // 联系方式
+  contactEmail    String?
+  socialLinks     Json?    // { github?: string, twitter?: string, discord?: string, ... }
+  
+  // 页脚
+  footerText      String?  @db.Text  // 自定义页脚文本
+  footerLinks     Json?    // [{ label: string, url: string }]
+  
+  // ICP 备案
+  icpBeian        String?  // ICP 备案号
+  publicSecurityBeian String? // 公安备案号
+  
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
 }
