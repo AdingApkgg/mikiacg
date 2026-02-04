@@ -18,16 +18,27 @@ import * as path from "path";
 import * as crypto from "crypto";
 import { spawn } from "child_process";
 
-// 缓存目录
+// 封面存储目录（本地 uploads）
+const UPLOAD_DIR = process.env.UPLOAD_DIR || "./uploads";
+const COVER_DIR = path.join(process.cwd(), UPLOAD_DIR, "cover");
+// 外部图片缓存目录
 const CACHE_DIR = path.join(process.cwd(), "public", "cache", "covers");
 
-// 确保缓存目录存在
-async function ensureCacheDir() {
+// 确保目录存在
+async function ensureDir(dir: string) {
   try {
-    await fs.access(CACHE_DIR);
+    await fs.access(dir);
   } catch {
-    await fs.mkdir(CACHE_DIR, { recursive: true });
+    await fs.mkdir(dir, { recursive: true });
   }
+}
+
+async function ensureCacheDir() {
+  await ensureDir(CACHE_DIR);
+}
+
+async function ensureCoverDir() {
+  await ensureDir(COVER_DIR);
 }
 
 // 生成缓存文件名
@@ -150,7 +161,8 @@ async function generateThumbnailFromVideo(
 async function generateThumbnailWithFallback(
   videoUrl: string, 
   baseFileName: string,
-  preferredFormats: { ext: string; contentType: string }[]
+  preferredFormats: { ext: string; contentType: string }[],
+  outputDir: string = CACHE_DIR
 ): Promise<{ path: string; contentType: string } | null> {
   const formatMap: Record<string, "avif" | "webp" | "jpeg"> = {
     ".avif": "avif",
@@ -162,7 +174,7 @@ async function generateThumbnailWithFallback(
     const format = formatMap[ext];
     if (!format) continue;
     
-    const outputPath = path.join(CACHE_DIR, `${baseFileName}${ext}`);
+    const outputPath = path.join(outputDir, `${baseFileName}${ext}`);
     const success = await generateThumbnailFromVideo(videoUrl, outputPath, format);
     if (success) {
       return { path: outputPath, contentType };
@@ -270,16 +282,19 @@ export async function GET(
       }
     }
 
-    // 尝试从视频生成封面（根据客户端支持的格式选择）
-    const cacheBaseName = `video_${videoId}`;
+    // 确保封面目录存在
+    await ensureCoverDir();
+    
+    // 根据客户端支持的格式选择最佳格式
     const acceptHeader = request.headers.get("accept");
     const preferredFormats = getPreferredFormat(acceptHeader);
-    const bestFormat = preferredFormats[0]; // 客户端最优先的格式
+    const bestFormat = preferredFormats[0];
     
-    // 检查最佳格式的缓存是否存在
-    const bestCacheFile = path.join(CACHE_DIR, `${cacheBaseName}${bestFormat.ext}`);
+    // 检查本地封面是否已存在
+    const coverFileName = `${videoId}${bestFormat.ext}`;
+    const coverFilePath = path.join(COVER_DIR, coverFileName);
     try {
-      const cached = await fs.readFile(bestCacheFile);
+      const cached = await fs.readFile(coverFilePath);
       return new Response(new Uint8Array(cached), {
         headers: {
           "Content-Type": bestFormat.contentType,
@@ -288,14 +303,27 @@ export async function GET(
         },
       });
     } catch {
-      // 最佳格式缓存不存在，需要生成
+      // 本地封面不存在，需要生成
     }
 
-    // 方案 1: 使用 ffmpeg 直接生成最佳格式
-    const result = await generateThumbnailWithFallback(video.videoUrl, cacheBaseName, preferredFormats);
+    // 方案 1: 使用 ffmpeg 直接生成封面（保存到 uploads/cover/）
+    const result = await generateThumbnailWithFallback(video.videoUrl, videoId, preferredFormats, COVER_DIR);
     if (result) {
       try {
         const thumbnail = await fs.readFile(result.path);
+        
+        // 自动保存封面路径到数据库（避免重复生成）
+        const coverUrl = `/uploads/cover/${path.basename(result.path)}`;
+        try {
+          await prisma.video.update({
+            where: { id: videoId },
+            data: { coverUrl },
+          });
+          console.log(`[封面生成] 已保存: ${videoId} -> ${coverUrl}`);
+        } catch (dbError) {
+          console.error(`[封面生成] 数据库更新失败: ${videoId}`, dbError);
+        }
+        
         return new Response(new Uint8Array(thumbnail), {
           headers: {
             "Content-Type": result.contentType,
@@ -311,9 +339,22 @@ export async function GET(
     // 方案 2: 尝试从 CDN 获取缩略图（作为后备）
     const cdnThumbnail = await tryFetchThumbnailFromCDN(video.videoUrl);
     if (cdnThumbnail) {
-      // CDN 返回的通常是 JPEG，保存为 .jpg
-      const cacheFile = path.join(CACHE_DIR, `${cacheBaseName}.jpg`);
-      await fs.writeFile(cacheFile, cdnThumbnail);
+      // CDN 返回的通常是 JPEG，保存到 uploads/cover/
+      const cdnCoverPath = path.join(COVER_DIR, `${videoId}.jpg`);
+      await fs.writeFile(cdnCoverPath, cdnThumbnail);
+      
+      // 保存到数据库
+      const coverUrl = `/uploads/cover/${videoId}.jpg`;
+      try {
+        await prisma.video.update({
+          where: { id: videoId },
+          data: { coverUrl },
+        });
+        console.log(`[封面生成] 已保存(CDN): ${videoId} -> ${coverUrl}`);
+      } catch (dbError) {
+        console.error(`[封面生成] 数据库更新失败: ${videoId}`, dbError);
+      }
+      
       return new Response(new Uint8Array(cdnThumbnail), {
         headers: {
           "Content-Type": "image/jpeg",

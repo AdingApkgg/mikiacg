@@ -1,6 +1,7 @@
 "use client";
 
 import Link from "next/link";
+import Image from "next/image";
 import { signOut } from "next-auth/react";
 import { Button } from "@/components/ui/button";
 import {
@@ -231,13 +232,15 @@ export function Header({ onMenuClick }: HeaderProps) {
           </Sheet>
 
           {/* Logo */}
-          <Link href="/" className="flex items-center gap-1 font-bold text-xl group">
-            <span className="text-gradient-anime transition-transform duration-200 hover:scale-105 active:scale-95">
-              Miki
-            </span>
-            <span className="text-foreground group-hover:text-primary transition-colors hidden sm:inline">
-              acg
-            </span>
+          <Link href="/" className="flex items-center transition-transform duration-200 hover:scale-105 active:scale-95">
+            <Image
+              src="/Mikiacg-logo.webp"
+              alt="Mikiacg"
+              width={120}
+              height={32}
+              className="h-8 w-auto"
+              priority
+            />
           </Link>
         </div>
 

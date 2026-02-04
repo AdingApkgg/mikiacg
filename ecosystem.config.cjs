@@ -13,7 +13,7 @@ module.exports = {
       },
       // 自动重启配置
       watch: false,
-      max_memory_restart: "2G",
+      max_memory_restart: "4G",
       // 日志配置
       error_file: "logs/error.log",
       out_file: "logs/out.log",

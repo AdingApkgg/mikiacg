@@ -1,5 +1,6 @@
 "use client";
 
+import { Suspense } from "react";
 import { useSession } from "next-auth/react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { useEffect, useState, useCallback } from "react";
@@ -73,7 +74,7 @@ const statusMap = {
 type SortBy = "latest" | "views" | "likes";
 type StatusFilter = "ALL" | "PUBLISHED" | "PENDING" | "REJECTED";
 
-export default function MyVideosPage() {
+function MyVideosContent() {
   const { data: session, status: authStatus } = useSession();
   const router = useRouter();
   const searchParams = useSearchParams();
@@ -686,5 +687,17 @@ export default function MyVideosPage() {
         </>
       )}
     </div>
+  );
+}
+
+export default function MyVideosPage() {
+  return (
+    <Suspense fallback={
+      <div className="flex items-center justify-center min-h-[400px]">
+        <Loader2 className="h-8 w-8 animate-spin text-primary" />
+      </div>
+    }>
+      <MyVideosContent />
+    </Suspense>
   );
 }

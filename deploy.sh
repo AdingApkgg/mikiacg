@@ -108,6 +108,9 @@ export NODE_ENV=production
 
 cd ${DEPLOY_PATH}
 
+echo "🧹 清理旧源代码..."
+rm -rf src/ prisma/ scripts/ public/
+
 echo "📦 解压文件..."
 tar -xzf /tmp/mikiacg-deploy.tar.gz --overwrite 2>/dev/null
 rm /tmp/mikiacg-deploy.tar.gz

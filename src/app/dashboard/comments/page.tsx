@@ -411,7 +411,7 @@ export default function AdminCommentsPage() {
             const isGuest = !comment.user;
             const displayName = isGuest
               ? ((comment as unknown as { guestName?: string }).guestName || "访客")
-              : (comment.user.nickname || comment.user.username);
+              : (comment.user!.nickname || comment.user!.username);
 
             return (
               <Card
@@ -432,7 +432,7 @@ export default function AdminCommentsPage() {
                     />
 
                     <Avatar className="h-10 w-10 shrink-0">
-                      <AvatarImage src={isGuest ? undefined : (comment.user.avatar || undefined)} />
+                      <AvatarImage src={isGuest ? undefined : (comment.user!.avatar || undefined)} />
                       <AvatarFallback>
                         {displayName.charAt(0).toUpperCase()}
                       </AvatarFallback>
@@ -448,7 +448,7 @@ export default function AdminCommentsPage() {
                           </span>
                         ) : (
                           <Link
-                            href={`/user/${comment.user.id}`}
+                            href={`/user/${comment.user!.id}`}
                             className="font-medium hover:underline"
                           >
                             {displayName}
