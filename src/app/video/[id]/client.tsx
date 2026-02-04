@@ -449,7 +449,9 @@ export function VideoPageClient({ id, initialVideo }: VideoPageClientProps) {
             )}
 
             {/* 扩展信息 */}
-            {displayVideo.extraInfo && <VideoExtraInfoSection extraInfo={displayVideo.extraInfo} />}
+            {displayVideo.extraInfo && typeof displayVideo.extraInfo === 'object' && !Array.isArray(displayVideo.extraInfo) && (
+              <VideoExtraInfoSection extraInfo={displayVideo.extraInfo as import("@/lib/shortcode-parser").VideoExtraInfo} />
+            )}
           </div>
 
           <Separator className="my-6" />

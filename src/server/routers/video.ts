@@ -610,9 +610,11 @@ export const videoRouter = router({
       }
 
       // 更新视频基本信息
-      const updateData = {
+      const updateData: Prisma.VideoUpdateInput = {
         ...data,
-        ...(extraInfo !== undefined ? { extraInfo: extraInfo || null } : {}),
+        ...(extraInfo !== undefined ? { 
+          extraInfo: extraInfo ? JSON.parse(JSON.stringify(extraInfo)) : Prisma.JsonNull 
+        } : {}),
       };
       const updated = await ctx.prisma.video.update({
         where: { id },
