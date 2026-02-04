@@ -1,0 +1,55 @@
+# Dependencies
+node_modules
+.pnpm-store
+
+# Next.js
+.next
+out
+build
+
+# Prisma
+src/generated
+
+# Environment
+.env
+.env.local
+.env.*.local
+.env.development
+.env.production
+
+# IDE
+.vscode
+.idea
+*.swp
+*.swo
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Logs
+logs
+*.log
+npm-debug.log*
+pnpm-debug.log*
+
+# Testing
+coverage
+.nyc_output
+
+# Uploads
+uploads/*
+!uploads/.gitkeep
+
+# SSL certificates
+certbot
+
+# Deploy secrets (keep templates)
+deploy/rathole-client.toml
+deploy/rathole-server.toml
+!deploy/*.example.toml
+
+# Misc
+*.tsbuildinfo
+next-env.d.ts
+.history

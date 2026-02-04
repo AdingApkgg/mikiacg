@@ -1,0 +1,16 @@
+# Rathole 客户端配置 - 内网机
+# 将本地服务暴露到公网机
+
+[client]
+remote_addr = "公网机IP:2333"  # 修改为你的公网机 IP
+default_token = "your-secret-token"  # 修改为强密钥
+retry_interval = 5  # 重连间隔(秒)
+
+[client.transport]
+type = "tcp"
+keepalive_secs = 30
+keepalive_interval = 5
+
+# Next.js 应用
+[client.services.acgn-flow]
+local_addr = "127.0.0.1:1270"

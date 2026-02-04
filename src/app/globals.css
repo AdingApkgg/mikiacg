@@ -1,0 +1,332 @@
+@import "tailwindcss";
+@import "tw-animate-css";
+@plugin "@tailwindcss/typography";
+
+@custom-variant dark (&:is(.dark *));
+
+/* 使用 @theme 扩展默认主题，保留内置 spacing, sizing 等 */
+@theme {
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+  --font-sans: "Noto Sans SC", "Noto Sans JP", "PingFang SC", "Hiragino Sans GB", "Microsoft YaHei", ui-sans-serif, system-ui, sans-serif, "Apple Color Emoji", "Segoe UI Emoji";
+  --font-mono: ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas, "Liberation Mono", monospace;
+  --color-sidebar-ring: var(--sidebar-ring);
+  --color-sidebar-border: var(--sidebar-border);
+  --color-sidebar-accent-foreground: var(--sidebar-accent-foreground);
+  --color-sidebar-accent: var(--sidebar-accent);
+  --color-sidebar-primary-foreground: var(--sidebar-primary-foreground);
+  --color-sidebar-primary: var(--sidebar-primary);
+  --color-sidebar-foreground: var(--sidebar-foreground);
+  --color-sidebar: var(--sidebar);
+  --color-chart-5: var(--chart-5);
+  --color-chart-4: var(--chart-4);
+  --color-chart-3: var(--chart-3);
+  --color-chart-2: var(--chart-2);
+  --color-chart-1: var(--chart-1);
+  --color-ring: var(--ring);
+  --color-input: var(--input);
+  --color-border: var(--border);
+  --color-destructive: var(--destructive);
+  --color-accent-foreground: var(--accent-foreground);
+  --color-accent: var(--accent);
+  --color-muted-foreground: var(--muted-foreground);
+  --color-muted: var(--muted);
+  --color-secondary-foreground: var(--secondary-foreground);
+  --color-secondary: var(--secondary);
+  --color-primary-foreground: var(--primary-foreground);
+  --color-primary: var(--primary);
+  --color-popover-foreground: var(--popover-foreground);
+  --color-popover: var(--popover);
+  --color-card-foreground: var(--card-foreground);
+  --color-card: var(--card);
+  --radius-sm: calc(var(--radius) - 4px);
+  --radius-md: calc(var(--radius) - 2px);
+  --radius-lg: var(--radius);
+  --radius-xl: calc(var(--radius) + 4px);
+  --radius-2xl: calc(var(--radius) + 8px);
+  --radius-3xl: calc(var(--radius) + 12px);
+  --radius-4xl: calc(var(--radius) + 16px);
+  
+  /* ACGN gradient colors */
+  --gradient-acgn: linear-gradient(135deg, #667eea 0%, #764ba2 50%, #f093fb 100%);
+  --gradient-anime: linear-gradient(135deg, #a855f7 0%, #ec4899 50%, #f43f5e 100%);
+  --gradient-cyber: linear-gradient(135deg, #06b6d4 0%, #3b82f6 50%, #8b5cf6 100%);
+}
+
+:root {
+  --radius: 0.625rem;
+  /* 视觉设置变量（由 JS 动态更新） */
+  --visual-opacity: 0.95;
+  --visual-blur: 10px;
+  --visual-radius: 12px;
+  --background: oklch(0.99 0.005 285);
+  --foreground: oklch(0.15 0.02 285);
+  --card: oklch(1 0 0);
+  --card-foreground: oklch(0.15 0.02 285);
+  --popover: oklch(1 0 0);
+  --popover-foreground: oklch(0.15 0.02 285);
+  --primary: oklch(0.55 0.24 285);
+  --primary-foreground: oklch(0.98 0 0);
+  --secondary: oklch(0.95 0.02 285);
+  --secondary-foreground: oklch(0.25 0.05 285);
+  --muted: oklch(0.96 0.01 285);
+  --muted-foreground: oklch(0.5 0.03 285);
+  --accent: oklch(0.92 0.05 330);
+  --accent-foreground: oklch(0.25 0.1 330);
+  --destructive: oklch(0.577 0.245 27.325);
+  --border: oklch(0.9 0.02 285);
+  --input: oklch(0.92 0.02 285);
+  --ring: oklch(0.55 0.24 285);
+  --chart-1: oklch(0.55 0.24 285);
+  --chart-2: oklch(0.65 0.22 330);
+  --chart-3: oklch(0.6 0.2 200);
+  --chart-4: oklch(0.7 0.18 60);
+  --chart-5: oklch(0.6 0.25 20);
+  --sidebar: oklch(0.985 0.01 285);
+  --sidebar-foreground: oklch(0.15 0.02 285);
+  --sidebar-primary: oklch(0.55 0.24 285);
+  --sidebar-primary-foreground: oklch(0.98 0 0);
+  --sidebar-accent: oklch(0.95 0.02 285);
+  --sidebar-accent-foreground: oklch(0.25 0.05 285);
+  --sidebar-border: oklch(0.9 0.02 285);
+  --sidebar-ring: oklch(0.55 0.24 285);
+}
+
+.dark {
+  --background: oklch(0.13 0.02 285);
+  --foreground: oklch(0.95 0.01 285);
+  --card: oklch(0.18 0.025 285);
+  --card-foreground: oklch(0.95 0.01 285);
+  --popover: oklch(0.18 0.025 285);
+  --popover-foreground: oklch(0.95 0.01 285);
+  --primary: oklch(0.7 0.2 285);
+  --primary-foreground: oklch(0.13 0.02 285);
+  --secondary: oklch(0.25 0.04 285);
+  --secondary-foreground: oklch(0.9 0.01 285);
+  --muted: oklch(0.25 0.03 285);
+  --muted-foreground: oklch(0.65 0.03 285);
+  --accent: oklch(0.35 0.1 330);
+  --accent-foreground: oklch(0.92 0.05 330);
+  --destructive: oklch(0.65 0.22 25);
+  --border: oklch(1 0 0 / 12%);
+  --input: oklch(1 0 0 / 15%);
+  --ring: oklch(0.7 0.2 285);
+  --chart-1: oklch(0.7 0.2 285);
+  --chart-2: oklch(0.7 0.2 330);
+  --chart-3: oklch(0.65 0.18 200);
+  --chart-4: oklch(0.75 0.15 60);
+  --chart-5: oklch(0.65 0.22 25);
+  --sidebar: oklch(0.16 0.025 285);
+  --sidebar-foreground: oklch(0.95 0.01 285);
+  --sidebar-primary: oklch(0.7 0.2 285);
+  --sidebar-primary-foreground: oklch(0.13 0.02 285);
+  --sidebar-accent: oklch(0.25 0.04 285);
+  --sidebar-accent-foreground: oklch(0.9 0.01 285);
+  --sidebar-border: oklch(1 0 0 / 12%);
+  --sidebar-ring: oklch(0.7 0.2 285);
+}
+
+@layer base {
+  * {
+    @apply border-border outline-ring/50;
+  }
+  html {
+    overflow-x: hidden;
+  }
+  body {
+    @apply bg-background text-foreground;
+    overflow-x: hidden;
+    width: 100%;
+  }
+}
+
+/* Container 居中配置 */
+@layer utilities {
+  .container {
+    @apply mx-auto px-4 sm:px-6 lg:px-8;
+    max-width: min(1280px, 100%);
+    box-sizing: border-box;
+  }
+}
+
+/* ACGN 风格渐变 */
+@layer utilities {
+  .gradient-acgn {
+    background: linear-gradient(135deg, #667eea 0%, #764ba2 50%, #f093fb 100%);
+  }
+  
+  .gradient-anime {
+    background: linear-gradient(135deg, #a855f7 0%, #ec4899 50%, #f43f5e 100%);
+  }
+  
+  .gradient-cyber {
+    background: linear-gradient(135deg, #06b6d4 0%, #3b82f6 50%, #8b5cf6 100%);
+  }
+  
+  .gradient-text {
+    background-clip: text;
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+  }
+  
+  .text-gradient-acgn {
+    background: linear-gradient(135deg, #667eea 0%, #764ba2 50%, #f093fb 100%);
+    background-clip: text;
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+  }
+  
+  .text-gradient-anime {
+    background: linear-gradient(135deg, #a855f7 0%, #ec4899 50%, #f43f5e 100%);
+    background-clip: text;
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+  }
+}
+
+/* 玻璃态效果 */
+@layer utilities {
+  .glass {
+    background: oklch(1 0 0 / 70%);
+    backdrop-filter: blur(12px);
+    -webkit-backdrop-filter: blur(12px);
+  }
+  
+  .dark .glass {
+    background: oklch(0.18 0.025 285 / 70%);
+  }
+  
+  .glass-card {
+    background: oklch(1 0 0 / 50%);
+    backdrop-filter: blur(16px);
+    -webkit-backdrop-filter: blur(16px);
+    border: 1px solid oklch(1 0 0 / 20%);
+  }
+  
+  .dark .glass-card {
+    background: oklch(0.18 0.025 285 / 50%);
+    border: 1px solid oklch(1 0 0 / 10%);
+  }
+}
+
+/* 动画效果 */
+@layer utilities {
+  .animate-float {
+    animation: float 3s ease-in-out infinite;
+  }
+  
+  .animate-pulse-slow {
+    animation: pulse 3s cubic-bezier(0.4, 0, 0.6, 1) infinite;
+  }
+  
+  .animate-shimmer {
+    animation: shimmer 2s linear infinite;
+    background-size: 200% 100%;
+  }
+}
+
+@keyframes float {
+  0%, 100% { transform: translateY(0); }
+  50% { transform: translateY(-10px); }
+}
+
+@keyframes shimmer {
+  0% { background-position: -200% 0; }
+  100% { background-position: 200% 0; }
+}
+
+/* 滚动条美化 */
+@layer base {
+  ::-webkit-scrollbar {
+    width: 8px;
+    height: 8px;
+  }
+  
+  ::-webkit-scrollbar-track {
+    background: transparent;
+  }
+  
+  ::-webkit-scrollbar-thumb {
+    background: oklch(0.7 0.1 285 / 40%);
+    border-radius: 4px;
+  }
+  
+  ::-webkit-scrollbar-thumb:hover {
+    background: oklch(0.6 0.15 285 / 60%);
+  }
+  
+  .dark ::-webkit-scrollbar-thumb {
+    background: oklch(0.5 0.1 285 / 40%);
+  }
+  
+  .dark ::-webkit-scrollbar-thumb:hover {
+    background: oklch(0.6 0.15 285 / 60%);
+  }
+}
+
+/* 视觉设置应用 - 使用 CSS 变量控制透明度、模糊度和圆角 */
+@layer utilities {
+  .glass-effect {
+    background-color: hsl(var(--background) / var(--visual-opacity));
+    backdrop-filter: blur(var(--visual-blur));
+    -webkit-backdrop-filter: blur(var(--visual-blur));
+  }
+
+  .visual-radius {
+    border-radius: var(--visual-radius);
+  }
+}
+
+/* Header 玻璃态效果 */
+header.sticky {
+  background-color: hsl(var(--background) / var(--visual-opacity)) !important;
+  backdrop-filter: blur(var(--visual-blur));
+  -webkit-backdrop-filter: blur(var(--visual-blur));
+}
+
+/* Card 圆角应用 */
+[data-slot="card"] {
+  border-radius: var(--visual-radius);
+}
+
+/* Popover/Dialog 圆角应用 */
+[data-radix-popper-content-wrapper] > div {
+  border-radius: var(--visual-radius);
+}
+
+/* 移动端安全区域适配 (iPhone 底部 Home Indicator 等) */
+@layer utilities {
+  .safe-area-bottom {
+    padding-bottom: env(safe-area-inset-bottom, 0px);
+  }
+
+  .safe-area-top {
+    padding-top: env(safe-area-inset-top, 0px);
+  }
+
+  .safe-area-left {
+    padding-left: env(safe-area-inset-left, 0px);
+  }
+
+  .safe-area-right {
+    padding-right: env(safe-area-inset-right, 0px);
+  }
+}
+
+/* 移动端触摸优化 */
+@layer base {
+  /* 移除移动端点击高亮 */
+  * {
+    -webkit-tap-highlight-color: transparent;
+  }
+  
+  /* 优化移动端滚动 */
+  html {
+    -webkit-overflow-scrolling: touch;
+  }
+
+  /* 防止移动端双击缩放 */
+  button, a, input, select, textarea {
+    touch-action: manipulation;
+  }
+}
