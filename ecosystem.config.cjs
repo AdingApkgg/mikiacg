@@ -4,7 +4,7 @@ module.exports = {
       name: "mikiacg",
       script: "node_modules/next/dist/bin/next",
       args: "start",
-      cwd: "/home/i/acgn-flow",
+      cwd: "/home/i/mikiacg",
       instances: 1,
       exec_mode: "fork",
       env: {
