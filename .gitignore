@@ -41,6 +41,9 @@ coverage
 uploads/*
 !uploads/.gitkeep
 
+# Cache
+public/cache
+
 # SSL certificates
 certbot
 
@@ -53,6 +56,3 @@ deploy/rathole-server.toml
 *.tsbuildinfo
 next-env.d.ts
 .history
-
-# Cache covers
-public/cache/covers/

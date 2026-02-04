@@ -187,18 +187,10 @@ interface DeviceInfo {
   connectionType: string | null;
 }
 
-interface GeoLocation {
-  latitude: number;
-  longitude: number;
-  accuracy: number;
-}
-
 interface UseDeviceInfoReturn {
   deviceInfo: DeviceInfo | null;
-  geoLocation: GeoLocation | null;
   isLoading: boolean;
   error: string | null;
-  requestGeoLocation: () => Promise<GeoLocation | null>;
 }
 
 /**
@@ -207,7 +199,6 @@ interface UseDeviceInfoReturn {
  */
 export function useDeviceInfo(): UseDeviceInfoReturn {
   const [deviceInfo, setDeviceInfo] = useState<DeviceInfo | null>(null);
-  const [geoLocation, setGeoLocation] = useState<GeoLocation | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
@@ -244,41 +235,10 @@ export function useDeviceInfo(): UseDeviceInfoReturn {
     }
   }, []);
 
-  // 请求地理位置
-  const requestGeoLocation = useCallback(async (): Promise<GeoLocation | null> => {
-    if (typeof window === "undefined" || !navigator.geolocation) {
-      return null;
-    }
-
-    return new Promise((resolve) => {
-      navigator.geolocation.getCurrentPosition(
-        (position) => {
-          const location: GeoLocation = {
-            latitude: position.coords.latitude,
-            longitude: position.coords.longitude,
-            accuracy: position.coords.accuracy,
-          };
-          setGeoLocation(location);
-          resolve(location);
-        },
-        () => {
-          resolve(null);
-        },
-        {
-          enableHighAccuracy: false,
-          timeout: 5000,
-          maximumAge: 300000, // 5 分钟缓存
-        }
-      );
-    });
-  }, []);
-
   return {
     deviceInfo,
-    geoLocation,
     isLoading,
     error,
-    requestGeoLocation,
   };
 }
 

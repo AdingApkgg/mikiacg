@@ -4,7 +4,7 @@ import { prisma } from "@/lib/prisma";
 export const revalidate = 3600;
 
 export async function GET() {
-  const baseUrl = process.env.NEXT_PUBLIC_APP_URL || "https://mikiacg.vip";
+  const baseUrl = process.env.NEXT_PUBLIC_APP_URL || "https://www.mikiacg.vip";
   const now = new Date().toISOString();
 
   try {

@@ -16,7 +16,6 @@ import { formatRelativeTime } from "@/lib/format";
 import Link from "next/link";
 import type { SerializedUser } from "./page";
 import { parseDeviceInfo, getHighEntropyDeviceInfo, mergeDeviceInfo, type DeviceInfo } from "@/lib/device-info";
-import { getGpsLocation, formatGpsLocation } from "@/lib/geolocation";
 
 // 社交图标组件
 function TwitterIcon({ className }: { className?: string }) {
@@ -127,7 +126,6 @@ export function UserPageClient({ id, initialUser }: UserPageClientProps) {
   const { data: session } = useSession();
   const { ref, inView } = useInView();
   const [deviceInfo, setDeviceInfo] = useState<DeviceInfo | null>(null);
-  const [gpsLocation, setGpsLocation] = useState<string | null>(null);
   const deviceRecordedRef = useRef(false);
 
   // 客户端获取用户数据
@@ -177,22 +175,12 @@ export function UserPageClient({ id, initialUser }: UserPageClientProps) {
     if (!deviceInfo || deviceRecordedRef.current) return;
     deviceRecordedRef.current = true;
     const run = async () => {
-      let currentGps = gpsLocation;
-      if (!currentGps) {
-        // 使用逆地理编码获取可读地址
-        const gps = await getGpsLocation({ reverseGeocode: true, timeout: 8000 });
-        if (gps) {
-          currentGps = formatGpsLocation(gps);
-          setGpsLocation(currentGps);
-        }
-      }
       recordDeviceMutation.mutate({
-        gpsLocation: currentGps || undefined,
         deviceInfo,
       });
     };
     run();
-  }, [session?.user?.id, id, deviceInfo, gpsLocation, recordDeviceMutation]);
+  }, [session?.user?.id, id, deviceInfo, recordDeviceMutation]);
 
   const {
     data,
@@ -300,12 +288,6 @@ export function UserPageClient({ id, initialUser }: UserPageClientProps) {
                   IP属地（大致）：{displayUser.lastIpLocation}
                 </span>
               )}
-              {displayUser.lastGpsLocation && (
-                <span className="flex items-center gap-1" title="基于 GPS 的精确位置">
-                  <MapPin className="h-4 w-4" />
-                  定位：{displayUser.lastGpsLocation}
-                </span>
-              )}
               {displayUser.website && (
                 <a
                   href={displayUser.website.startsWith("http") ? displayUser.website : `https://${displayUser.website}`}
@@ -371,7 +353,6 @@ export function UserPageClient({ id, initialUser }: UserPageClientProps) {
                       <div>浏览器：{[device.browser, device.browserVersion].filter(Boolean).join(" ") || "未知"}</div>
                       {device.ipv4Location && <div title="基于 IPv4 地址">IPv4属地：{device.ipv4Location}</div>}
                       {device.ipv6Location && <div title="基于 IPv6 地址">IPv6属地：{device.ipv6Location}</div>}
-                      {device.gpsLocation && <div title="基于 GPS 的精确位置">定位：{device.gpsLocation}</div>}
                       <div>最近活跃：{formatRelativeTime(device.lastActiveAt)}</div>
                     </div>
                   </div>

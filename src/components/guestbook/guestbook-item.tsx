@@ -28,7 +28,6 @@ import { formatRelativeTime } from "@/lib/format";
 import Link from "next/link";
 import { cn } from "@/lib/utils";
 import { parseDeviceInfo, getHighEntropyDeviceInfo, mergeDeviceInfo, type DeviceInfo } from "@/lib/device-info";
-import { getGpsLocation, formatGpsLocation } from "@/lib/geolocation";
 
 interface GuestbookMessage {
   id: string;
@@ -41,7 +40,6 @@ interface GuestbookMessage {
   userReaction: boolean | null;
   ipv4Location?: string | null;
   ipv6Location?: string | null;
-  gpsLocation?: string | null;
   deviceInfo?: {
     deviceType?: string | null;
     os?: string | null;
@@ -82,7 +80,6 @@ export function GuestbookItem({ message, isReply = false }: GuestbookItemProps) 
   const [localDislikes, setLocalDislikes] = useState(message.dislikes);
   const [localReaction, setLocalReaction] = useState(message.userReaction);
   const [deviceInfo, setDeviceInfo] = useState<DeviceInfo | null>(null);
-  const [gpsLocation, setGpsLocation] = useState<string | null>(null);
 
   const utils = trpc.useUtils();
   const isOwner = session?.user?.id === message.user.id;
@@ -195,23 +192,13 @@ export function GuestbookItem({ message, isReply = false }: GuestbookItemProps) 
       setDeviceInfo(currentDeviceInfo);
     }
 
-    let currentGps = gpsLocation;
-    if (!currentGps) {
-      const gps = await getGpsLocation({ reverseGeocode: true, timeout: 8000 });
-      if (gps) {
-        currentGps = formatGpsLocation(gps);
-        setGpsLocation(currentGps);
-      }
-    }
-
     replyMutation.mutate({
       content: replyContent.trim(),
       parentId: isReply ? undefined : message.id,
       replyToUserId: message.user.id,
-      gpsLocation: currentGps || undefined,
       deviceInfo: currentDeviceInfo || undefined,
     });
-  }, [replyContent, replyMutation, message.id, message.user.id, isReply, deviceInfo, gpsLocation]);
+  }, [replyContent, replyMutation, message.id, message.user.id, isReply, deviceInfo]);
 
   const displayName = message.user.nickname || message.user.username;
   const replyToDisplayName = message.replyToUser?.nickname || message.replyToUser?.username;

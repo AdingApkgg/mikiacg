@@ -57,6 +57,7 @@ import { toast } from "sonner";
 import Link from "next/link";
 import Image from "next/image";
 import { EmptyState } from "@/components/ui/empty-state";
+import { getCoverUrl } from "@/lib/cover";
 
 const statusMap = {
   PUBLISHED: { label: "已发布", variant: "default" as const, color: "text-green-600" },
@@ -410,18 +411,13 @@ export default function MyVideosPage() {
                   href={`/v/${video.id}`}
                   className="relative w-40 h-24 flex-shrink-0 rounded-md overflow-hidden bg-muted"
                 >
-                  {video.coverUrl ? (
-                    <Image
-                      src={video.coverUrl}
-                      alt={video.title}
-                      fill
-                      className="object-cover"
-                    />
-                  ) : (
-                    <div className="flex items-center justify-center h-full">
-                      <Video className="h-8 w-8 text-muted-foreground" />
-                    </div>
-                  )}
+                  <Image
+                    src={getCoverUrl(video.id, video.coverUrl)}
+                    alt={video.title}
+                    fill
+                    className="object-cover"
+                    unoptimized
+                  />
                   {video.duration && (
                     <div className="absolute bottom-1 right-1 px-1.5 py-0.5 bg-black/80 text-white text-xs rounded">
                       {Math.floor(video.duration / 60)}:{String(video.duration % 60).padStart(2, "0")}

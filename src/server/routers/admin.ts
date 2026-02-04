@@ -242,7 +242,6 @@ export const adminRouter = router({
           isBanned: true,
           banReason: true,
           lastIpLocation: true,
-          lastGpsLocation: true,
           createdAt: true,
           _count: { select: { videos: true, comments: true, likes: true } },
         },

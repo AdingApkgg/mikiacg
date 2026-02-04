@@ -20,7 +20,6 @@ import { toast } from "sonner";
 import { GuestbookItem } from "@/components/guestbook/guestbook-item";
 import Link from "next/link";
 import { parseDeviceInfo, getHighEntropyDeviceInfo, mergeDeviceInfo, type DeviceInfo } from "@/lib/device-info";
-import { getGpsLocation, formatGpsLocation } from "@/lib/geolocation";
 import { formatRelativeTime } from "@/lib/format";
 import { useIsMounted } from "@/components/motion";
 
@@ -33,7 +32,6 @@ export default function CommentsPage() {
   const [isSubmitting, setIsSubmitting] = useState(false);
   const isMounted = useIsMounted();
   const [deviceInfo, setDeviceInfo] = useState<DeviceInfo | null>(null);
-  const [gpsLocation, setGpsLocation] = useState<string | null>(null);
 
   const utils = trpc.useUtils();
 
@@ -118,21 +116,11 @@ export default function CommentsPage() {
       setDeviceInfo(currentDeviceInfo);
     }
 
-    let currentGps = gpsLocation;
-    if (!currentGps) {
-      const gps = await getGpsLocation({ reverseGeocode: true, timeout: 8000 });
-      if (gps) {
-        currentGps = formatGpsLocation(gps);
-        setGpsLocation(currentGps);
-      }
-    }
-
     createMutation.mutate({
       content: newMessage.trim(),
-      gpsLocation: currentGps || undefined,
       deviceInfo: currentDeviceInfo || undefined,
     });
-  }, [newMessage, isSubmitting, createMutation, gpsLocation, deviceInfo]);
+  }, [newMessage, isSubmitting, createMutation, deviceInfo]);
 
   const messages = data?.pages.flatMap((page) => page.messages) ?? [];
 

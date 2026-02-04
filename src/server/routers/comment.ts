@@ -231,7 +231,6 @@ export const commentRouter = router({
         content: z.string().min(1).max(2000),
         parentId: z.string().optional(),
         replyToUserId: z.string().optional(), // 回复的目标用户
-        gpsLocation: z.string().optional(),
         deviceInfo: z
           .object({
             deviceType: z.string().nullable().optional(),
@@ -253,7 +252,7 @@ export const commentRouter = router({
       })
     )
     .mutation(async ({ ctx, input }) => {
-      const { videoId, content, parentId, replyToUserId, gpsLocation, deviceInfo } = input;
+      const { videoId, content, parentId, replyToUserId, deviceInfo } = input;
       const userId = ctx.session.user.id;
       
       // 获取 IPv4 和 IPv6 位置
@@ -327,7 +326,6 @@ export const commentRouter = router({
           ipv4Location,
           ipv6Address: ctx.ipv6Address,
           ipv6Location,
-          gpsLocation,
           deviceInfo: normalizedDeviceInfo as unknown as Prisma.InputJsonValue,
           userAgent: ctx.userAgent,
         },
@@ -359,7 +357,6 @@ export const commentRouter = router({
         where: { id: userId },
         data: {
           lastIpLocation: lastIpLocation || undefined,
-          lastGpsLocation: gpsLocation || undefined,
         },
       });
 
@@ -384,7 +381,6 @@ export const commentRouter = router({
           ipv4Location,
           ipv6Address: ctx.ipv6Address,
           ipv6Location,
-          gpsLocation,
           lastActiveAt: new Date(),
         },
         create: {
@@ -402,7 +398,6 @@ export const commentRouter = router({
           ipv4Location,
           ipv6Address: ctx.ipv6Address,
           ipv6Location,
-          gpsLocation,
         },
       });
 

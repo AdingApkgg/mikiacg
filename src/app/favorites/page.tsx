@@ -25,6 +25,7 @@ import { EmptyState } from "@/components/ui/empty-state";
 import Link from "next/link";
 import Image from "next/image";
 import { formatViews, formatRelativeTime } from "@/lib/format";
+import { getCoverUrl } from "@/lib/cover";
 
 export default function FavoritesPage() {
   const { data: session, status } = useSession();
@@ -221,18 +222,13 @@ export default function FavoritesPage() {
                   href={`/v/${video.id}`}
                   className="relative w-40 h-24 flex-shrink-0 rounded-md overflow-hidden bg-muted"
                 >
-                  {video.coverUrl ? (
-                    <Image
-                      src={video.coverUrl}
-                      alt={video.title}
-                      fill
-                      className="object-cover"
-                    />
-                  ) : (
-                    <div className="flex items-center justify-center h-full">
-                      <Star className="h-8 w-8 text-muted-foreground" />
-                    </div>
-                  )}
+                  <Image
+                    src={getCoverUrl(video.id, video.coverUrl)}
+                    alt={video.title}
+                    fill
+                    className="object-cover"
+                    unoptimized
+                  />
                   {video.duration && (
                     <div className="absolute bottom-1 right-1 px-1.5 py-0.5 bg-black/80 text-white text-xs rounded">
                       {Math.floor(video.duration / 60)}:{String(video.duration % 60).padStart(2, "0")}

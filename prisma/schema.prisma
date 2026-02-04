@@ -31,7 +31,6 @@ model User {
   banReason     String?   // 封禁原因
   bannedAt      DateTime? // 封禁时间
   lastIpLocation  String?  // 最后一次 IP 属地
-  lastGpsLocation String?  // 最后一次 GPS 位置
   createdAt     DateTime  @default(now())
   updatedAt     DateTime  @updatedAt
 
@@ -114,7 +113,6 @@ model LoginSession {
   ipv4Location   String?
   ipv6Address    String?
   ipv6Location   String?
-  gpsLocation    String?
   
   isRevoked      Boolean  @default(false) // 是否已撤销
   revokedAt      DateTime?
@@ -393,7 +391,6 @@ model Comment {
   ipv4Location  String?
   ipv6Address   String?
   ipv6Location  String?
-  gpsLocation   String?
   deviceInfo    Json?
   userAgent     String?
   
@@ -437,7 +434,6 @@ model UserDevice {
   ipv4Location   String?
   ipv6Address    String?
   ipv6Location   String?
-  gpsLocation    String?
   lastActiveAt   DateTime @default(now())
   createdAt      DateTime @default(now())
 
@@ -474,7 +470,6 @@ model Guestbook {
   ipv4Location String?
   ipv6Address  String?
   ipv6Location String?
-  gpsLocation  String?
   deviceInfo   Json?
   userAgent    String?
   

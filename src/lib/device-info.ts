@@ -198,9 +198,6 @@ export interface ClientDeviceInput {
   deviceMemory?: number | null;
   hardwareConcurrency?: number | null;
   connectionType?: string | null;
-  latitude?: number | null;
-  longitude?: number | null;
-  gpsAccuracy?: number | null;
 }
 
 /**
@@ -228,9 +225,6 @@ export interface LocationInfo {
   ipv6: string | null;
   ipv4Location: string | null;
   ipv6Location: string | null;
-  gpsLatitude: number | null;
-  gpsLongitude: number | null;
-  gpsAccuracy: number | null;
 }
 
 /**
@@ -292,17 +286,13 @@ export function createLocationInfo(
   ipv4: string | null,
   ipv6: string | null,
   ipv4Location: string | null,
-  ipv6Location: string | null,
-  gpsData?: { latitude?: number | null; longitude?: number | null; accuracy?: number | null }
+  ipv6Location: string | null
 ): LocationInfo {
   return {
     ipv4,
     ipv6,
     ipv4Location,
     ipv6Location,
-    gpsLatitude: gpsData?.latitude ?? null,
-    gpsLongitude: gpsData?.longitude ?? null,
-    gpsAccuracy: gpsData?.accuracy ?? null,
   };
 }
 

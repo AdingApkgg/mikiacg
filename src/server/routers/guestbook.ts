@@ -168,7 +168,6 @@ export const guestbookRouter = router({
         content: z.string().min(1).max(2000),
         parentId: z.string().optional(),
         replyToUserId: z.string().optional(),
-        gpsLocation: z.string().optional(),
         deviceInfo: z
           .object({
             deviceType: z.string().nullable().optional(),
@@ -190,7 +189,7 @@ export const guestbookRouter = router({
       })
     )
     .mutation(async ({ ctx, input }) => {
-      const { content, parentId, replyToUserId, gpsLocation, deviceInfo } = input;
+      const { content, parentId, replyToUserId, deviceInfo } = input;
       const userId = ctx.session.user.id;
 
       const [ipv4Location, ipv6Location] = await Promise.all([
@@ -244,7 +243,6 @@ export const guestbookRouter = router({
           ipv4Location,
           ipv6Address: ctx.ipv6Address,
           ipv6Location,
-          gpsLocation,
           deviceInfo: normalizedDeviceInfo as unknown as Prisma.InputJsonValue,
           userAgent: ctx.userAgent,
         },
@@ -275,7 +273,6 @@ export const guestbookRouter = router({
         where: { id: userId },
         data: {
           lastIpLocation: lastIpLocation || undefined,
-          lastGpsLocation: gpsLocation || undefined,
         },
       });
 
@@ -299,7 +296,6 @@ export const guestbookRouter = router({
           ipv4Location,
           ipv6Address: ctx.ipv6Address,
           ipv6Location,
-          gpsLocation,
           lastActiveAt: new Date(),
         },
         create: {
@@ -317,7 +313,6 @@ export const guestbookRouter = router({
           ipv4Location,
           ipv6Address: ctx.ipv6Address,
           ipv6Location,
-          gpsLocation,
         },
       });
 

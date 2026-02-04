@@ -1302,7 +1302,7 @@ export const videoRouter = router({
           const ogImageMatch = html.match(/<meta[^>]*property="og:image"[^>]*content="([^"]+)"/i);
           const coverUrl = ogImageMatch ? ogImageMatch[1] : '';
 
-          // 提取所有视频 URL (CDN 格式: https://cdn.mikiacg.vip/Video/...)
+          // 提取所有视频 URL (CDN 格式: https://cdn.www.mikiacg.vip/Video/...)
           const videoMatches = html.matchAll(/["'](https?:\/\/cdn\.mikiacg\.vip\/[^"']+\.mp4)["']/gi);
           const videoUrls = [...new Set([...videoMatches].map(m => m[1]))];
 

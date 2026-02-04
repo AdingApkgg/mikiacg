@@ -63,7 +63,7 @@ export async function generateMetadata({ params }: VideoPageProps): Promise<Meta
     : `由 ${uploaderName} 上传的视频`;
   const keywords = video.tags.map(({ tag }) => tag.name);
 
-  const baseUrl = process.env.NEXT_PUBLIC_APP_URL || "https://mikiacg.vip";
+  const baseUrl = process.env.NEXT_PUBLIC_APP_URL || "https://www.mikiacg.vip";
 
   return {
     title: video.title,

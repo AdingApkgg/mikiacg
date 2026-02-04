@@ -3,7 +3,7 @@
 import { trpc } from "@/lib/trpc";
 import { VideoGrid } from "@/components/video/video-grid";
 import { Button } from "@/components/ui/button";
-import { useState, useEffect } from "react";
+import { useState } from "react";
 import { Search, ArrowUpDown, Clock } from "lucide-react";
 import {
   Select,
@@ -51,11 +51,6 @@ export function SearchContent({ query }: SearchContentProps) {
     }
   );
 
-  // 切换排序或时间范围时重置页码
-  useEffect(() => {
-    setPage(1);
-  }, [sortBy, timeRange, query]);
-
   const videos = data?.videos ?? [];
   const totalCount = data?.totalCount ?? 0;
   const totalPages = data?.totalPages ?? 1;
@@ -93,7 +88,7 @@ export function SearchContent({ query }: SearchContentProps) {
           {/* 筛选选项 */}
           <div className="flex items-center gap-2 flex-wrap">
             {/* 排序 */}
-            <Select value={sortBy} onValueChange={(v) => setSortBy(v as SortBy)}>
+            <Select value={sortBy} onValueChange={(v) => { setSortBy(v as SortBy); setPage(1); }}>
               <SelectTrigger className="w-[130px] h-9">
                 <ArrowUpDown className="h-4 w-4 mr-2" />
                 <SelectValue />
@@ -110,7 +105,7 @@ export function SearchContent({ query }: SearchContentProps) {
             {/* 时间范围 */}
             <Select
               value={timeRange}
-              onValueChange={(v) => setTimeRange(v as TimeRange)}
+              onValueChange={(v) => { setTimeRange(v as TimeRange); setPage(1); }}
             >
               <SelectTrigger className="w-[120px] h-9">
                 <Clock className="h-4 w-4 mr-2" />

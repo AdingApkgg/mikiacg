@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 
 export async function GET() {
-  const baseUrl = process.env.NEXT_PUBLIC_APP_URL || "https://mikiacg.vip";
+  const baseUrl = process.env.NEXT_PUBLIC_APP_URL || "https://www.mikiacg.vip";
   const siteName = process.env.NEXT_PUBLIC_APP_NAME || "Mikiacg";
 
   const openapi = `openapi: 3.1.0

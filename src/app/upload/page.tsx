@@ -72,6 +72,7 @@ interface ParsedVideo {
   coverUrl: string;
   videoUrl: string;
   tags: string[];
+  extraInfo?: VideoExtraInfo;
 }
 
 interface ParsedSeries {
@@ -96,6 +97,14 @@ interface ParsedBatchData {
  * 封面：封面URL（可选）
  * 视频：视频URL
  * 标签：标签1,标签2,标签3（可选）
+ * 作品介绍：作品详细介绍（可选）
+ * 作者：原作者（可选）
+ * 作者介绍：作者介绍（可选）
+ * 关键词：关键词1,关键词2（可选）
+ * 下载：名称|URL|密码（可选；多个用 ; 分隔）
+ * 公告：info|内容（可选；type 可为 info/success/warning/error）
+ * 视频信息：视频格式/码率等说明（可选）
+ * 相关：相关视频标题1,相关视频标题2（可选）
  * 
  * 标题：视频标题2
  * 视频：视频URL
@@ -111,16 +120,102 @@ function parseBatchInput(input: string): ParsedBatchData {
   const series: ParsedSeries[] = [];
   let currentSeries: ParsedSeries | null = null;
   let currentVideo: Partial<ParsedVideo> = {};
+  let currentSeriesExtra: VideoExtraInfo = {};
+  let currentVideoExtra: VideoExtraInfo = {};
+  let lastField: { target: "series" | "video"; key: string } | null = null;
 
   // 解析带前缀的行
   const parseField = (line: string): { key: string; value: string } | null => {
     const trimmed = line.trim();
     // 支持中英文冒号
-    const match = trimmed.match(/^(合集|标题|描述|封面|视频|标签)[：:]\s*(.*)$/);
+    const match = trimmed.match(/^(合集|标题|描述|封面|视频|标签|作品介绍|作者|作者介绍|关键词|下载|公告|视频信息|相关)[：:]\s*(.*)$/);
     if (match) {
       return { key: match[1], value: match[2].trim() };
     }
     return null;
+  };
+
+  const setExtraField = (target: "series" | "video", updater: (info: VideoExtraInfo) => VideoExtraInfo) => {
+    if (target === "series") {
+      currentSeriesExtra = updater(currentSeriesExtra);
+    } else {
+      currentVideoExtra = updater(currentVideoExtra);
+    }
+  };
+
+  const appendNotice = (target: "series" | "video", notice: { type: 'info' | 'success' | 'warning' | 'error'; content: string }) => {
+    setExtraField(target, (info) => ({
+      ...info,
+      notices: [...(info.notices || []), notice],
+    }));
+  };
+
+  const appendNoticeLine = (target: "series" | "video", content: string) => {
+    setExtraField(target, (info) => {
+      const notices = [...(info.notices || [])];
+      if (notices.length === 0) {
+        notices.push({ type: "info", content });
+      } else {
+        notices[notices.length - 1] = {
+          ...notices[notices.length - 1],
+          content: `${notices[notices.length - 1].content}\n${content}`,
+        };
+      }
+      return { ...info, notices };
+    });
+  };
+
+  const parseDownloads = (value: string) => {
+    const items = value.split(/[;；]/).map(item => item.trim()).filter(Boolean);
+    return items.map((item) => {
+      const parts = item.split(/[|｜]/).map(p => p.trim());
+      return {
+        name: parts[0] || "下载",
+        url: parts[1] || "",
+        password: parts[2] || undefined,
+      };
+    }).filter(d => d.url);
+  };
+
+  const parseNotice = (value: string, defaultType: 'info' | 'success' | 'warning' | 'error' = "info") => {
+    const match = value.match(/^(info|success|warning|error)[：:|]\s*(.+)$/i);
+    if (match) {
+      return { type: match[1].toLowerCase() as 'info' | 'success' | 'warning' | 'error', content: match[2].trim() };
+    }
+    return { type: defaultType, content: value };
+  };
+
+  const mergeExtraInfo = (base?: VideoExtraInfo, override?: VideoExtraInfo): VideoExtraInfo | undefined => {
+    const result: VideoExtraInfo = {};
+    const pickText = (a?: string, b?: string) => b || a;
+    const mergeArray = <T,>(a?: T[], b?: T[]) => {
+      if (!a || a.length === 0) return b;
+      if (!b || b.length === 0) return a;
+      return [...a, ...b];
+    };
+    const mergeKeywords = (a?: string[], b?: string[]) => {
+      const merged = mergeArray(a, b) || [];
+      const unique = Array.from(new Set(merged.map(k => k.trim()).filter(Boolean)));
+      return unique.length > 0 ? unique : undefined;
+    };
+
+    result.intro = pickText(base?.intro, override?.intro);
+    result.author = pickText(base?.author, override?.author);
+    result.authorIntro = pickText(base?.authorIntro, override?.authorIntro);
+    result.episodes = mergeArray(base?.episodes, override?.episodes);
+    result.downloads = mergeArray(base?.downloads, override?.downloads);
+    result.relatedVideos = mergeArray(base?.relatedVideos, override?.relatedVideos);
+    result.notices = mergeArray(base?.notices, override?.notices);
+    result.keywords = mergeKeywords(base?.keywords, override?.keywords);
+
+    const hasContent = result.intro || result.author || result.authorIntro ||
+      (result.keywords && result.keywords.length > 0) ||
+      (result.downloads && result.downloads.length > 0) ||
+      (result.episodes && result.episodes.length > 0) ||
+      (result.relatedVideos && result.relatedVideos.length > 0) ||
+      (result.notices && result.notices.length > 0);
+
+    return hasContent ? result : undefined;
   };
 
   // 保存当前视频
@@ -129,27 +224,64 @@ function parseBatchInput(input: string): ParsedBatchData {
       if (!currentSeries) {
         currentSeries = { seriesTitle: '', videos: [] };
       }
+      const mergedExtra = mergeExtraInfo(currentSeriesExtra, currentVideoExtra);
       currentSeries.videos.push({
         title: currentVideo.title || '',
         description: currentVideo.description || '',
         coverUrl: currentVideo.coverUrl || '',
         videoUrl: currentVideo.videoUrl || '',
         tags: currentVideo.tags || [],
+        extraInfo: mergedExtra,
       });
     }
     currentVideo = {};
+    currentVideoExtra = {};
+    lastField = null;
   };
 
   for (const line of lines) {
     const field = parseField(line);
     
     if (!field) {
+      const trimmed = line.trim();
       // 空行时保存当前视频
-      if (line.trim() === '' && currentVideo.title) {
+      if (trimmed === '' && currentVideo.title) {
         saveCurrentVideo();
+        continue;
+      }
+      // 多行字段续写
+      if (lastField && trimmed !== '') {
+        const { target, key } = lastField;
+        if (key === '描述' && target === 'video') {
+          currentVideo.description = currentVideo.description
+            ? `${currentVideo.description}\n${trimmed}`
+            : trimmed;
+          continue;
+        }
+        if (key === '作品介绍') {
+          setExtraField(target, (info) => ({
+            ...info,
+            intro: info.intro ? `${info.intro}\n${trimmed}` : trimmed,
+          }));
+          continue;
+        }
+        if (key === '作者介绍') {
+          setExtraField(target, (info) => ({
+            ...info,
+            authorIntro: info.authorIntro ? `${info.authorIntro}\n${trimmed}` : trimmed,
+          }));
+          continue;
+        }
+        if (key === '视频信息' || key === '公告') {
+          appendNoticeLine(target, trimmed);
+          continue;
+        }
       }
       continue;
     }
+
+    const target: "series" | "video" =
+      !currentVideo.title && currentSeries ? "series" : "video";
 
     switch (field.key) {
       case '合集':
@@ -163,6 +295,7 @@ function parseBatchInput(input: string): ParsedBatchData {
           seriesTitle: field.value,
           videos: [],
         };
+        currentSeriesExtra = {};
         break;
       case '标题':
         // 新视频开始前，保存之前的视频
@@ -173,6 +306,7 @@ function parseBatchInput(input: string): ParsedBatchData {
         break;
       case '描述':
         currentVideo.description = field.value;
+        lastField = { target: "video", key: "描述" };
         break;
       case '封面':
         currentVideo.coverUrl = field.value;
@@ -183,6 +317,52 @@ function parseBatchInput(input: string): ParsedBatchData {
       case '标签':
         currentVideo.tags = field.value.split(/[,，]/).map(t => t.trim()).filter(Boolean);
         break;
+      case '作品介绍':
+        setExtraField(target, (info) => ({ ...info, intro: field.value }));
+        lastField = { target, key: "作品介绍" };
+        break;
+      case '作者':
+        setExtraField(target, (info) => ({ ...info, author: field.value }));
+        break;
+      case '作者介绍':
+        setExtraField(target, (info) => ({ ...info, authorIntro: field.value }));
+        lastField = { target, key: "作者介绍" };
+        break;
+      case '关键词':
+        setExtraField(target, (info) => ({
+          ...info,
+          keywords: field.value.split(/[,，]/).map(k => k.trim()).filter(Boolean),
+        }));
+        break;
+      case '下载': {
+        const downloads = parseDownloads(field.value);
+        setExtraField(target, (info) => ({
+          ...info,
+          downloads: [...(info.downloads || []), ...downloads],
+        }));
+        break;
+      }
+      case '公告': {
+        const notice = parseNotice(field.value, "info");
+        appendNotice(target, notice);
+        lastField = { target, key: "公告" };
+        break;
+      }
+      case '视频信息': {
+        const notice = parseNotice(field.value, "info");
+        appendNotice(target, notice);
+        lastField = { target, key: "视频信息" };
+        break;
+      }
+      case '相关':
+        setExtraField(target, (info) => ({
+          ...info,
+          relatedVideos: field.value.split(/[,，]/).map(v => v.trim()).filter(Boolean),
+        }));
+        break;
+    }
+    if (!['描述', '作品介绍', '作者介绍', '视频信息', '公告'].includes(field.key)) {
+      lastField = null;
     }
   }
 
@@ -399,6 +579,7 @@ export default function UploadPage() {
               coverUrl: video.coverUrl || "",
               videoUrl: video.videoUrl,
               tagNames: video.tags,
+              ...(video.extraInfo ? { extraInfo: video.extraInfo } : {}),
               skipIndexNow: true, // 批量导入时跳过 IndexNow
             });
 
@@ -745,6 +926,14 @@ export default function UploadPage() {
 封面：https://example.com/cover1.jpg（可选）
 视频：https://example.com/video1.mp4
 标签：标签1,标签2,标签3
+作品介绍：更详细的作品介绍（可选）
+作者：原作者（可选）
+作者介绍：作者介绍（可选）
+关键词：关键词1,关键词2（可选）
+下载：夸克|https://example.com/file1|1234; 百度|https://example.com/file2
+公告：warning|本视频含有敏感内容（可选）
+视频信息：AV1格式1080P（可选）
+相关：相关视频标题1,相关视频标题2（可选）
 
 标题：视频标题2
 视频：https://example.com/video2.mp4
@@ -759,7 +948,7 @@ export default function UploadPage() {
                       className="min-h-[300px] font-mono text-sm"
                     />
                     <p className="text-xs text-muted-foreground">
-                      格式说明：每行用前缀标识字段（合集:、标题:、描述:、封面:、视频:、标签:），支持中英文冒号，视频之间用空行分隔
+                      格式说明：每行用前缀标识字段（合集:、标题:、描述:、封面:、视频:、标签:、作品介绍:、作者:、作者介绍:、关键词:、下载:、公告:、视频信息:、相关:），支持中英文冒号，视频之间用空行分隔；描述/作品介绍/作者介绍/公告/视频信息支持多行
                     </p>
                   </div>
 

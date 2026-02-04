@@ -131,22 +131,6 @@ pm2 restart mikiacg
 pm2 stop mikiacg
 ```
 
-### 使用 Podman/Docker Compose
-
-```bash
-# 构建并启动应用
-podman compose up -d --build
-
-# 查看日志
-podman compose logs -f app
-
-# 重启服务
-podman compose restart
-
-# 停止服务
-podman compose down
-```
-
 ## 目录结构
 
 ```
@@ -164,8 +148,7 @@ mikiacg/
 │   └── stores/          # Zustand stores
 ├── deploy/              # 部署配置文件
 ├── uploads/             # 上传文件目录
-├── compose.yaml         # Podman/Docker Compose 配置
-└── Dockerfile           # Docker 构建文件
+└── ecosystem.config.cjs # PM2 配置
 ```
 
 ## SEO & AI 端点

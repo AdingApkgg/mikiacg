@@ -8,7 +8,6 @@ import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Separator } from "@/components/ui/separator";
-import { Skeleton } from "@/components/ui/skeleton";
 import { Markdown } from "@/components/ui/markdown";
 import { Heart, ThumbsDown, HelpCircle, Star, Share2, Eye, Calendar, Edit, MoreVertical, Trash2, List, Play, Layers, User, Download, ExternalLink, Info, AlertCircle, CheckCircle, AlertTriangle } from "lucide-react";
 import {
@@ -35,6 +34,7 @@ import { toast } from "sonner";
 import Link from "next/link";
 import { CommentSection } from "@/components/comment/comment-section";
 import { VideoJsonLd, BreadcrumbJsonLd } from "@/components/seo/json-ld";
+import { getCoverUrl } from "@/lib/cover";
 import type { SerializedVideo } from "./page";
 
 interface VideoPageClientProps {
@@ -46,6 +46,7 @@ export function VideoPageClient({ id, initialVideo }: VideoPageClientProps) {
   const { data: session } = useSession();
   const router = useRouter();
   const playerRef = useRef<VideoPlayerRef>(null);
+  const currentEpisodeRef = useRef<HTMLAnchorElement | null>(null);
 
   // 客户端获取视频数据（用于交互后刷新）
   const { data: video } = trpc.video.getById.useQuery(
@@ -68,6 +69,7 @@ export function VideoPageClient({ id, initialVideo }: VideoPageClientProps) {
   const initialPage = urlPage ? parseInt(urlPage, 10) : 1;
   
   const [currentPage, setCurrentPage] = useState(initialPage);
+  const [seriesExpanded, setSeriesExpanded] = useState(false);
   
   // URL 参数变化时同步状态
   useEffect(() => {
@@ -105,6 +107,32 @@ export function VideoPageClient({ id, initialVideo }: VideoPageClientProps) {
     { videoId: id },
     { staleTime: 60000 }
   );
+
+  const seriesEpisodes = useMemo(() => {
+    if (!seriesData?.series?.episodes) return [];
+    return [...seriesData.series.episodes].sort((a, b) => a.episodeNum - b.episodeNum);
+  }, [seriesData]);
+
+  const currentEpisodeIndex = useMemo(() => {
+    if (!seriesEpisodes.length) return -1;
+    return seriesEpisodes.findIndex((ep) => ep.video.id === id);
+  }, [seriesEpisodes, id]);
+
+  const hasMoreEpisodes = seriesEpisodes.length > 12;
+  const visibleEpisodes = seriesExpanded ? seriesEpisodes : seriesEpisodes.slice(0, 12);
+
+  useEffect(() => {
+    if (!seriesEpisodes.length) return;
+    if (!seriesExpanded && currentEpisodeIndex >= 12) {
+      setSeriesExpanded(true);
+    }
+  }, [seriesEpisodes.length, currentEpisodeIndex, seriesExpanded]);
+
+  useEffect(() => {
+    if (!seriesExpanded) return;
+    if (!currentEpisodeRef.current) return;
+    currentEpisodeRef.current.scrollIntoView({ block: "nearest" });
+  }, [seriesExpanded, currentEpisodeIndex]);
 
   const { data: status } = trpc.video.getInteractionStatus.useQuery(
     { videoId: id },
@@ -260,7 +288,7 @@ export function VideoPageClient({ id, initialVideo }: VideoPageClientProps) {
     );
   }
 
-  const baseUrl = process.env.NEXT_PUBLIC_APP_URL || "https://mikiacg.vip";
+  const baseUrl = process.env.NEXT_PUBLIC_APP_URL || "https://www.mikiacg.vip";
 
   return (
     <>
@@ -279,7 +307,7 @@ export function VideoPageClient({ id, initialVideo }: VideoPageClientProps) {
             <VideoPlayer
               ref={playerRef}
               url={currentVideoUrl || displayVideo.videoUrl}
-              poster={displayVideo.coverUrl}
+              poster={getCoverUrl(displayVideo.id, displayVideo.coverUrl)}
               onProgress={handleProgress}
             />
 
@@ -468,19 +496,35 @@ export function VideoPageClient({ id, initialVideo }: VideoPageClientProps) {
               <div className="flex items-center gap-2 px-4 py-3 bg-muted/50 border-b">
                 <Layers className="h-4 w-4 text-primary" />
                 <div className="flex-1 min-w-0">
-                  <h3 className="font-medium text-sm truncate">{seriesData.series.title}</h3>
+                  <h3 className="font-medium text-sm truncate">
+                    <Link href={`/series/${seriesData.series.id}`} className="hover:text-primary transition-colors">
+                      {seriesData.series.title}
+                    </Link>
+                  </h3>
                   <p className="text-xs text-muted-foreground">
                     第 {seriesData.currentEpisode} 集 / 共 {seriesData.series.episodes.length} 集
                   </p>
                 </div>
+                {hasMoreEpisodes && (
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    className="h-7 px-2 text-xs"
+                    onClick={() => setSeriesExpanded((v) => !v)}
+                  >
+                    {seriesExpanded ? "收起" : "展开"}
+                  </Button>
+                )}
               </div>
               <div className="max-h-[300px] overflow-y-auto">
-                {seriesData.series.episodes.map((ep) => {
+                {visibleEpisodes.map((ep) => {
                   const isCurrentVideo = ep.video.id === id;
                   return (
                     <Link
                       key={ep.video.id}
                       href={`/v/${ep.video.id}`}
+                      ref={isCurrentVideo ? currentEpisodeRef : null}
+                      aria-current={isCurrentVideo ? "true" : undefined}
                       className={`flex items-center gap-3 p-3 border-b last:border-b-0 transition-colors ${
                         isCurrentVideo ? "bg-primary/10" : "hover:bg-muted/50"
                       }`}
@@ -501,9 +545,16 @@ export function VideoPageClient({ id, initialVideo }: VideoPageClientProps) {
                         )}
                       </div>
                       <div className="flex-1 min-w-0">
-                        <span className={`text-xs font-medium ${isCurrentVideo ? "text-primary" : "text-muted-foreground"}`}>
-                          第{ep.episodeNum}集
-                        </span>
+                        <div className="flex items-center gap-2">
+                          <span className={`text-xs font-medium ${isCurrentVideo ? "text-primary" : "text-muted-foreground"}`}>
+                            第{ep.episodeNum}集
+                          </span>
+                          {isCurrentVideo && (
+                            <Badge variant="secondary" className="text-[10px] px-1.5 py-0">
+                              正在播放
+                            </Badge>
+                          )}
+                        </div>
                         <p className={`text-sm truncate ${isCurrentVideo ? "font-medium" : ""}`}>
                           {ep.episodeTitle || ep.video.title}
                         </p>
@@ -516,6 +567,18 @@ export function VideoPageClient({ id, initialVideo }: VideoPageClientProps) {
                     </Link>
                   );
                 })}
+                {!seriesExpanded && hasMoreEpisodes && (
+                  <div className="p-3 text-center">
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      className="text-xs"
+                      onClick={() => setSeriesExpanded(true)}
+                    >
+                      展开查看全部 ({seriesEpisodes.length} 集)
+                    </Button>
+                  </div>
+                )}
               </div>
             </div>
           )}
@@ -554,8 +617,6 @@ export function VideoPageClient({ id, initialVideo }: VideoPageClientProps) {
             </div>
           )}
 
-          {/* 更多视频 */}
-          <MoreVideosContent videoId={id} />
         </div>
       </div>
     </div>
@@ -563,91 +624,6 @@ export function VideoPageClient({ id, initialVideo }: VideoPageClientProps) {
   );
 }
 
-// 更多视频组件
-function MoreVideosContent({ videoId }: { videoId: string }) {
-  const { data: videos, isLoading } = trpc.video.getRecommendations.useQuery(
-    { videoId, limit: 10 },
-    { enabled: !!videoId }
-  );
-
-  if (isLoading) {
-    return (
-      <div className="space-y-4">
-        <h3 className="font-medium">更多视频</h3>
-        {[1, 2, 3, 4, 5].map((i) => (
-          <div key={i} className="flex gap-3">
-            <Skeleton className="w-32 h-20 sm:w-40 sm:h-24 rounded-lg shrink-0" />
-            <div className="flex-1 space-y-2">
-              <Skeleton className="h-4 w-full" />
-              <Skeleton className="h-3 w-2/3" />
-              <Skeleton className="h-3 w-1/2" />
-            </div>
-          </div>
-        ))}
-      </div>
-    );
-  }
-
-  if (!videos || videos.length === 0) {
-    return (
-      <div>
-        <h3 className="font-medium mb-4">更多视频</h3>
-        <p className="text-sm text-muted-foreground">暂无更多视频</p>
-      </div>
-    );
-  }
-
-  return (
-    <div className="space-y-4">
-      <h3 className="font-medium">更多视频</h3>
-      <div className="space-y-3">
-        {videos.map((video) => (
-          <Link
-            key={video.id}
-            href={`/v/${video.id}`}
-            className="flex gap-3 group"
-          >
-            {/* 封面 */}
-            <div className="relative w-32 h-20 sm:w-40 sm:h-24 rounded-lg overflow-hidden bg-muted shrink-0">
-              {video.coverUrl ? (
-                // eslint-disable-next-line @next/next/no-img-element
-                <img
-                  src={video.coverUrl}
-                  alt={video.title}
-                  className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
-                />
-              ) : (
-                <div className="w-full h-full flex items-center justify-center text-muted-foreground">
-                  <Eye className="h-8 w-8" />
-                </div>
-              )}
-              {video.duration && (
-                <div className="absolute bottom-1 right-1 px-1.5 py-0.5 bg-black/80 text-white text-xs rounded">
-                  {Math.floor(video.duration / 60)}:{String(video.duration % 60).padStart(2, "0")}
-                </div>
-              )}
-            </div>
-
-            {/* 信息 */}
-            <div className="flex-1 min-w-0">
-              <h4 className="text-xs sm:text-sm font-medium line-clamp-2 group-hover:text-primary transition-colors">
-                {video.title}
-              </h4>
-              <p className="text-[10px] sm:text-xs text-muted-foreground mt-1">
-                {video.uploader.nickname || video.uploader.username}
-              </p>
-              <div className="flex items-center gap-2 text-[10px] sm:text-xs text-muted-foreground mt-1">
-                <span>{formatViews(video.views)} 次播放</span>
-                <span>·</span>
-                <span>{formatRelativeTime(video.createdAt)}</span>
-              </div>
-            </div>
-          </Link>
-        ))}
-      </div>
-    </div>
-  );
-}
 
 // 扩展信息展示组件
 function VideoExtraInfoSection({ extraInfo }: { extraInfo: import("@/lib/shortcode-parser").VideoExtraInfo }) {

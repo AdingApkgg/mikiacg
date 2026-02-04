@@ -13,8 +13,7 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: "未登录" }, { status: 401 });
     }
 
-    const body = await request.json().catch(() => ({}));
-    const { gpsLocation } = body;
+    await request.json().catch(() => ({}));
 
     // 获取设备信息
     const userAgent = request.headers.get("user-agent") || "";
@@ -60,7 +59,6 @@ export async function POST(request: NextRequest) {
         ipv4Location,
         ipv6Address,
         ipv6Location,
-        gpsLocation,
         expiresAt,
       },
       update: {
@@ -70,7 +68,6 @@ export async function POST(request: NextRequest) {
         ipv4Location,
         ipv6Address,
         ipv6Location,
-        gpsLocation: gpsLocation || undefined,
       },
     });
 

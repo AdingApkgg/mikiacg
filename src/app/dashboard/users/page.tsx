@@ -52,7 +52,6 @@ import {
   Video,
   MessageSquare,
   Heart,
-  MapPin,
   Globe,
   Calendar,
   Mail,
@@ -78,7 +77,6 @@ interface UserItem {
   isBanned: boolean;
   banReason: string | null;
   lastIpLocation: string | null;
-  lastGpsLocation: string | null;
   createdAt: Date;
   _count: { videos: number; comments: number; likes: number };
 }
@@ -474,12 +472,6 @@ export default function AdminUsersPage() {
                           <span className="inline-flex items-center gap-1 text-xs text-muted-foreground bg-muted/50 px-1.5 py-0.5 rounded">
                             <Globe className="h-3 w-3 text-blue-500" />
                             {user.lastIpLocation}
-                          </span>
-                        )}
-                        {user.lastGpsLocation && (
-                          <span className="inline-flex items-center gap-1 text-xs text-muted-foreground bg-muted/50 px-1.5 py-0.5 rounded">
-                            <MapPin className="h-3 w-3 text-green-500" />
-                            {user.lastGpsLocation}
                           </span>
                         )}
                       </div>

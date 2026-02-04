@@ -19,7 +19,6 @@ import { toast } from "sonner";
 import { CommentItem } from "./comment-item";
 import Link from "next/link";
 import { parseDeviceInfo, getHighEntropyDeviceInfo, mergeDeviceInfo, type DeviceInfo } from "@/lib/device-info";
-import { getGpsLocation, formatGpsLocation } from "@/lib/geolocation";
 import { useIsMounted } from "@/components/motion";
 
 interface CommentSectionProps {
@@ -35,7 +34,6 @@ export function CommentSection({ videoId }: CommentSectionProps) {
   const [isSubmitting, setIsSubmitting] = useState(false);
   const isMounted = useIsMounted();
   const [deviceInfo, setDeviceInfo] = useState<DeviceInfo | null>(null);
-  const [gpsLocation, setGpsLocation] = useState<string | null>(null);
 
   const utils = trpc.useUtils();
 
@@ -116,22 +114,12 @@ export function CommentSection({ videoId }: CommentSectionProps) {
     
     console.log("[Comment] Submitting with deviceInfo:", currentDeviceInfo);
     
-    let currentGps = gpsLocation;
-    if (!currentGps) {
-      // 使用逆地理编码获取可读地址
-      const gps = await getGpsLocation({ reverseGeocode: true, timeout: 8000 });
-      if (gps) {
-        currentGps = formatGpsLocation(gps);
-        setGpsLocation(currentGps);
-      }
-    }
     createMutation.mutate({ 
       videoId, 
       content: newComment.trim(),
-      gpsLocation: currentGps || undefined,
       deviceInfo: currentDeviceInfo || undefined,
     });
-  }, [newComment, isSubmitting, createMutation, videoId, gpsLocation, deviceInfo]);
+  }, [newComment, isSubmitting, createMutation, videoId, deviceInfo]);
 
   const comments = data?.pages.flatMap((page) => page.comments) ?? [];
 

@@ -23,7 +23,6 @@ const getUser = cache(async (id: string) => {
       website: true,
       socialLinks: true,
       lastIpLocation: true,
-      lastGpsLocation: true,
       createdAt: true,
       _count: {
         select: {
@@ -54,7 +53,7 @@ export async function generateMetadata({ params }: UserPageProps): Promise<Metad
     : `${displayName} 的个人主页，已发布 ${user._count.videos} 个视频`;
 
   const siteName = process.env.NEXT_PUBLIC_APP_NAME || "Mikiacg";
-  const baseUrl = process.env.NEXT_PUBLIC_APP_URL || "https://mikiacg.vip";
+  const baseUrl = process.env.NEXT_PUBLIC_APP_URL || "https://www.mikiacg.vip";
 
   return {
     title: displayName,
@@ -96,7 +95,6 @@ function serializeUser(user: NonNullable<Awaited<ReturnType<typeof getUser>>>) {
     website: user.website,
     socialLinks: user.socialLinks as Record<string, string> | null,
     lastIpLocation: user.lastIpLocation,
-    lastGpsLocation: user.lastGpsLocation,
     createdAt: user.createdAt.toISOString(),
     _count: user._count,
   };

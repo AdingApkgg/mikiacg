@@ -2,7 +2,7 @@ import type { MetadataRoute } from "next";
 
 // Sitemap Index - 索引多个子 sitemap
 export default function sitemap(): MetadataRoute.Sitemap {
-  const baseUrl = process.env.NEXT_PUBLIC_APP_URL || "https://mikiacg.vip";
+  const baseUrl = process.env.NEXT_PUBLIC_APP_URL || "https://www.mikiacg.vip";
 
   // 返回 sitemap index 格式
   return [

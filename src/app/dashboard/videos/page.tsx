@@ -56,6 +56,7 @@ import {
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { formatRelativeTime, formatDuration } from "@/lib/format";
+import { getCoverUrl } from "@/lib/cover";
 
 type VideoStatus = "PENDING" | "PUBLISHED" | "REJECTED";
 
@@ -373,19 +374,14 @@ export default function AdminVideosPage() {
 
                     {/* 封面 */}
                     <div className="relative w-40 h-24 rounded-lg bg-muted overflow-hidden shrink-0">
-                      {video.coverUrl ? (
-                        <Image
-                          src={video.coverUrl}
-                          alt={video.title}
-                          fill
-                          className="object-cover"
-                          sizes="160px"
-                        />
-                      ) : (
-                        <div className="w-full h-full flex items-center justify-center">
-                          <Video className="h-8 w-8 text-muted-foreground" />
-                        </div>
-                      )}
+                      <Image
+                        src={getCoverUrl(video.id, video.coverUrl)}
+                        alt={video.title}
+                        fill
+                        className="object-cover"
+                        sizes="160px"
+                        unoptimized
+                      />
                       {video.duration && (
                         <div className="absolute bottom-1 right-1 bg-black/80 text-white text-xs px-1 py-0.5 rounded">
                           {formatDuration(video.duration)}

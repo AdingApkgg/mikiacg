@@ -31,6 +31,32 @@ const nextConfig: NextConfig = {
     // 优化预加载行为，减少不必要的 CSS 预加载警告
     optimizeCss: true,
   },
+  async redirects() {
+    return [
+      {
+        source: "/:path*",
+        has: [
+          {
+            type: "host",
+            value: "mikiacg.vip",
+          },
+        ],
+        destination: "https://www.mikiacg.vip/:path*",
+        permanent: true,
+      },
+      {
+        source: "/:path*",
+        has: [
+          {
+            type: "host",
+            value: "tv.mikiacg.vip",
+          },
+        ],
+        destination: "https://www.mikiacg.vip/:path*",
+        permanent: true,
+      },
+    ];
+  },
 };
 
 export default nextConfig;

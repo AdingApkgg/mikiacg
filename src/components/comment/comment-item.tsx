@@ -33,7 +33,6 @@ import {
   Pin,
   ChevronDown,
   ChevronUp,
-  MapPin,
   Globe,
   Globe2,
   Smartphone,
@@ -78,7 +77,6 @@ interface CommentData {
   _count?: { replies: number };
   ipv4Location?: string | null;
   ipv6Location?: string | null;
-  gpsLocation?: string | null;
   deviceInfo?: unknown;
 }
 
@@ -318,7 +316,7 @@ export function CommentItem({
   })();
 
   // 是否有元信息需要显示
-  const hasMetaInfo = comment.ipv4Location || comment.ipv6Location || comment.gpsLocation || deviceBrief;
+  const hasMetaInfo = comment.ipv4Location || comment.ipv6Location || deviceBrief;
 
   return (
     <div className={cn("flex gap-3", isReply && "ml-12")}>
@@ -382,22 +380,6 @@ export function CommentItem({
                 <TooltipContent side="bottom" className="text-xs">
                   <p className="font-medium">IPv6 属地</p>
                   <p className="text-muted-foreground">{comment.ipv6Location}</p>
-                </TooltipContent>
-              </Tooltip>
-            )}
-
-            {/* GPS 定位 */}
-            {comment.gpsLocation && (
-              <Tooltip>
-                <TooltipTrigger asChild>
-                  <span className="inline-flex items-center gap-1 text-xs text-muted-foreground bg-muted/50 px-1.5 py-0.5 rounded cursor-default">
-                    <MapPin className="h-3 w-3 text-green-500" />
-                    <span className="max-w-[120px] truncate">{comment.gpsLocation}</span>
-                  </span>
-                </TooltipTrigger>
-                <TooltipContent side="bottom" className="text-xs max-w-[300px]">
-                  <p className="font-medium">GPS 定位</p>
-                  <p className="text-muted-foreground whitespace-pre-wrap">{comment.gpsLocation}</p>
                 </TooltipContent>
               </Tooltip>
             )}

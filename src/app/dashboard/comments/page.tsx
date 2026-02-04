@@ -42,7 +42,6 @@ import {
   ChevronUp,
   Globe,
   Globe2,
-  MapPin,
   Smartphone,
   Monitor,
   Tablet,
@@ -492,12 +491,6 @@ export default function AdminCommentsPage() {
                           <span className="inline-flex items-center gap-1 text-xs text-muted-foreground bg-muted/50 px-1.5 py-0.5 rounded">
                             <Globe2 className="h-3 w-3 text-purple-500" />
                             {comment.ipv6Location}
-                          </span>
-                        )}
-                        {comment.gpsLocation && (
-                          <span className="inline-flex items-center gap-1 text-xs text-muted-foreground bg-muted/50 px-1.5 py-0.5 rounded">
-                            <MapPin className="h-3 w-3 text-green-500" />
-                            {comment.gpsLocation}
                           </span>
                         )}
                         {deviceInfo && (

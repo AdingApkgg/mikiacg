@@ -4,7 +4,7 @@ import { NextResponse } from "next/server";
 export const dynamic = "force-dynamic";
 
 export async function GET() {
-  const baseUrl = process.env.NEXT_PUBLIC_APP_URL || "https://mikiacg.vip";
+  const baseUrl = process.env.NEXT_PUBLIC_APP_URL || "https://www.mikiacg.vip";
   const siteName = process.env.NEXT_PUBLIC_APP_NAME || "Mikiacg";
 
   let statsSection = "";
@@ -107,7 +107,7 @@ ${statsSection}${tagsSection}${recentVideosSection}
 本站使用以下技术构建：
 - 前端: Next.js 15, React 19, Tailwind CSS, shadcn/ui
 - 后端: Node.js, Prisma ORM, PostgreSQL
-- 部署: Docker, Nginx
+- 部署: PM2, Nginx
 
 ## 数据访问
 

@@ -9,6 +9,7 @@ import { Button } from "@/components/ui/button";
 import { Play, Clock, Eye, ArrowLeft, User } from "lucide-react";
 import Link from "next/link";
 import { PageWrapper, FadeIn } from "@/components/motion";
+import { getCoverUrl } from "@/lib/cover";
 
 function formatDuration(seconds: number | null) {
   if (!seconds) return "--:--";
@@ -111,22 +112,16 @@ export default function SeriesPage() {
         {/* 剧集列表 */}
         <FadeIn delay={0.1}>
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
-            {publishedEpisodes.map((episode, index) => (
+            {publishedEpisodes.map((episode) => (
               <Link key={episode.video.id} href={`/v/${episode.video.id}`}>
                 <Card className="overflow-hidden group hover:shadow-lg transition-all duration-200 hover:-translate-y-1">
                   <div className="relative aspect-video bg-muted">
-                    {episode.video.coverUrl ? (
-                      // eslint-disable-next-line @next/next/no-img-element
-                      <img
-                        src={episode.video.coverUrl}
-                        alt={episode.video.title}
-                        className="w-full h-full object-cover"
-                      />
-                    ) : (
-                      <div className="w-full h-full flex items-center justify-center">
-                        <Play className="w-12 h-12 text-muted-foreground/30" />
-                      </div>
-                    )}
+                    {/* eslint-disable-next-line @next/next/no-img-element */}
+                    <img
+                      src={getCoverUrl(episode.video.id, episode.video.coverUrl)}
+                      alt={episode.video.title}
+                      className="w-full h-full object-cover"
+                    />
                     
                     {/* 集数徽章 */}
                     <Badge 

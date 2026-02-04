@@ -64,7 +64,6 @@ export const userRouter = router({
           location: true,
           socialLinks: true,
           lastIpLocation: true,
-          lastGpsLocation: true,
           createdAt: true,
           _count: {
             select: {
@@ -135,7 +134,6 @@ export const userRouter = router({
         socialLinks: true,
         role: true,
           lastIpLocation: true,
-          lastGpsLocation: true,
         createdAt: true,
       },
     });
@@ -257,7 +255,6 @@ export const userRouter = router({
           model: true,
           ipv4Location: true,
           ipv6Location: true,
-          gpsLocation: true,
           lastActiveAt: true,
         },
       });
@@ -269,7 +266,6 @@ export const userRouter = router({
   recordDevice: protectedProcedure
     .input(
       z.object({
-        gpsLocation: z.string().optional(),
         deviceInfo: z
           .object({
             deviceType: z.string().nullable().optional(),
@@ -328,7 +324,6 @@ export const userRouter = router({
         where: { id: userId },
         data: {
           lastIpLocation: lastIpLocation || undefined,
-          lastGpsLocation: input.gpsLocation || undefined,
         },
       });
 
@@ -352,7 +347,6 @@ export const userRouter = router({
           ipv4Location,
           ipv6Address: ctx.ipv6Address,
           ipv6Location,
-          gpsLocation: input.gpsLocation,
           lastActiveAt: new Date(),
         },
         create: {
@@ -370,7 +364,6 @@ export const userRouter = router({
           ipv4Location,
           ipv6Address: ctx.ipv6Address,
           ipv6Location,
-          gpsLocation: input.gpsLocation,
         },
       });
 
@@ -422,7 +415,6 @@ export const userRouter = router({
           model: true,
           ipv4Location: true,
           ipv6Location: true,
-          gpsLocation: true,
           createdAt: true,
           lastActiveAt: true,
         },

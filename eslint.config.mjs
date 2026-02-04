@@ -17,6 +17,8 @@ const eslintConfig = defineConfig([
     // Third-party libraries
     "public/ccl.js",
     "public/ccl.min.js",
+    // IDE local history
+    ".history/**",
   ]),
 ]);
 

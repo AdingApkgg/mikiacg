@@ -13,6 +13,7 @@ import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Pagination } from "@/components/ui/pagination";
+import { getCoverUrl } from "@/lib/cover";
 
 type ViewMode = "videos" | "series";
 type SortBy = "latest" | "views" | "likes";
@@ -95,10 +96,6 @@ export function HomePageClient({ initialTags, initialVideos, siteConfig }: HomeP
   const series = seriesData?.items ?? [];
   const seriesTotalPages = seriesData?.totalPages ?? 1;
 
-  // 切换排序或标签时重置页码
-  useEffect(() => {
-    setVideoPage(1);
-  }, [sortBy, selectedTag]);
 
   // 检查滚动箭头显示状态
   const checkScrollArrows = () => {
@@ -157,6 +154,7 @@ export function HomePageClient({ initialTags, initialVideos, siteConfig }: HomeP
 
   const handleSortClick = (id: SortBy) => {
     setSortBy(id);
+    setVideoPage(1);
   };
 
   const handleTagClick = (tagId: string) => {
@@ -167,6 +165,7 @@ export function HomePageClient({ initialTags, initialVideos, siteConfig }: HomeP
     } else {
       setSelectedTag(tagId);
     }
+    setVideoPage(1);
   };
 
   return (
@@ -360,10 +359,10 @@ export function HomePageClient({ initialTags, initialVideos, siteConfig }: HomeP
                                 const video = s.previewVideos[idx];
                                 return (
                                   <div key={idx} className="relative overflow-hidden">
-                                    {video?.coverUrl ? (
+                                    {video ? (
                                       // eslint-disable-next-line @next/next/no-img-element
                                       <img
-                                        src={video.coverUrl}
+                                        src={getCoverUrl(video.id, video.coverUrl)}
                                         alt={video.title}
                                         className="w-full h-full object-cover"
                                       />

@@ -157,7 +157,7 @@ export default function SessionsPage() {
               const isMobile = loginSession.deviceType === "mobile" || loginSession.deviceType === "tablet";
               const DeviceIcon = isMobile ? Smartphone : Laptop;
               const isCurrent = loginSession.jti === currentJti;
-              const location = loginSession.ipv4Location || loginSession.ipv6Location || loginSession.gpsLocation;
+              const location = loginSession.ipv4Location || loginSession.ipv6Location;
 
               return (
                 <div 
@@ -239,7 +239,7 @@ export default function SessionsPage() {
             {devices.map((device) => {
               const isMobile = device.deviceType === "mobile" || device.deviceType === "tablet";
               const DeviceIcon = isMobile ? Smartphone : Laptop;
-              const location = device.ipv4Location || device.ipv6Location || device.gpsLocation;
+              const location = device.ipv4Location || device.ipv6Location;
 
               return (
                 <div key={device.id} className="flex items-center gap-3 p-3 rounded-lg border bg-card text-sm">

@@ -44,7 +44,7 @@ export default async function SearchPage({ searchParams }: SearchPageProps) {
 
   return (
     <Suspense fallback={<SearchFallback />}>
-      <SearchContent query={query || ""} />
+      <SearchContent key={query || ""} query={query || ""} />
     </Suspense>
   );
 }

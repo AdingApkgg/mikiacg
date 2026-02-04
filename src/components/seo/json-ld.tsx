@@ -27,7 +27,7 @@ interface VideoJsonLdProps {
 }
 
 export function VideoJsonLd({ video }: VideoJsonLdProps) {
-  const baseUrl = process.env.NEXT_PUBLIC_APP_URL || "https://mikiacg.vip";
+  const baseUrl = process.env.NEXT_PUBLIC_APP_URL || "https://www.mikiacg.vip";
 
   const jsonLd = {
     "@context": "https://schema.org",
@@ -71,7 +71,7 @@ interface WebsiteJsonLdProps {
 
 export function WebsiteJsonLd({
   siteName = "Mikiacg",
-  siteUrl = "https://mikiacg.vip",
+  siteUrl = "https://www.mikiacg.vip",
   description = "ACGN Fans 流式媒体内容分享平台",
 }: WebsiteJsonLdProps) {
   const jsonLd = {
@@ -135,8 +135,8 @@ interface OrganizationJsonLdProps {
 
 export function OrganizationJsonLd({
   name = "Mikiacg",
-  url = "https://mikiacg.vip",
-  logo = "https://mikiacg.vip/icon",
+  url = "https://www.mikiacg.vip",
+  logo = "https://www.mikiacg.vip/icon",
 }: OrganizationJsonLdProps) {
   const jsonLd = {
     "@context": "https://schema.org",
@@ -181,7 +181,7 @@ interface VideoListJsonLdProps {
  * 视频列表结构化数据 - 用于首页和列表页
  */
 export function VideoListJsonLd({ videos }: VideoListJsonLdProps) {
-  const baseUrl = process.env.NEXT_PUBLIC_APP_URL || "https://mikiacg.vip";
+  const baseUrl = process.env.NEXT_PUBLIC_APP_URL || "https://www.mikiacg.vip";
 
   const jsonLd = {
     "@context": "https://schema.org",
