@@ -118,7 +118,7 @@ export const seriesRouter = router({
             orderBy: { episodeNum: "asc" },
             include: {
               video: {
-                select: { coverUrl: true },
+                select: { id: true, coverUrl: true },
               },
             },
           },

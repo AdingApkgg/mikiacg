@@ -64,6 +64,8 @@ export const VideoPlayer = forwardRef<VideoPlayerRef, VideoPlayerProps>(
       }
 
       return () => {
+        // 重置 ready 状态，在 cleanup 中调用避免 lint 错误
+        setIsReady(false);
         if (hls) {
           hls.destroy();
         }
@@ -149,11 +151,6 @@ export const VideoPlayer = forwardRef<VideoPlayerRef, VideoPlayerProps>(
         video.removeEventListener("ratechange", handleRateChange);
       };
     }, [getVideoElement, initialProgress, onEnded, onProgress]);
-
-    // 重置 ready 状态当 URL 变化时
-    useEffect(() => {
-      setIsReady(false);
-    }, [url]);
 
     return (
       <div className="relative w-full aspect-video bg-black">

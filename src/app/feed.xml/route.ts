@@ -1,4 +1,5 @@
 import { prisma } from "@/lib/prisma";
+import { getCoverFullUrl } from "@/lib/cover";
 
 // 强制动态渲染，避免构建时预渲染（此时数据库不可用）
 export const dynamic = "force-dynamic";
@@ -51,14 +52,14 @@ export async function GET() {
       <pubDate>${new Date(video.createdAt).toUTCString()}</pubDate>
       <author>${escapeXml(video.uploader.nickname || video.uploader.username)}</author>
       ${video.tags.map((t) => `<category>${escapeXml(t.tag.name)}</category>`).join("\n      ")}
-      ${video.coverUrl ? `<media:thumbnail url="${escapeXml(video.coverUrl)}" />` : ""}
-      ${video.coverUrl ? `<media:content url="${escapeXml(video.videoUrl)}" type="video/mp4" medium="video"${video.duration ? ` duration="${video.duration}"` : ""}>
+      <media:thumbnail url="${escapeXml(getCoverFullUrl(video.id, video.coverUrl))}" />
+      <media:content url="${escapeXml(video.videoUrl)}" type="video/mp4" medium="video"${video.duration ? ` duration="${video.duration}"` : ""}>
         <media:title type="plain">${escapeXml(video.title)}</media:title>
         <media:description type="plain"><![CDATA[${video.description || ""}]]></media:description>
-        ${video.coverUrl ? `<media:thumbnail url="${escapeXml(video.coverUrl)}" />` : ""}
+        <media:thumbnail url="${escapeXml(getCoverFullUrl(video.id, video.coverUrl))}" />
         <media:credit role="author">${escapeXml(video.uploader.nickname || video.uploader.username)}</media:credit>
         <media:statistics views="${video.views}" />
-      </media:content>` : ""}
+      </media:content>
       ${video.duration ? `<itunes:duration>${formatDuration(video.duration)}</itunes:duration>` : ""}
     </item>`
       )

@@ -31,6 +31,14 @@ const nextConfig: NextConfig = {
     // 优化预加载行为，减少不必要的 CSS 预加载警告
     optimizeCss: true,
   },
+  async rewrites() {
+    return [
+      {
+        source: "/uploads/:path*",
+        destination: "/api/cover/uploads/:path*",
+      },
+    ];
+  },
   async redirects() {
     return [
       {

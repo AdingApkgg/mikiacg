@@ -262,14 +262,14 @@ export default function MySeriesPage() {
                   href={`/series/${series.id}`}
                   className="relative w-32 h-20 flex-shrink-0 rounded-md overflow-hidden bg-muted"
                 >
-                  {series.firstEpisodeCover || series.coverUrl ? (
+                  {series.firstEpisodeCover || series.coverUrl || series.episodes?.[0]?.video ? (
                     <Image
                       src={
                         series.coverUrl
-                          ? `/api/cover/${encodeURIComponent(series.coverUrl)}`
-                          : series.episodes?.[0]?.video?.coverUrl
+                          ? getCoverUrl("", series.coverUrl)
+                          : series.episodes?.[0]?.video
                           ? getCoverUrl(
-                              series.episodes[0].video.coverUrl,
+                              series.episodes[0].video.id,
                               series.episodes[0].video.coverUrl
                             )
                           : "/placeholder.svg"

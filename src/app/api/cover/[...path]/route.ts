@@ -16,7 +16,7 @@ import { prisma } from "@/lib/prisma";
 import * as fs from "fs/promises";
 import * as path from "path";
 import * as crypto from "crypto";
-import { spawn } from "child_process";
+import { ensureCoverAuto, enqueueCoverForVideo } from "@/lib/cover-auto";
 
 // 封面存储目录（本地 uploads）
 const UPLOAD_DIR = process.env.UPLOAD_DIR || "./uploads";
@@ -97,92 +97,6 @@ function getPreferredFormat(acceptHeader: string | null): { ext: string; content
   return formats.sort((a, b) => a.priority - b.priority);
 }
 
-// 使用 ffmpeg 从视频 URL 生成封面（支持多种格式）
-async function generateThumbnailFromVideo(
-  videoUrl: string, 
-  outputPath: string,
-  format: "avif" | "webp" | "jpeg" = "avif"
-): Promise<boolean> {
-  const runFfmpeg = (formatArgs: string[], logOnFail: boolean) =>
-    new Promise<boolean>((resolve) => {
-      const ffmpeg = spawn("ffmpeg", [
-        "-ss", "1",           // 从第 1 秒开始
-        "-i", videoUrl,       // 输入 URL
-        "-vframes", "1",      // 只截取 1 帧
-        "-vf", "scale=640:-1", // 缩放到 640 宽度，高度自适应
-        ...formatArgs,        // 格式特定参数
-        "-y",                 // 覆盖输出
-        outputPath,           // 输出路径
-      ], {
-        timeout: 30000, // 30 秒超时
-      });
-
-      let stderr = "";
-      
-      ffmpeg.stderr.on("data", (data) => {
-        stderr += data.toString();
-      });
-
-      ffmpeg.on("close", (code) => {
-        if (code === 0) {
-          resolve(true);
-        } else {
-          if (logOnFail) {
-            console.error("ffmpeg error:", stderr);
-          }
-          resolve(false);
-        }
-      });
-
-      ffmpeg.on("error", (err) => {
-        console.error("ffmpeg spawn error:", err);
-        resolve(false);
-      });
-    });
-
-  // 根据格式设置参数（优先 AVIF > WebP > JPEG）
-  if (format === "avif") {
-    // 优先使用 libaom-av1（服务器常见），失败则回退到 libsvtav1（macOS 常见）
-    const aomOk = await runFfmpeg(["-c:v", "libaom-av1", "-still-picture", "1", "-crf", "30"], false);
-    if (aomOk) return true;
-    const svtOk = await runFfmpeg(["-c:v", "libsvtav1", "-crf", "35"], false);
-    if (svtOk) return true;
-    return false;
-  }
-
-  if (format === "webp") {
-    return runFfmpeg(["-c:v", "libwebp", "-quality", "85"], false);
-  }
-
-  return runFfmpeg(["-q:v", "2"], true);
-}
-
-// 尝试生成封面，按客户端偏好顺序尝试
-async function generateThumbnailWithFallback(
-  videoUrl: string, 
-  baseFileName: string,
-  preferredFormats: { ext: string; contentType: string }[],
-  outputDir: string = CACHE_DIR
-): Promise<{ path: string; contentType: string } | null> {
-  const formatMap: Record<string, "avif" | "webp" | "jpeg"> = {
-    ".avif": "avif",
-    ".webp": "webp",
-    ".jpg": "jpeg",
-  };
-
-  for (const { ext, contentType } of preferredFormats) {
-    const format = formatMap[ext];
-    if (!format) continue;
-    
-    const outputPath = path.join(outputDir, `${baseFileName}${ext}`);
-    const success = await generateThumbnailFromVideo(videoUrl, outputPath, format);
-    if (success) {
-      return { path: outputPath, contentType };
-    }
-  }
-  
-  return null;
-}
 
 // 尝试常见的缩略图 URL 模式（某些 CDN 支持）
 async function tryFetchThumbnailFromCDN(videoUrl: string): Promise<Buffer | null> {
@@ -284,76 +198,35 @@ export async function GET(
 
     // 确保封面目录存在
     await ensureCoverDir();
-    
+
     // 根据客户端支持的格式选择最佳格式
     const acceptHeader = request.headers.get("accept");
     const preferredFormats = getPreferredFormat(acceptHeader);
-    const bestFormat = preferredFormats[0];
-    
-    // 检查本地封面是否已存在
-    const coverFileName = `${videoId}${bestFormat.ext}`;
-    const coverFilePath = path.join(COVER_DIR, coverFileName);
-    try {
-      const cached = await fs.readFile(coverFilePath);
-      return new Response(new Uint8Array(cached), {
-        headers: {
-          "Content-Type": bestFormat.contentType,
-          "Cache-Control": "public, max-age=31536000, immutable",
-          "Vary": "Accept",
-        },
-      });
-    } catch {
-      // 本地封面不存在，需要生成
-    }
 
-    // 方案 1: 使用 ffmpeg 直接生成封面（保存到 uploads/cover/）
-    const result = await generateThumbnailWithFallback(video.videoUrl, videoId, preferredFormats, COVER_DIR);
-    if (result) {
+    // 检查本地封面是否已存在（按偏好顺序查找）
+    for (const format of preferredFormats) {
+      const coverFileName = `${videoId}${format.ext}`;
+      const coverFilePath = path.join(COVER_DIR, coverFileName);
       try {
-        const thumbnail = await fs.readFile(result.path);
-        
-        // 自动保存封面路径到数据库（避免重复生成）
-        const coverUrl = `/uploads/cover/${path.basename(result.path)}`;
-        try {
-          await prisma.video.update({
-            where: { id: videoId },
-            data: { coverUrl },
-          });
-          console.log(`[封面生成] 已保存: ${videoId} -> ${coverUrl}`);
-        } catch (dbError) {
-          console.error(`[封面生成] 数据库更新失败: ${videoId}`, dbError);
-        }
-        
-        return new Response(new Uint8Array(thumbnail), {
+        const cached = await fs.readFile(coverFilePath);
+        return new Response(new Uint8Array(cached), {
           headers: {
-            "Content-Type": result.contentType,
+            "Content-Type": format.contentType,
             "Cache-Control": "public, max-age=31536000, immutable",
             "Vary": "Accept",
           },
         });
       } catch {
-        // 读取失败
+        // 尝试下一个格式
       }
     }
 
-    // 方案 2: 尝试从 CDN 获取缩略图（作为后备）
+    // 方案 1: 尝试从 CDN 获取缩略图（作为后备）
     const cdnThumbnail = await tryFetchThumbnailFromCDN(video.videoUrl);
     if (cdnThumbnail) {
       // CDN 返回的通常是 JPEG，保存到 uploads/cover/
       const cdnCoverPath = path.join(COVER_DIR, `${videoId}.jpg`);
       await fs.writeFile(cdnCoverPath, cdnThumbnail);
-      
-      // 保存到数据库
-      const coverUrl = `/uploads/cover/${videoId}.jpg`;
-      try {
-        await prisma.video.update({
-          where: { id: videoId },
-          data: { coverUrl },
-        });
-        console.log(`[封面生成] 已保存(CDN): ${videoId} -> ${coverUrl}`);
-      } catch (dbError) {
-        console.error(`[封面生成] 数据库更新失败: ${videoId}`, dbError);
-      }
       
       return new Response(new Uint8Array(cdnThumbnail), {
         headers: {
@@ -364,20 +237,50 @@ export async function GET(
       });
     }
 
-    // 无法生成封面，返回 404 让前端显示占位符
+    // 方案 2: 加入队列异步生成
+    ensureCoverAuto();
+    await enqueueCoverForVideo(videoId);
+
     return NextResponse.json(
-      { error: "Cover not available" }, 
-      { 
-        status: 404,
+      { status: "queued" },
+      {
+        status: 202,
         headers: {
-          "Cache-Control": "public, max-age=300", // 5 分钟后重试
-        }
+          "Cache-Control": "no-store",
+          "Retry-After": "5",
+        },
       }
     );
   }
 
   // 代理外部图片：/api/cover/https://example.com/image.jpg
-  const imageUrl = pathSegments.join("/");
+  // 注意：前端可能 encodeURIComponent 了整个路径，需要解码
+  const rawImageUrl = pathSegments.join("/");
+  const imageUrl = decodeURIComponent(rawImageUrl);
+
+  // 处理本地 uploads 路径：/api/cover//uploads/cover/xxx.jpg
+  const normalizedLocalPath = imageUrl.startsWith("/")
+    ? imageUrl.slice(1)
+    : imageUrl;
+  const uploadsRoot = path.join(process.cwd(), UPLOAD_DIR);
+  const candidateLocalPath = path.join(process.cwd(), normalizedLocalPath);
+  if (
+    normalizedLocalPath.startsWith("uploads/") &&
+    candidateLocalPath.startsWith(uploadsRoot)
+  ) {
+    try {
+      const cached = await fs.readFile(candidateLocalPath);
+      const ext = path.extname(candidateLocalPath);
+      return new Response(new Uint8Array(cached), {
+        headers: {
+          "Content-Type": getContentType(ext),
+          "Cache-Control": "public, max-age=31536000, immutable",
+        },
+      });
+    } catch {
+      return NextResponse.json({ error: "Local image not found" }, { status: 404 });
+    }
+  }
   
   // 验证 URL
   let url: URL;

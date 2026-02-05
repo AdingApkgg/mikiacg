@@ -556,10 +556,10 @@ export function VideoPageClient({ id: initialId, initialVideo }: VideoPageClient
                   className="w-full flex items-center gap-3 px-3 py-2.5"
                 >
                   <div className="relative w-16 h-10 rounded overflow-hidden bg-muted shrink-0">
-                    {seriesEpisodes[currentEpisodeIndex]?.video.coverUrl ? (
+                    {seriesEpisodes[currentEpisodeIndex]?.video ? (
                       // eslint-disable-next-line @next/next/no-img-element
                       <img 
-                        src={seriesEpisodes[currentEpisodeIndex].video.coverUrl} 
+                        src={getCoverUrl(seriesEpisodes[currentEpisodeIndex].video.id, seriesEpisodes[currentEpisodeIndex].video.coverUrl)} 
                         alt="" 
                         className="w-full h-full object-cover" 
                       />
@@ -888,14 +888,8 @@ export function VideoPageClient({ id: initialId, initialVideo }: VideoPageClient
                           } ${isVideoLoading && !isCurrentVideo ? "opacity-70" : ""}`}
                         >
                           <div className="relative w-20 h-12 rounded overflow-hidden bg-muted shrink-0">
-                            {ep.video.coverUrl ? (
-                              // eslint-disable-next-line @next/next/no-img-element
-                              <img src={ep.video.coverUrl} alt="" className="w-full h-full object-cover" />
-                            ) : (
-                              <div className="w-full h-full flex items-center justify-center text-muted-foreground">
-                                <Play className="h-4 w-4" />
-                              </div>
-                            )}
+                            {/* eslint-disable-next-line @next/next/no-img-element */}
+                            <img src={getCoverUrl(ep.video.id, ep.video.coverUrl)} alt="" className="w-full h-full object-cover" />
                             {isCurrentVideo && (
                               <div className="absolute inset-0 bg-black/50 flex items-center justify-center">
                                 <Play className="h-4 w-4 text-white fill-white" />

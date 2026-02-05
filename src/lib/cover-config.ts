@@ -1,0 +1,15 @@
+export const COVER_CONFIG = {
+  width: 1280,
+  formats: ["avif", "webp", "jpg"] as const,
+  samplePoints: [1, 3, 5, 10],
+  maxConcurrency: 2,
+  timeout: 45000,
+  maxRetries: 3,
+  retryDelay: 2000,
+  lockTtlSeconds: 120,
+  queueName: "cover:queue",
+  progressKey: "cover:progress",
+  backfillIntervalMs: 10 * 60 * 1000,
+  backfillBatchSize: 50,
+  backfillLockTtlSeconds: 300,
+} as const;

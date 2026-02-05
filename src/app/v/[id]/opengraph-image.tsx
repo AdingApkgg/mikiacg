@@ -1,5 +1,6 @@
 import { ImageResponse } from "next/og";
 import { prisma } from "@/lib/prisma";
+import { getCoverFullUrl } from "@/lib/cover";
 
 export const runtime = "nodejs";
 export const alt = "Video";
@@ -67,21 +68,19 @@ export default async function Image({ params }: { params: Promise<{ id: string }
           color: "white",
         }}
       >
-        {video.coverUrl && (
-          <img
-            src={video.coverUrl}
-            alt=""
-            style={{
-              position: "absolute",
-              top: 0,
-              left: 0,
-              width: "100%",
-              height: "100%",
-              objectFit: "cover",
-              opacity: 0.3,
-            }}
-          />
-        )}
+        <img
+          src={getCoverFullUrl(id, video.coverUrl)}
+          alt=""
+          style={{
+            position: "absolute",
+            top: 0,
+            left: 0,
+            width: "100%",
+            height: "100%",
+            objectFit: "cover",
+            opacity: 0.3,
+          }}
+        />
         <div
           style={{
             display: "flex",

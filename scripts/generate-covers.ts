@@ -5,18 +5,23 @@
  * 运行方式: npx tsx scripts/generate-covers.ts
  * 
  * 可选参数:
- *   --force      强制重新生成所有封面（包括已有封面的视频）
- *   --dry-run    仅显示将要处理的视频，不实际生成
- *   --limit=N    限制处理的视频数量（用于测试）
+ *   --force          强制重新生成所有封面（包括已有封面的视频）
+ *   --dry-run        仅显示将要处理的视频，不实际生成
+ *   --limit=N        限制处理的视频数量（用于测试）
+ *   --concurrency=N  并发处理数量（默认 2）
+ *   --resume         断点续传（跳过已成功处理的记录）
  */
 
 import { PrismaClient } from "../src/generated/prisma/client.js";
 import { PrismaPg } from "@prisma/adapter-pg";
 import { Pool } from "pg";
 import * as dotenv from "dotenv";
-import { execSync, spawn } from "child_process";
+import { execSync } from "child_process";
 import { existsSync, mkdirSync } from "fs";
 import { join } from "path";
+import { COVER_CONFIG } from "../src/lib/cover-config";
+import { retryGenerateCover } from "../src/lib/cover-generator";
+import { redis } from "../src/lib/redis";
 
 // 加载环境变量
 dotenv.config({ path: ".env.development" });
@@ -42,7 +47,12 @@ const args = process.argv.slice(2);
 const forceRegenerate = args.includes("--force");
 const dryRun = args.includes("--dry-run");
 const limitArg = args.find((arg) => arg.startsWith("--limit="));
+const concurrencyArg = args.find((arg) => arg.startsWith("--concurrency="));
 const limit = limitArg ? parseInt(limitArg.split("=")[1], 10) : undefined;
+const concurrency = concurrencyArg
+  ? parseInt(concurrencyArg.split("=")[1], 10)
+  : COVER_CONFIG.maxConcurrency;
+const resume = args.includes("--resume");
 
 // 检查 ffmpeg 是否可用
 function checkFfmpeg(): boolean {
@@ -54,53 +64,43 @@ function checkFfmpeg(): boolean {
   }
 }
 
-// 使用 ffmpeg 生成封面（支持多种格式，按优先级尝试）
-async function generateCover(
-  videoUrl: string,
-  outputPath: string
-): Promise<boolean> {
-  const runFfmpeg = (formatArgs: string[]): Promise<boolean> =>
-    new Promise((resolve) => {
-      const ffmpeg = spawn("ffmpeg", [
-        "-ss", "5",           // 从第 5 秒开始
-        "-i", videoUrl,       // 输入 URL
-        "-vframes", "1",      // 只截取 1 帧
-        "-vf", "scale=1280:-2", // 缩放到 1280 宽度
-        ...formatArgs,
-        "-y",                 // 覆盖输出
-        outputPath,
-      ], {
-        timeout: 60000, // 60 秒超时
-      });
+const progressKey = COVER_CONFIG.progressKey;
+const progressMetaKey = `${progressKey}:meta`;
+const progressDoneKey = `${progressKey}:done`;
 
-      ffmpeg.on("close", (code) => {
-        resolve(code === 0);
-      });
+async function resetProgress() {
+  await redis.del(progressMetaKey);
+  await redis.del(progressDoneKey);
+}
 
-      ffmpeg.on("error", () => {
-        resolve(false);
-      });
-    });
-
-  // 尝试 AVIF (最优先)
-  if (outputPath.endsWith(".avif")) {
-    // 优先 libaom-av1，失败则尝试 libsvtav1
-    if (await runFfmpeg(["-c:v", "libaom-av1", "-still-picture", "1", "-crf", "30"])) {
-      return true;
-    }
-    if (await runFfmpeg(["-c:v", "libsvtav1", "-crf", "35"])) {
-      return true;
-    }
-    return false;
+async function markProgress(videoId: string, success: boolean) {
+  if (success) {
+    await redis.sadd(progressDoneKey, videoId);
   }
+  await redis.hincrby(progressMetaKey, success ? "success" : "error", 1);
+  await redis.hset(progressMetaKey, "updatedAt", String(Date.now()));
+}
 
-  // 尝试 WebP
-  if (outputPath.endsWith(".webp")) {
-    return runFfmpeg(["-c:v", "libwebp", "-quality", "85"]);
-  }
+async function hasProgress(videoId: string): Promise<boolean> {
+  const exists = await redis.sismember(progressDoneKey, videoId);
+  return exists === 1;
+}
 
-  // JPEG (默认)
-  return runFfmpeg(["-q:v", "2"]);
+async function runWithConcurrency<T>(
+  items: T[],
+  worker: (item: T, index: number) => Promise<void>,
+  limitCount: number
+) {
+  let index = 0;
+  const workers = Array.from({ length: Math.max(1, limitCount) }, async () => {
+    while (true) {
+      const current = index;
+      index += 1;
+      if (current >= items.length) break;
+      await worker(items[current], current);
+    }
+  });
+  await Promise.all(workers);
 }
 
 async function main() {
@@ -164,52 +164,69 @@ async function main() {
     return;
   }
 
+  if (!resume) {
+    await resetProgress();
+  }
+  await redis.hset(progressMetaKey, "total", String(videos.length));
+
   // 处理每个视频
   let successCount = 0;
   let errorCount = 0;
 
   // 尝试的格式顺序：AVIF > WebP > JPEG
-  const formats = [".avif", ".webp", ".jpg"];
+  const formats = COVER_CONFIG.formats;
 
-  for (let i = 0; i < videos.length; i++) {
-    const video = videos[i];
-    const progress = `[${i + 1}/${videos.length}]`;
+  await runWithConcurrency(
+    videos,
+    async (video, index) => {
+      if (resume && (await hasProgress(video.id))) {
+        return;
+      }
 
-    console.log(`${progress} 处理: ${video.title}`);
+      const progress = `[${index + 1}/${videos.length}]`;
+      console.log(`${progress} 处理: ${video.title}`);
 
-    let success = false;
-    let finalCoverUrl = "";
+      let success = false;
+      let finalCoverUrl = "";
 
-    // 按格式优先级尝试
-    for (const ext of formats) {
-      const coverFilename = `${video.id}${ext}`;
-      const coverPath = join(COVER_DIR, coverFilename);
-      const coverUrl = `/uploads/cover/${coverFilename}`;
+      for (const ext of formats) {
+        const coverFilename = `${video.id}.${ext}`;
+        const coverPath = join(COVER_DIR, coverFilename);
+        const coverUrl = `/uploads/cover/${coverFilename}`;
 
-      console.log(`  🖼️  尝试生成 ${ext.toUpperCase().slice(1)} 格式...`);
-      
-      if (await generateCover(video.videoUrl, coverPath)) {
-        if (existsSync(coverPath)) {
+        console.log(`  🖼️  尝试生成 ${ext.toUpperCase()} 格式...`);
+
+        const ok = await retryGenerateCover(video.videoUrl, coverPath, ext, {
+          width: COVER_CONFIG.width,
+          samplePoints: [...COVER_CONFIG.samplePoints],
+          timeoutMs: COVER_CONFIG.timeout,
+          maxRetries: COVER_CONFIG.maxRetries,
+          retryDelayMs: COVER_CONFIG.retryDelay,
+        });
+
+        if (ok && existsSync(coverPath)) {
           finalCoverUrl = coverUrl;
           success = true;
           break;
         }
       }
-    }
 
-    if (success) {
-      // 更新数据库
-      await prisma.video.update({
-        where: { id: video.id },
-        data: { coverUrl: finalCoverUrl },
-      });
-      console.log(`  ✅ 成功: ${finalCoverUrl}`);
-      successCount++;
-    } else {
-      console.log(`  ❌ 失败: 无法生成封面`);
-      errorCount++;
-    }
-  }
+      if (success) {
+        await prisma.video.update({
+          where: { id: video.id },
+          data: { coverUrl: finalCoverUrl },
+        });
+        console.log(`  ✅ 成功: ${finalCoverUrl}`);
+        successCount++;
+      } else {
+        console.log("  ❌ 失败: 无法生成封面");
+        errorCount++;
+      }
+
+      await markProgress(video.id, success);
+    },
+    concurrency
+  );
 
   // 输出统计
   console.log("\n📊 统计:");

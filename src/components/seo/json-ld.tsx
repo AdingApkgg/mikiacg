@@ -1,6 +1,7 @@
 "use client";
 
 import Script from "next/script";
+import { getCoverFullUrl } from "@/lib/cover";
 
 interface VideoJsonLdProps {
   video: {
@@ -34,7 +35,7 @@ export function VideoJsonLd({ video }: VideoJsonLdProps) {
     "@type": "VideoObject",
     name: video.title,
     description: video.description || video.title,
-    thumbnailUrl: video.coverUrl || `${baseUrl}/og-image.png`,
+    thumbnailUrl: getCoverFullUrl(video.id, video.coverUrl),
     uploadDate: new Date(video.createdAt).toISOString(),
     contentUrl: video.videoUrl,
     embedUrl: `${baseUrl}/v/${video.id}`,
@@ -194,7 +195,7 @@ export function VideoListJsonLd({ videos }: VideoListJsonLdProps) {
         "@id": `${baseUrl}/v/${video.id}`,
         name: video.title,
         description: video.description || video.title,
-        thumbnailUrl: video.coverUrl || `${baseUrl}/og-image.png`,
+        thumbnailUrl: getCoverFullUrl(video.id, video.coverUrl),
         uploadDate: new Date(video.createdAt).toISOString(),
         author: {
           "@type": "Person",

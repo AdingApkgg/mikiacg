@@ -4,6 +4,7 @@ import { prisma } from "@/lib/prisma";
 import { VideoPageClient } from "./client";
 import { cache, Suspense } from "react";
 import { Skeleton } from "@/components/ui/skeleton";
+import { getCoverFullUrl } from "@/lib/cover";
 
 interface VideoPageProps {
   params: Promise<{ id: string }>;
@@ -75,20 +76,20 @@ export async function generateMetadata({ params }: VideoPageProps): Promise<Meta
       title: video.title,
       description,
       url: `${baseUrl}/v/${id}`,
-      images: video.coverUrl ? [
+      images: [
         {
-          url: video.coverUrl,
+          url: getCoverFullUrl(id, video.coverUrl),
           width: 1280,
           height: 720,
           alt: video.title,
         },
-      ] : undefined,
+      ],
     },
     twitter: {
       card: "summary_large_image",
       title: video.title,
       description,
-      images: video.coverUrl ? [video.coverUrl] : undefined,
+      images: [getCoverFullUrl(id, video.coverUrl)],
     },
   };
 }

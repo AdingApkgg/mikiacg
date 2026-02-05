@@ -2,7 +2,7 @@
 
 import Image from "next/image";
 import { Film } from "lucide-react";
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 
 interface VideoCoverProps {
   videoId?: string;
@@ -29,14 +29,31 @@ function CoverPlaceholder({ className = "" }: { className?: string }) {
 }
 
 export function VideoCover({ videoId, coverUrl, title, className = "" }: VideoCoverProps) {
-  const [error, setError] = useState(false);
+  const [retryIndex, setRetryIndex] = useState(0);
+  const [isRetrying, setIsRetrying] = useState(false);
+  const [giveUp, setGiveUp] = useState(false);
+  const retryTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const shouldRetry = Boolean(videoId && !coverUrl);
+  const maxRetries = 12;
+  const retryDelayMs = 5000;
+
+  useEffect(() => {
+    return () => {
+      if (retryTimerRef.current) {
+        clearTimeout(retryTimerRef.current);
+      }
+    };
+  }, []);
 
   // 获取封面 URL
   const getCoverSrc = () => {
-    if (error) return null;
+    if (giveUp) return null;
     
     if (coverUrl) {
-      // 使用代理缓存外部图片
+      // 本地路径直接访问，外部 URL 走代理
+      if (coverUrl.startsWith("/uploads/")) {
+        return coverUrl;
+      }
       return `/api/cover/${encodeURIComponent(coverUrl)}`;
     }
     
@@ -49,20 +66,44 @@ export function VideoCover({ videoId, coverUrl, title, className = "" }: VideoCo
   };
 
   const coverSrc = getCoverSrc();
+  const coverSrcWithRetry =
+    coverSrc && shouldRetry ? `${coverSrc}?r=${retryIndex}` : coverSrc;
 
   // 无法获取封面时显示占位符
-  if (!coverSrc) {
+  if (!coverSrcWithRetry || isRetrying) {
     return <CoverPlaceholder className={className} />;
   }
 
   return (
     <Image
-      src={coverSrc}
+      src={coverSrcWithRetry}
       alt={title}
       fill
       className={`object-cover ${className}`}
       sizes="(max-width: 640px) 100vw, (max-width: 1024px) 50vw, 33vw"
-      onError={() => setError(true)}
+      onError={() => {
+        if (!shouldRetry) {
+          setGiveUp(true);
+          return;
+        }
+
+        if (retryIndex >= maxRetries) {
+          setGiveUp(true);
+          return;
+        }
+
+        setIsRetrying(true);
+        if (retryTimerRef.current) {
+          clearTimeout(retryTimerRef.current);
+        }
+        retryTimerRef.current = setTimeout(() => {
+          setRetryIndex((value) => value + 1);
+          setIsRetrying(false);
+        }, retryDelayMs);
+      }}
+      onLoad={() => {
+        setIsRetrying(false);
+      }}
       unoptimized // 跳过 Next.js 图片优化，因为 API 可能返回 404
     />
   );

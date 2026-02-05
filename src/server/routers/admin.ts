@@ -5,6 +5,7 @@ import { ADMIN_SCOPES, type AdminScope } from "@/lib/constants";
 import { Prisma } from "@/generated/prisma/client";
 import { nanoid } from "nanoid";
 import { parseShortcode } from "@/lib/shortcode-parser";
+import { enqueueCoverForVideo } from "@/lib/cover-auto";
 
 // 检查用户是否有特定权限
 async function hasScope(
@@ -705,6 +706,8 @@ export const adminRouter = router({
                 : {}),
             },
           });
+
+          enqueueCoverForVideo(video.id, video.coverUrl).catch(() => {});
 
           results.push({ title: videoData.title, id: video.id });
         } catch (error) {

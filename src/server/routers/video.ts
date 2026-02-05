@@ -4,6 +4,7 @@ import { router, publicProcedure, protectedProcedure, adminProcedure } from "../
 import { TRPCError } from "@trpc/server";
 import { getCache, setCache, deleteCachePattern } from "@/lib/redis";
 import { submitVideoToIndexNow, submitVideosToIndexNow } from "@/lib/indexnow";
+import { enqueueCoverForVideo } from "@/lib/cover-auto";
 
 const VIDEO_CACHE_TTL = 60; // 1 minute
 
@@ -612,6 +613,8 @@ export const videoRouter = router({
         submitVideoToIndexNow(video.id).catch(() => {});
       }
 
+      enqueueCoverForVideo(video.id, video.coverUrl).catch(() => {});
+
       return video;
     }),
 
@@ -750,6 +753,8 @@ export const videoRouter = router({
 
       // 视频更新后通知搜索引擎重新索引
       submitVideoToIndexNow(id).catch(() => {});
+
+      enqueueCoverForVideo(updated.id, updated.coverUrl).catch(() => {});
 
       return updated;
     }),
