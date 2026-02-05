@@ -51,7 +51,7 @@ interface HomePageClientProps {
 }
 
 export function HomePageClient({ initialTags, initialVideos, siteConfig }: HomePageClientProps) {
-  const [viewMode, setViewMode] = useState<ViewMode>("series");
+  const [viewMode, setViewMode] = useState<ViewMode>("videos");
   const [sortBy, setSortBy] = useState<SortBy>("latest");
   const [selectedTag, setSelectedTag] = useState<string | null>(null);
   const [showAnnouncement, setShowAnnouncement] = useState(true);
@@ -134,7 +134,7 @@ export function HomePageClient({ initialTags, initialVideos, siteConfig }: HomeP
   // 视图模式选项
   const viewModeOptions: { id: ViewMode; label: string }[] = [
     { id: "videos", label: "视频" },
-    { id: "series", label: "合集" },
+    { id: "series", label: "作者" },
   ];
 
   // 排序选项
