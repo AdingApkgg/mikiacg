@@ -26,6 +26,7 @@ export const VideoPlayer = forwardRef<VideoPlayerRef, VideoPlayerProps>(
     const videoRef = useRef<HTMLVideoElement | null>(null);
     const [playedSeconds, setPlayedSeconds] = useState(0);
     const [duration, setDuration] = useState(0);
+    const [isReady, setIsReady] = useState(false);
 
     const getVideoElement = useCallback(() => videoRef.current, []);
 
@@ -95,33 +96,83 @@ export const VideoPlayer = forwardRef<VideoPlayerRef, VideoPlayerProps>(
         if (initialProgress > 0) {
           video.currentTime = initialProgress;
         }
+        // 恢复保存的音量和播放速度
+        try {
+          const savedVolume = localStorage.getItem('video-player-volume');
+          const savedPlaybackRate = localStorage.getItem('video-player-playback-rate');
+          if (savedVolume !== null) {
+            video.volume = parseFloat(savedVolume);
+          }
+          if (savedPlaybackRate !== null) {
+            video.playbackRate = parseFloat(savedPlaybackRate);
+          }
+        } catch {
+          // localStorage 不可用时忽略
+        }
+      };
+      const handleCanPlay = () => {
+        setIsReady(true);
       };
       const handleEnded = () => onEnded?.();
+      
+      // 保存音量和播放速度变化
+      const handleVolumeChange = () => {
+        try {
+          localStorage.setItem('video-player-volume', video.volume.toString());
+        } catch {
+          // localStorage 不可用时忽略
+        }
+      };
+      const handleRateChange = () => {
+        try {
+          localStorage.setItem('video-player-playback-rate', video.playbackRate.toString());
+        } catch {
+          // localStorage 不可用时忽略
+        }
+      };
 
       video.addEventListener("timeupdate", handleTimeUpdate);
       video.addEventListener("durationchange", handleDurationChange);
       video.addEventListener("loadedmetadata", handleLoadedMetadata);
+      video.addEventListener("canplay", handleCanPlay);
       video.addEventListener("ended", handleEnded);
+      video.addEventListener("volumechange", handleVolumeChange);
+      video.addEventListener("ratechange", handleRateChange);
 
       return () => {
         video.removeEventListener("timeupdate", handleTimeUpdate);
         video.removeEventListener("durationchange", handleDurationChange);
         video.removeEventListener("loadedmetadata", handleLoadedMetadata);
+        video.removeEventListener("canplay", handleCanPlay);
         video.removeEventListener("ended", handleEnded);
+        video.removeEventListener("volumechange", handleVolumeChange);
+        video.removeEventListener("ratechange", handleRateChange);
       };
     }, [getVideoElement, initialProgress, onEnded, onProgress]);
+
+    // 重置 ready 状态当 URL 变化时
+    useEffect(() => {
+      setIsReady(false);
+    }, [url]);
 
     return (
       <div className="relative w-full aspect-video bg-black">
         <video
           ref={videoRef}
-          className="w-full h-full"
+          className={`w-full h-full transition-opacity duration-300 ${isReady ? 'opacity-100' : 'opacity-0'}`}
           playsInline
           preload="metadata"
           poster={poster || undefined}
           controls
           autoPlay={autoStart}
         />
+        {/* 封面图作为加载占位，视频就绪后隐藏 */}
+        {poster && !isReady && (
+          <div 
+            className="absolute inset-0 bg-cover bg-center transition-opacity duration-300"
+            style={{ backgroundImage: `url(${poster})` }}
+          />
+        )}
       </div>
     );
   }

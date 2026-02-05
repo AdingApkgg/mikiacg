@@ -330,3 +330,15 @@ header.sticky {
     touch-action: manipulation;
   }
 }
+
+/* 隐藏滚动条但保持滚动功能 */
+@layer utilities {
+  .scrollbar-hide {
+    -ms-overflow-style: none;
+    scrollbar-width: none;
+  }
+  
+  .scrollbar-hide::-webkit-scrollbar {
+    display: none;
+  }
+}
