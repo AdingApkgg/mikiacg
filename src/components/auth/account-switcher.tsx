@@ -95,14 +95,9 @@ export function AccountSwitcher() {
         return;
       }
 
-      // 切换成功，更新 session 并刷新页面
+      // 切换成功，整页刷新以确保所有 session 状态（cookie cache、client hooks）全部更新
       toast.success("已切换账号", { description: `欢迎回来，${data.user.name}` });
-      
-      // 强制刷新 session
-      await updateSession();
-      
-      // 刷新页面以确保所有状态更新
-      router.refresh();
+      window.location.reload();
     } catch (error) {
       console.error("Switch account error:", error);
       toast.error("切换失败", { description: "网络错误，请重试" });
