@@ -5,7 +5,6 @@ import { VideoGrid } from "@/components/video/video-grid";
 import { Button } from "@/components/ui/button";
 import { useState, useEffect, useRef } from "react";
 import { AlertTriangle, X, ChevronLeft, ChevronRight, Play, Layers } from "lucide-react";
-import { SiteStats } from "@/components/stats/site-stats";
 import { PageWrapper, FadeIn } from "@/components/motion";
 import { cn } from "@/lib/utils";
 import Link from "next/link";
@@ -192,13 +191,6 @@ export function HomePageClient({ initialTags, initialVideos, siteConfig }: HomeP
             </div>
           </div>
         )}
-
-        {/* 网站统计 */}
-        <FadeIn delay={0.1}>
-          <section className="mb-4">
-            <SiteStats />
-          </section>
-        </FadeIn>
 
         {/* YouTube 风格的标签栏 */}
         <FadeIn delay={0.15}>

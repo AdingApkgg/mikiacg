@@ -16,7 +16,6 @@ import {
   SheetTrigger,
 } from "@/components/ui/sheet";
 import {
-  LayoutDashboard,
   Users,
   Video,
   Tag,
@@ -29,12 +28,6 @@ import {
 } from "lucide-react";
 
 const menuItems = [
-  {
-    href: "/dashboard",
-    label: "数据总览",
-    icon: LayoutDashboard,
-    scope: null,
-  },
   {
     href: "/dashboard/videos",
     label: "视频管理",

@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { router, protectedProcedure, adminProcedure, ownerProcedure } from "../trpc";
+import { router, publicProcedure, protectedProcedure, adminProcedure, ownerProcedure } from "../trpc";
 import { TRPCError } from "@trpc/server";
 import { ADMIN_SCOPES, type AdminScope } from "@/lib/constants";
 import { Prisma } from "@/generated/prisma/client";
@@ -60,8 +60,8 @@ export const adminRouter = router({
     };
   }),
 
-  // 公开统计数据（所有登录用户可见）
-  getPublicStats: protectedProcedure.query(async ({ ctx }) => {
+  // 公开统计数据（所有人可见）
+  getPublicStats: publicProcedure.query(async ({ ctx }) => {
     const [
       userCount,
       videoCount,
@@ -69,7 +69,10 @@ export const adminRouter = router({
       commentCount,
       totalViews,
       likeCount,
+      dislikeCount,
       favoriteCount,
+      seriesCount,
+      searchCount,
     ] = await Promise.all([
       ctx.prisma.user.count(),
       ctx.prisma.video.count({ where: { status: "PUBLISHED" } }),
@@ -80,7 +83,10 @@ export const adminRouter = router({
         _sum: { views: true },
       }),
       ctx.prisma.like.count(),
+      ctx.prisma.dislike.count(),
       ctx.prisma.favorite.count(),
+      ctx.prisma.series.count(),
+      ctx.prisma.searchRecord.count(),
     ]);
 
     return {
@@ -90,12 +96,15 @@ export const adminRouter = router({
       commentCount,
       totalViews: totalViews._sum.views || 0,
       likeCount,
+      dislikeCount,
       favoriteCount,
+      seriesCount,
+      searchCount,
     };
   }),
 
-  // 增量统计数据（最近30天）
-  getGrowthStats: protectedProcedure
+  // 增量统计数据（最近N天，所有人可见）
+  getGrowthStats: publicProcedure
     .input(z.object({ days: z.number().min(1).max(90).default(30) }))
     .query(async ({ ctx, input }) => {
       const since = new Date();
@@ -105,16 +114,26 @@ export const adminRouter = router({
         newUsers,
         newVideos,
         newTags,
+        newComments,
+        newViews,
         newLikes,
+        newDislikes,
         newFavorites,
+        newSearches,
+        newSeries,
       ] = await Promise.all([
         ctx.prisma.user.count({ where: { createdAt: { gte: since } } }),
         ctx.prisma.video.count({
           where: { createdAt: { gte: since }, status: "PUBLISHED" },
         }),
         ctx.prisma.tag.count({ where: { createdAt: { gte: since } } }),
+        ctx.prisma.comment.count({ where: { createdAt: { gte: since }, isDeleted: false } }),
+        ctx.prisma.watchHistory.count({ where: { createdAt: { gte: since } } }),
         ctx.prisma.like.count({ where: { createdAt: { gte: since } } }),
+        ctx.prisma.dislike.count({ where: { createdAt: { gte: since } } }),
         ctx.prisma.favorite.count({ where: { createdAt: { gte: since } } }),
+        ctx.prisma.searchRecord.count({ where: { createdAt: { gte: since } } }),
+        ctx.prisma.series.count({ where: { createdAt: { gte: since } } }),
       ]);
 
       return {
@@ -122,8 +141,13 @@ export const adminRouter = router({
         newUsers,
         newVideos,
         newTags,
+        newComments,
+        newViews,
         newLikes,
+        newDislikes,
         newFavorites,
+        newSearches,
+        newSeries,
       };
     }),
 

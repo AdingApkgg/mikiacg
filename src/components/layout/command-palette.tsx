@@ -30,6 +30,7 @@ import {
   MessageSquare,
   Shield,
   Keyboard,
+  BarChart3,
 } from "lucide-react";
 import { useStableSession } from "@/lib/hooks";
 import { useTheme } from "next-themes";
@@ -151,6 +152,10 @@ export function CommandPalette({ open, onOpenChange }: CommandPaletteProps) {
           <CommandItem onSelect={() => runCommand(() => router.push("/comments"))}>
             <MessageSquare className="mr-2 h-4 w-4" />
             评论动态
+          </CommandItem>
+          <CommandItem onSelect={() => runCommand(() => router.push("/stats"))}>
+            <BarChart3 className="mr-2 h-4 w-4" />
+            数据总览
           </CommandItem>
         </CommandGroup>
 

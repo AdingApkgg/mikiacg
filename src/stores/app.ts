@@ -42,10 +42,16 @@ export const useSearchHistoryStore = create<SearchHistoryState>()(
 
 // ==================== UI Store ====================
 
+/** 首页内容模式（视频/图片/游戏），入口预留 */
+export type ContentMode = "video" | "image" | "game";
+
 interface UIState {
   // 侧边栏状态
   sidebarCollapsed: boolean;
   sidebarOpen: boolean;
+  // 首页内容模式（导航「首页」右侧切换）
+  contentMode: ContentMode;
+  setContentMode: (mode: ContentMode) => void;
   // 播放器状态
   playerFullscreen: boolean;
   playerPiP: boolean;
@@ -65,6 +71,8 @@ export const useUIStore = create<UIState>()(
     (set) => ({
       sidebarCollapsed: false,
       sidebarOpen: false,
+      contentMode: "video",
+      setContentMode: (mode) => set({ contentMode: mode }),
       playerFullscreen: false,
       playerPiP: false,
       reducedMotion: false,
@@ -82,6 +90,7 @@ export const useUIStore = create<UIState>()(
       partialize: (state) => ({
         sidebarCollapsed: state.sidebarCollapsed,
         reducedMotion: state.reducedMotion,
+        contentMode: state.contentMode,
       }),
     }
   )

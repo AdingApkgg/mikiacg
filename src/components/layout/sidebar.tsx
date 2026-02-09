@@ -14,7 +14,12 @@ import {
   User,
   Layers,
   MessageCircle,
+  BarChart3,
+  Image,
+  Gamepad2,
+  Play,
 } from "lucide-react";
+import { useUIStore, type ContentMode } from "@/stores/app";
 import { Button } from "@/components/ui/button";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import { Separator } from "@/components/ui/separator";
@@ -45,6 +50,14 @@ interface NavItem {
 const mainNavItems: NavItem[] = [
   { href: "/", icon: Home, label: "首页" },
   { href: "/comments", icon: MessageCircle, label: "评论动态" },
+  { href: "/stats", icon: BarChart3, label: "数据总览" },
+];
+
+/** 首页右侧模式切换：视频 / 图片 / 游戏（入口预留） */
+const CONTENT_MODE_OPTIONS: { id: ContentMode; label: string; icon: React.ElementType }[] = [
+  { id: "video", label: "视频", icon: Play },
+  { id: "image", label: "图片", icon: Image },
+  { id: "game", label: "游戏", icon: Gamepad2 },
 ];
 
 const userNavItems: NavItem[] = [
@@ -138,6 +151,71 @@ function NavGroup({
   );
 }
 
+/** 内容模式切换条（视频 / 图片 / 游戏），显示在「首页」上方 */
+function ContentModeSwitcher({ collapsed }: { collapsed: boolean }) {
+  const contentMode = useUIStore((s) => s.contentMode);
+  const setContentMode = useUIStore((s) => s.setContentMode);
+
+  if (collapsed) {
+    // 折叠态：纵向图标列
+    return (
+      <div className="flex flex-col items-center gap-1">
+        {CONTENT_MODE_OPTIONS.map((opt) => {
+          const Icon = opt.icon;
+          const isSelected = contentMode === opt.id;
+          return (
+            <Tooltip key={opt.id} delayDuration={0}>
+              <TooltipTrigger asChild>
+                <button
+                  type="button"
+                  onClick={() => setContentMode(opt.id)}
+                  className={cn(
+                    "flex items-center justify-center w-10 h-8 rounded-lg transition-colors",
+                    isSelected
+                      ? "bg-primary text-primary-foreground"
+                      : "text-muted-foreground hover:bg-accent hover:text-accent-foreground"
+                  )}
+                >
+                  <Icon className="h-4 w-4" />
+                </button>
+              </TooltipTrigger>
+              <TooltipContent side="right" className="font-medium">
+                {opt.label}
+              </TooltipContent>
+            </Tooltip>
+          );
+        })}
+      </div>
+    );
+  }
+
+  // 展开态：横向按钮条
+  return (
+    <div className="flex items-center gap-1 rounded-lg bg-muted/60 p-1">
+      {CONTENT_MODE_OPTIONS.map((opt) => {
+        const Icon = opt.icon;
+        const isSelected = contentMode === opt.id;
+        return (
+          <button
+            key={opt.id}
+            type="button"
+            onClick={() => setContentMode(opt.id)}
+            className={cn(
+              "flex flex-1 items-center justify-center gap-1.5 rounded-md px-2 py-1.5 text-sm font-medium transition-colors",
+              isSelected
+                ? "bg-background text-foreground shadow-sm"
+                : "text-muted-foreground hover:text-foreground"
+            )}
+          >
+            <Icon className="h-4 w-4" />
+            {opt.label}
+          </button>
+        );
+      })}
+    </div>
+  );
+}
+
 // 用户个人主页链接
 function UserProfileLink({ collapsed, session }: { collapsed: boolean; session: NonNullable<SessionWithUser> }) {
   const content = (
@@ -207,6 +285,7 @@ export function Sidebar({ collapsed, onToggle, overlay = false }: SidebarProps) 
       >
         <ScrollArea className="flex-1 py-4">
           <div className={cn("space-y-4", collapsed ? "px-2" : "px-3")}>
+            <ContentModeSwitcher collapsed={collapsed} />
             <NavGroup items={mainNavItems} collapsed={collapsed} pathname={pathname} session={session} />
             
             {session && (
@@ -267,7 +346,6 @@ export function Sidebar({ collapsed, onToggle, overlay = false }: SidebarProps) 
 export function MobileSidebarContent({ onClose }: { onClose?: () => void }) {
   const pathname = usePathname();
   const { session } = useStableSession();
-
   const handleClick = () => {
     onClose?.();
   };
@@ -275,6 +353,8 @@ export function MobileSidebarContent({ onClose }: { onClose?: () => void }) {
   return (
     <ScrollArea className="h-full py-4">
       <div className="space-y-4 px-3">
+        {/* 视频/图片/游戏 模式切换 */}
+        <ContentModeSwitcher collapsed={false} />
         <NavGroupMobile
           items={mainNavItems}
           pathname={pathname}
