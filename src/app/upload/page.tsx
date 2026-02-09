@@ -227,7 +227,10 @@ function parseBatchInput(input: string): ParsedBatchData {
       currentSeries.videos.push({
         title: currentVideo.title || '',
         description: currentVideo.description || seriesDescription || '',
-        coverUrl: currentVideo.coverUrl || seriesCoverUrl || '',
+        // 视频封面只用视频自己的，不继承合集封面
+        // 合集封面是作者/系列的代表图，不是视频截图
+        // 视频没有封面时让自动生成器从视频流提取
+        coverUrl: currentVideo.coverUrl || '',
         videoUrl: currentVideo.videoUrl || '',
         tags: currentVideo.tags?.length ? currentVideo.tags : [...seriesTags],
         extraInfo: mergedExtra,
@@ -805,35 +808,89 @@ export default function UploadPage() {
                 </CardDescription>
               </CardHeader>
               <CardContent>
-                <ScrollArea className="max-h-[400px]">
+                <ScrollArea className="max-h-[500px]">
                   <div className="space-y-4">
                     {parsedBatch.series.map((series, sIndex) => (
-                      <div key={sIndex} className="space-y-2">
-                        <div className="flex items-center gap-2">
-                          <Layers className="h-4 w-4 text-primary" />
-                          <span className="font-medium">
-                            {series.seriesTitle || "无合集"}
-                          </span>
-                          <Badge variant="secondary">{series.videos.length} 个视频</Badge>
+                      <div key={sIndex} className="space-y-2 border rounded-lg p-3">
+                        {/* 合集头部 */}
+                        <div className="flex items-start gap-3">
+                          {series.coverUrl ? (
+                            <div className="shrink-0 w-16 h-10 rounded overflow-hidden bg-muted">
+                              {/* eslint-disable-next-line @next/next/no-img-element */}
+                              <img
+                                src={series.coverUrl}
+                                alt={series.seriesTitle || "合集封面"}
+                                className="w-full h-full object-cover"
+                                onError={(e) => { e.currentTarget.style.display = "none"; }}
+                              />
+                            </div>
+                          ) : null}
+                          <div className="flex-1 min-w-0">
+                            <div className="flex items-center gap-2 flex-wrap">
+                              <Layers className="h-4 w-4 text-primary shrink-0" />
+                              <span className="font-medium truncate">
+                                {series.seriesTitle || "无合集"}
+                              </span>
+                              <Badge variant="secondary" className="text-xs shrink-0">
+                                {series.videos.length} 个视频
+                              </Badge>
+                              {series.coverUrl && (
+                                <Badge variant="outline" className="text-xs shrink-0">
+                                  <ImageIcon className="h-3 w-3 mr-1" />
+                                  合集封面
+                                </Badge>
+                              )}
+                            </div>
+                            {series.description && (
+                              <p className="text-xs text-muted-foreground mt-1 line-clamp-2">
+                                {series.description}
+                              </p>
+                            )}
+                          </div>
                         </div>
-                        <div className="ml-6 space-y-2">
+                        {/* 视频列表 */}
+                        <div className="ml-2 space-y-1.5">
                           {series.videos.map((video, vIndex) => (
                             <div
                               key={vIndex}
-                              className="p-2 rounded-lg bg-muted/50 text-sm"
+                              className="flex items-center gap-2 p-2 rounded-lg bg-muted/50 text-sm"
                             >
-                              <div className="font-medium">{video.title}</div>
-                              {video.description && (
-                                <div className="text-muted-foreground text-xs truncate">
-                                  {video.description}
+                              <span className="text-muted-foreground text-xs tabular-nums shrink-0 w-6 text-right">
+                                {vIndex + 1}
+                              </span>
+                              <div className="flex-1 min-w-0">
+                                <div className="font-medium truncate">{video.title}</div>
+                                <div className="flex items-center gap-1.5 mt-0.5 flex-wrap">
+                                  {video.coverUrl ? (
+                                    <Badge variant="outline" className="text-[10px] py-0">
+                                      <ImageIcon className="h-2.5 w-2.5 mr-0.5" />
+                                      自定义封面
+                                    </Badge>
+                                  ) : (
+                                    <Badge variant="secondary" className="text-[10px] py-0">
+                                      <FileVideo className="h-2.5 w-2.5 mr-0.5" />
+                                      自动生成封面
+                                    </Badge>
+                                  )}
+                                  {video.extraInfo?.author && (
+                                    <span className="text-[10px] text-muted-foreground">
+                                      <User className="h-2.5 w-2.5 inline mr-0.5" />
+                                      {video.extraInfo.author}
+                                    </span>
+                                  )}
+                                  {video.extraInfo?.downloads && video.extraInfo.downloads.length > 0 && (
+                                    <span className="text-[10px] text-muted-foreground">
+                                      <Download className="h-2.5 w-2.5 inline mr-0.5" />
+                                      {video.extraInfo.downloads.length} 个下载
+                                    </span>
+                                  )}
+                                  {video.tags.length > 0 && (
+                                    <span className="text-[10px] text-muted-foreground">
+                                      <Tag className="h-2.5 w-2.5 inline mr-0.5" />
+                                      {video.tags.length} 个标签
+                                    </span>
+                                  )}
                                 </div>
-                              )}
-                              <div className="flex flex-wrap gap-1 mt-1">
-                                {video.tags.map((tag, tIndex) => (
-                                  <Badge key={tIndex} variant="outline" className="text-xs">
-                                    {tag}
-                                  </Badge>
-                                ))}
                               </div>
                             </div>
                           ))}

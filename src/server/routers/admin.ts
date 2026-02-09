@@ -6,6 +6,7 @@ import { Prisma } from "@/generated/prisma/client";
 import { nanoid } from "nanoid";
 import { parseShortcode } from "@/lib/shortcode-parser";
 import { enqueueCoverForVideo } from "@/lib/cover-auto";
+import { addToQueueBatch } from "@/lib/cover-queue";
 import { deleteCache } from "@/lib/redis";
 
 // 检查用户是否有特定权限
@@ -1244,5 +1245,69 @@ export const adminRouter = router({
       await deleteCache("site:config");
 
       return config;
+    }),
+
+  // 重置视频封面：清除匹配模式的封面URL并触发自动生成
+  resetCovers: adminProcedure
+    .input(z.object({
+      // 匹配封面URL的模式，如 "/Picture/" 匹配合集封面
+      urlPattern: z.string().min(1).max(200).optional(),
+      // 指定合集ID，重置该合集下所有视频的封面
+      seriesId: z.string().optional(),
+      // 指定视频ID列表
+      videoIds: z.array(z.string()).optional(),
+      // 重置所有没有自动生成封面的视频（coverUrl 非空且不是本地路径）
+      nonLocalOnly: z.boolean().optional(),
+    }))
+    .mutation(async ({ ctx, input }) => {
+      const canManage = await hasScope(ctx.prisma, ctx.session.user.id, "video:manage");
+      if (!canManage) {
+        throw new TRPCError({ code: "FORBIDDEN", message: "无视频管理权限" });
+      }
+
+      // 构建查询条件
+      const where: Prisma.VideoWhereInput = {
+        coverUrl: { not: null },
+      };
+
+      if (input.videoIds && input.videoIds.length > 0) {
+        where.id = { in: input.videoIds };
+      } else if (input.seriesId) {
+        where.seriesEpisodes = { some: { seriesId: input.seriesId } };
+      }
+
+      if (input.urlPattern) {
+        where.coverUrl = { contains: input.urlPattern };
+      } else if (input.nonLocalOnly) {
+        // 非本地路径（自动生成的封面是 /api/cover/ 开头）
+        where.coverUrl = { not: { startsWith: "/api/cover/" } };
+        // 排除已经为空的
+        where.AND = [{ coverUrl: { not: null } }, { coverUrl: { not: "" } }];
+      }
+
+      // 查找受影响的视频
+      const videos = await ctx.prisma.video.findMany({
+        where,
+        select: { id: true, coverUrl: true },
+        take: 500, // 安全限制
+      });
+
+      if (videos.length === 0) {
+        return { resetCount: 0, queuedCount: 0 };
+      }
+
+      // 批量清除 coverUrl
+      await ctx.prisma.video.updateMany({
+        where: { id: { in: videos.map((v) => v.id) } },
+        data: { coverUrl: null },
+      });
+
+      // 批量入队自动生成
+      const queuedCount = await addToQueueBatch(videos.map((v) => v.id));
+
+      return {
+        resetCount: videos.length,
+        queuedCount,
+      };
     }),
 });

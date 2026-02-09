@@ -298,7 +298,7 @@ export const videoRouter = router({
             tags: {
               include: { tag: { select: { id: true, name: true, slug: true } } },
             },
-            _count: { select: { likes: true, dislikes: true, favorites: true } },
+            _count: { select: { likes: true, dislikes: true, confused: true, comments: true, favorites: true } },
           },
         }),
         ctx.prisma.video.count({ where: baseWhere }),
@@ -1325,7 +1325,7 @@ export const videoRouter = router({
               tags: {
                 include: { tag: { select: { id: true, name: true, slug: true } } },
               },
-              _count: { select: { likes: true, dislikes: true, favorites: true } },
+              _count: { select: { likes: true, dislikes: true, confused: true, comments: true, favorites: true } },
             },
           },
         },
@@ -1371,7 +1371,7 @@ export const videoRouter = router({
               tags: {
                 include: { tag: { select: { id: true, name: true, slug: true } } },
               },
-              _count: { select: { likes: true, dislikes: true, favorites: true } },
+              _count: { select: { likes: true, dislikes: true, confused: true, comments: true, favorites: true } },
             },
           },
         },
@@ -1507,7 +1507,7 @@ export const videoRouter = router({
           tags: {
             include: { tag: { select: { id: true, name: true, slug: true } } },
           },
-          _count: { select: { likes: true, dislikes: true, favorites: true } },
+          _count: { select: { likes: true, dislikes: true, confused: true, comments: true, favorites: true } },
         },
       });
     }),

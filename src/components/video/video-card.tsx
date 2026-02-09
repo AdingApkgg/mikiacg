@@ -3,14 +3,7 @@
 import { memo } from "react";
 import Link from "next/link";
 import { VideoCover } from "./video-cover";
-import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
-import { Badge } from "@/components/ui/badge";
-import {
-  HoverCard,
-  HoverCardContent,
-  HoverCardTrigger,
-} from "@/components/ui/hover-card";
-import { Play, Eye, ThumbsUp, User, Clock } from "lucide-react";
+import { Play, ThumbsUp } from "lucide-react";
 import { formatDuration, formatViews, formatRelativeTime } from "@/lib/format";
 
 interface VideoCardProps {
@@ -27,170 +20,86 @@ interface VideoCardProps {
       nickname?: string | null;
       avatar?: string | null;
     };
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    extraInfo?: any;
     tags?: { tag: { id: string; name: string; slug: string } }[];
     _count: {
       likes: number;
       dislikes?: number;
-      favorites?: number;
+      [key: string]: number | undefined;
     };
   };
   index?: number;
-  showTags?: boolean;
 }
 
-function VideoCardComponent({ video, index = 0, showTags = false }: VideoCardProps) {
-  const uploaderName = video.uploader.nickname || video.uploader.username;
-  
-  // 计算好评率（参考 hanime1.me 的 thumb_up 百分比）
+function VideoCardComponent({ video, index = 0 }: VideoCardProps) {
+  const extra = video.extraInfo && typeof video.extraInfo === "object" && !Array.isArray(video.extraInfo) ? video.extraInfo : null;
+  const authorName = extra?.author || video.uploader.nickname || video.uploader.username;
+
+  // 好评率（hanime1 风格：thumb_up 百分比）
   const totalVotes = video._count.likes + (video._count.dislikes || 0);
   const likeRatio = totalVotes > 0 ? Math.round((video._count.likes / totalVotes) * 100) : 100;
-  const likeRatioColor = likeRatio >= 90 ? "text-green-400" : likeRatio >= 70 ? "text-yellow-400" : "text-red-400";
-  
-  // 获取前3个标签
-  const displayTags = video.tags?.slice(0, 3) || [];
-  
+  const likeColor = likeRatio >= 90 ? "text-green-400" : likeRatio >= 70 ? "text-yellow-400" : "text-red-400";
+
   return (
-    <div 
+    <div
       className="group transition-transform duration-300 hover:-translate-y-1"
-      style={{ 
-        animationDelay: `${index * 50}ms`,
-      }}
+      style={{ animationDelay: `${index * 50}ms` }}
     >
       <Link href={`/v/${video.id}`} className="block">
-        {/* 封面容器 */}
-        <div className="relative aspect-video overflow-hidden rounded-xl bg-muted shadow-sm group-hover:shadow-xl transition-shadow duration-300">
+        {/* 封面 */}
+        <div className="relative aspect-video overflow-hidden rounded-lg bg-muted shadow-sm group-hover:shadow-xl transition-shadow duration-300">
           <VideoCover
             videoId={video.id}
             coverUrl={video.coverUrl}
             title={video.title}
             className="transition-transform duration-500 ease-out group-hover:scale-105"
           />
-          
-          {/* 渐变遮罩 - 底部信息区域 */}
-          <div className="absolute inset-0 bg-gradient-to-t from-black/70 via-black/0 to-black/0 opacity-60 group-hover:opacity-80 transition-opacity duration-300" />
-          
-          {/* 播放按钮 - 居中 */}
+
+          {/* 底部渐变遮罩 */}
+          <div className="absolute inset-0 bg-gradient-to-t from-black/70 via-transparent to-transparent" />
+
+          {/* 播放按钮 hover */}
           <div className="absolute inset-0 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-all duration-300">
-            <div className="bg-white/95 dark:bg-black/80 backdrop-blur-md rounded-full p-3.5 shadow-2xl transition-transform duration-200 ease-out group-hover:scale-110 active:scale-95">
-              <Play className="h-6 w-6 text-primary fill-primary" />
+            <div className="bg-white/90 dark:bg-black/80 backdrop-blur-md rounded-full p-3 shadow-2xl transition-transform duration-200 group-hover:scale-110 active:scale-95">
+              <Play className="h-5 w-5 text-primary fill-primary" />
             </div>
           </div>
 
-          {/* 时长标签 */}
+          {/* 时长 - 左上角 */}
           {video.duration && (
-            <div className="absolute bottom-2.5 right-2.5 flex items-center gap-1 bg-black/75 backdrop-blur-sm text-white text-xs px-2 py-1 rounded-md font-medium">
-              <Clock className="h-3 w-3" />
+            <div className="absolute top-1.5 left-1.5 bg-black/75 backdrop-blur-sm text-white text-[10px] sm:text-xs px-1.5 py-0.5 rounded font-medium tabular-nums">
               {formatDuration(video.duration)}
             </div>
           )}
 
-          {/* 统计信息 - 左下角：好评率 + 观看次数 */}
-          <div className="absolute bottom-2.5 left-2.5 flex items-center gap-2 text-white/90 text-xs">
-            {/* 好评率（类似 hanime1.me 的 thumb_up 100%） */}
-            <span className={`flex items-center gap-1 bg-black/60 backdrop-blur-sm px-1.5 py-0.5 rounded ${likeRatioColor}`}>
+          {/* 右下角：好评率 + 观看数（hanime1 风格） */}
+          <div className="absolute bottom-1.5 right-1.5 flex items-center gap-2 text-[10px] sm:text-xs">
+            <span className={`flex items-center gap-1 ${likeColor}`}>
               <ThumbsUp className="h-3 w-3" />
               {likeRatio}%
             </span>
-            {/* 观看次数 */}
-            <span className="flex items-center gap-1 bg-black/50 backdrop-blur-sm px-1.5 py-0.5 rounded">
-              <Eye className="h-3 w-3" />
-              {formatViews(video.views)}
+            <span className="text-white/80">
+              {formatViews(video.views)}次
             </span>
           </div>
-          
-          {/* 标签展示 - 顶部（可选） */}
-          {showTags && displayTags.length > 0 && (
-            <div className="absolute top-2 left-2 right-12 flex flex-wrap gap-1 overflow-hidden max-h-6">
-              {displayTags.map(({ tag }) => (
-                <Badge 
-                  key={tag.id} 
-                  variant="secondary" 
-                  className="text-[10px] px-1.5 py-0 h-5 bg-black/60 text-white/90 border-0 backdrop-blur-sm"
-                >
-                  {tag.name}
-                </Badge>
-              ))}
-            </div>
-          )}
         </div>
 
-        {/* 信息区域 */}
-        <div className="flex gap-2 sm:gap-3 mt-3 px-0.5">
-          {/* 头像 */}
-          <HoverCard openDelay={400} closeDelay={100}>
-            <HoverCardTrigger asChild>
-              <div
-                onClick={(e) => e.preventDefault()}
-                className="cursor-pointer flex-shrink-0"
-              >
-                <Avatar className="h-8 w-8 sm:h-9 sm:w-9 ring-2 ring-background shadow-sm transition-transform duration-200 hover:scale-110">
-                  <AvatarImage
-                    src={video.uploader.avatar || undefined}
-                    alt={uploaderName}
-                  />
-                  <AvatarFallback className="bg-primary/10 text-primary text-xs sm:text-sm font-medium">
-                    {uploaderName.charAt(0).toUpperCase()}
-                  </AvatarFallback>
-                </Avatar>
-              </div>
-            </HoverCardTrigger>
-            <HoverCardContent
-              className="w-64 max-w-[calc(100vw-2rem)] sm:w-72"
-              side="top"
-              align="start"
-            >
-              <div className="flex gap-3">
-                <Avatar className="h-14 w-14 ring-2 ring-primary/20">
-                  <AvatarImage
-                    src={video.uploader.avatar || undefined}
-                    alt={uploaderName}
-                  />
-                  <AvatarFallback className="bg-primary/10 text-primary text-lg font-medium">
-                    {uploaderName.charAt(0).toUpperCase()}
-                  </AvatarFallback>
-                </Avatar>
-                <div className="flex-1 min-w-0">
-                  <p className="font-semibold truncate">
-                    {uploaderName}
-                  </p>
-                  <p className="text-sm text-muted-foreground">
-                    @{video.uploader.username}
-                  </p>
-                  <Link
-                    href={`/user/${video.uploader.id}`}
-                    className="inline-flex items-center gap-1.5 text-sm text-primary hover:underline mt-2 font-medium"
-                    onClick={(e) => e.stopPropagation()}
-                  >
-                    <User className="h-3.5 w-3.5" />
-                    查看主页
-                  </Link>
-                </div>
-              </div>
-            </HoverCardContent>
-          </HoverCard>
-
-          {/* 标题和作者 */}
-          <div className="flex-1 min-w-0 space-y-1">
-            <h3 className="font-medium line-clamp-2 text-xs sm:text-sm leading-snug group-hover:text-primary transition-colors duration-200">
-              {video.title}
-            </h3>
-            <div className="flex items-center gap-2 text-[10px] sm:text-xs text-muted-foreground">
-              <span className="truncate hover:text-foreground transition-colors">
-                {uploaderName}
-              </span>
-              <span className="text-muted-foreground/50">•</span>
-              <span className="flex-shrink-0">{formatRelativeTime(video.createdAt)}</span>
-            </div>
-          </div>
+        {/* 标题 + 作者 · 时间 */}
+        <div className="mt-2 px-0.5 space-y-0.5">
+          <h3 className="font-medium line-clamp-2 text-xs sm:text-sm leading-snug group-hover:text-primary transition-colors duration-200">
+            {video.title}
+          </h3>
+          <p className="text-[10px] sm:text-xs text-muted-foreground truncate">
+            {authorName} • {formatRelativeTime(video.createdAt)}
+          </p>
         </div>
       </Link>
     </div>
   );
 }
 
-// 使用 memo 优化，避免不必要的重渲染
 export const VideoCard = memo(VideoCardComponent, (prevProps, nextProps) => {
-  // 仅当视频 ID 或关键数据变化时才重新渲染
   return (
     prevProps.video.id === nextProps.video.id &&
     prevProps.video.views === nextProps.video.views &&

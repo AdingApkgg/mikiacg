@@ -104,7 +104,7 @@ export const userRouter = router({
           uploader: {
             select: { id: true, username: true, nickname: true, avatar: true },
           },
-          _count: { select: { likes: true, favorites: true } },
+          _count: { select: { likes: true, dislikes: true, confused: true, comments: true, favorites: true } },
         },
       });
 

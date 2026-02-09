@@ -16,11 +16,13 @@ interface Video {
     nickname?: string | null;
     avatar?: string | null;
   };
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  extraInfo?: any;
   tags?: { tag: { id: string; name: string; slug: string } }[];
   _count: {
     likes: number;
     dislikes?: number;
-    favorites?: number;
+    [key: string]: number | undefined;
   };
 }
 
@@ -66,28 +68,20 @@ export function VideoGrid({ videos, isLoading, columns = 4 }: VideoGridProps) {
 
 function VideoCardSkeleton() {
   return (
-    <div className="space-y-3">
-      {/* 封面骨架 */}
-      <div className="relative aspect-video rounded-xl overflow-hidden">
+    <div className="space-y-2">
+      <div className="relative aspect-video rounded-lg overflow-hidden">
         <Skeleton className="absolute inset-0" />
-        {/* 模拟时长标签 */}
-        <div className="absolute bottom-2.5 right-2.5">
-          <Skeleton className="h-5 w-12 rounded-md" />
+        <div className="absolute top-1.5 left-1.5">
+          <Skeleton className="h-4 w-10 rounded" />
         </div>
-        {/* 模拟统计标签 */}
-        <div className="absolute bottom-2.5 left-2.5 flex gap-2">
-          <Skeleton className="h-5 w-14 rounded" />
-          <Skeleton className="h-5 w-10 rounded" />
+        <div className="absolute bottom-1.5 left-1.5 right-1.5 flex justify-between">
+          <Skeleton className="h-4 w-12 rounded bg-white/10" />
+          <Skeleton className="h-4 w-10 rounded bg-white/10" />
         </div>
       </div>
-      {/* 信息骨架 */}
-      <div className="flex gap-2 sm:gap-3 px-0.5">
-        <Skeleton className="h-8 w-8 sm:h-9 sm:w-9 rounded-full flex-shrink-0" />
-        <div className="flex-1 space-y-2">
-          <Skeleton className="h-4 w-full" />
-          <Skeleton className="h-4 w-3/4" />
-          <Skeleton className="h-3 w-1/2" />
-        </div>
+      <div className="px-0.5 space-y-1">
+        <Skeleton className="h-4 w-full" />
+        <Skeleton className="h-3 w-2/3" />
       </div>
     </div>
   );
