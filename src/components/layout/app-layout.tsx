@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useRef } from "react";
+import { useState, useEffect, useRef, useSyncExternalStore, useCallback } from "react";
 import { usePathname } from "next/navigation";
 import { Header } from "./header";
 import { Sidebar } from "./sidebar";
@@ -34,30 +34,29 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
   const isOverlayMode = isOverlaySidebarPage(pathname);
   const isNoSidebarPage = shouldHideSidebar(pathname);
   
-  // YouTube 风格：默认展开侧边栏
-  // 使用惰性初始化避免 effect 中 setState
-  const [sidebarExpanded, setSidebarExpanded] = useState(() => {
-    if (typeof window === "undefined") return true;
+  // YouTube 风格：使用 useSyncExternalStore 读取 localStorage
+  // 避免 effect 内 setState，同时 SSR 返回 server snapshot（true）
+  const subscribeSidebar = useCallback((cb: () => void) => {
+    window.addEventListener("storage", cb);
+    return () => window.removeEventListener("storage", cb);
+  }, []);
+  const getSidebarSnapshot = useCallback(() => {
     const saved = localStorage.getItem(SIDEBAR_COLLAPSED_KEY);
     return saved === null ? true : saved !== "true";
-  });
-  
+  }, []);
+  const sidebarExpanded = useSyncExternalStore(subscribeSidebar, getSidebarSnapshot, () => true);
+
+  const setSidebarExpanded = useCallback((expanded: boolean) => {
+    localStorage.setItem(SIDEBAR_COLLAPSED_KEY, String(!expanded));
+    // 触发同窗口的 storage 事件以通知 useSyncExternalStore
+    window.dispatchEvent(new StorageEvent("storage", { key: SIDEBAR_COLLAPSED_KEY, newValue: String(!expanded) }));
+  }, []);
+
   // 视频页面独立的展开状态（默认隐藏）
   const [videoPageSidebarOpen, setVideoPageSidebarOpen] = useState(false);
   
   // 追踪上一次的 pathname 来重置视频页面侧边栏
   const prevPathnameRef = useRef(pathname);
-
-  // 当 localStorage 变化时同步状态
-  useEffect(() => {
-    const handleStorage = (e: StorageEvent) => {
-      if (e.key === SIDEBAR_COLLAPSED_KEY && e.newValue !== null) {
-        setSidebarExpanded(e.newValue !== "true");
-      }
-    };
-    window.addEventListener("storage", handleStorage);
-    return () => window.removeEventListener("storage", handleStorage);
-  }, []);
   
   // 切换页面时重置视频页面的侧边栏状态
   useEffect(() => {
@@ -74,9 +73,7 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
       setVideoPageSidebarOpen(prev => !prev);
     } else {
       // 其他页面切换全局状态并保存
-      const newState = !sidebarExpanded;
-      setSidebarExpanded(newState);
-      localStorage.setItem(SIDEBAR_COLLAPSED_KEY, String(!newState));
+      setSidebarExpanded(!sidebarExpanded);
     }
   };
 

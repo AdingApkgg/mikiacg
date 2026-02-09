@@ -154,8 +154,8 @@ export async function getIpLocation(ip: string | null): Promise<string | null> {
   if (isPrivateIp(ip)) return null;
 
   const cacheKey = `ip-location:${ip}`;
-  const cached = await getCache<IpLocation | null>(cacheKey);
-  if (cached) {
+  const cached = await getCache<IpLocation>(cacheKey);
+  if (cached !== null) {
     return formatLocation(cached);
   }
 

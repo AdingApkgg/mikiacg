@@ -11,6 +11,8 @@ export const auth = betterAuth({
     process.env.NEXT_PUBLIC_APP_URL ?? "",
     "http://localhost:3000",
     "http://127.0.0.1:3000",
+    "http://192.168.*:3000",
+    "http://10.*:3000",
   ].filter(Boolean),
   database: prismaAdapter(prisma, { provider: "postgresql" }),
   emailAndPassword: {

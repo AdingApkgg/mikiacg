@@ -208,7 +208,11 @@ export function VideoPageClient({ id: initialId, initialVideo }: VideoPageClient
     },
   });
 
-  const isOwner = session?.user?.id === displayVideo?.uploader?.id;
+  // 延迟 isOwner 判断到客户端挂载后，避免 SSR/CSR 不一致导致水合失败
+  // （SSR 时 session 为 null → isOwner=false，客户端 session 可能立即有值 → isOwner=true）
+  const [hasMounted, setHasMounted] = useState(false);
+  useEffect(() => setHasMounted(true), []);
+  const isOwner = hasMounted && session?.user?.id === displayVideo?.uploader?.id;
   const favoriteMutation = trpc.video.favorite.useMutation();
   const utils = trpc.useUtils();
 

@@ -2,7 +2,7 @@ import { z } from "zod";
 import { Prisma, PrismaClient } from "@/generated/prisma/client";
 import { router, publicProcedure, protectedProcedure, adminProcedure } from "../trpc";
 import { TRPCError } from "@trpc/server";
-import { getCache, setCache, deleteCachePattern } from "@/lib/redis";
+import { getCache, setCache, getOrSet, deleteCache, deleteCacheKeys } from "@/lib/redis";
 import { submitVideoToIndexNow, submitVideosToIndexNow } from "@/lib/indexnow";
 import { enqueueCoverForVideo } from "@/lib/cover-auto";
 
@@ -59,8 +59,9 @@ export const videoRouter = router({
         },
       });
 
-      // 清除热搜缓存
-      await deleteCachePattern("search:hot*");
+      // 热搜缓存已有 30 分钟 TTL，单次搜索不需要立即失效
+      // 仅清除精确的 search:hot 键即可（避免 SCAN 扫描）
+      await deleteCache("search:hot");
 
       return { success: true };
     }),
@@ -69,103 +70,99 @@ export const videoRouter = router({
   getHotSearches: publicProcedure
     .input(z.object({ limit: z.number().min(1).max(20).default(10) }))
     .query(async ({ ctx, input }) => {
-      const cacheKey = "search:hot";
-      const cached = await getCache<{ keyword: string; score: number; isHot: boolean }[]>(cacheKey);
-      if (cached) return cached;
+      return getOrSet("search:hot", async () => {
+        // 获取最近 7 天的搜索记录
+        const sevenDaysAgo = new Date();
+        sevenDaysAgo.setDate(sevenDaysAgo.getDate() - 7);
 
-      // 获取最近 7 天的搜索记录
-      const sevenDaysAgo = new Date();
-      sevenDaysAgo.setDate(sevenDaysAgo.getDate() - 7);
+        // 1. 基于实际搜索记录的热度（时间衰减）+ 2. 热门视频标签（并行查询）
+        const [searchRecords, hotVideos] = await Promise.all([
+          ctx.prisma.searchRecord.groupBy({
+            by: ["keyword"],
+            where: {
+              createdAt: { gte: sevenDaysAgo },
+            },
+            _count: { keyword: true },
+            orderBy: { _count: { keyword: "desc" } },
+            take: 50,
+          }),
+          ctx.prisma.video.findMany({
+            where: { 
+              status: "PUBLISHED",
+              createdAt: { gte: sevenDaysAgo },
+            },
+            select: { 
+              views: true,
+              tags: {
+                include: { tag: { select: { name: true } } },
+                take: 3,
+              },
+            },
+            orderBy: { views: "desc" },
+            take: 30,
+          }),
+        ]);
 
-      // 1. 基于实际搜索记录的热度（时间衰减）
-      const searchRecords = await ctx.prisma.searchRecord.groupBy({
-        by: ["keyword"],
-        where: {
-          createdAt: { gte: sevenDaysAgo },
-        },
-        _count: { keyword: true },
-        orderBy: { _count: { keyword: "desc" } },
-        take: 50,
-      });
+        // 3. 合并计算热度分数
+        const scoreMap = new Map<string, { score: number; searchCount: number }>();
 
-      // 2. 基于热门视频的标签
-      const hotVideos = await ctx.prisma.video.findMany({
-        where: { 
-          status: "PUBLISHED",
-          createdAt: { gte: sevenDaysAgo },
-        },
-        select: { 
-          views: true,
-          tags: {
-            include: { tag: { select: { name: true } } },
-            take: 3,
-          },
-        },
-        orderBy: { views: "desc" },
-        take: 30,
-      });
-
-      // 3. 合并计算热度分数
-      const scoreMap = new Map<string, { score: number; searchCount: number }>();
-
-      // 搜索记录权重（主要来源）
-      searchRecords.forEach((record) => {
-        const keyword = record.keyword;
-        const searchScore = record._count.keyword * 10; // 每次搜索 10 分
-        const existing = scoreMap.get(keyword) || { score: 0, searchCount: 0 };
-        scoreMap.set(keyword, {
-          score: existing.score + searchScore,
-          searchCount: record._count.keyword,
-        });
-      });
-
-      // 热门视频标签权重
-      hotVideos.forEach((video) => {
-        video.tags.forEach((t) => {
-          const tagName = t.tag.name.toLowerCase();
-          const tagScore = Math.log10(video.views + 1) * 5; // 播放量对数权重
-          const existing = scoreMap.get(tagName) || { score: 0, searchCount: 0 };
-          scoreMap.set(tagName, {
-            score: existing.score + tagScore,
-            searchCount: existing.searchCount,
+        // 搜索记录权重（主要来源）
+        searchRecords.forEach((record) => {
+          const keyword = record.keyword;
+          const searchScore = record._count.keyword * 10; // 每次搜索 10 分
+          const existing = scoreMap.get(keyword) || { score: 0, searchCount: 0 };
+          scoreMap.set(keyword, {
+            score: existing.score + searchScore,
+            searchCount: record._count.keyword,
           });
         });
-      });
 
-      // 4. 过滤和排序
-      const hotSearches = Array.from(scoreMap.entries())
-        .filter(([keyword]) => keyword.length >= 2 && keyword.length <= 20)
-        .sort((a, b) => b[1].score - a[1].score)
-        .slice(0, input.limit)
-        .map(([keyword, data], index) => ({
-          keyword,
-          score: Math.round(data.score),
-          isHot: index < 3 && data.searchCount > 5, // 前 3 且搜索次数 > 5 标记为热门
-        }));
-
-      // 5. 如果没有搜索记录，回退到标签热度
-      if (hotSearches.length < input.limit) {
-        const topTags = await ctx.prisma.tag.findMany({
-          select: { name: true },
-          orderBy: { videos: { _count: "desc" } },
-          take: input.limit - hotSearches.length,
-        });
-
-        const existingKeywords = new Set(hotSearches.map(h => h.keyword.toLowerCase()));
-        topTags.forEach((tag) => {
-          if (!existingKeywords.has(tag.name.toLowerCase())) {
-            hotSearches.push({
-              keyword: tag.name,
-              score: 0,
-              isHot: false,
+        // 热门视频标签权重
+        hotVideos.forEach((video) => {
+          video.tags.forEach((t) => {
+            const tagName = t.tag.name.toLowerCase();
+            const tagScore = Math.log10(video.views + 1) * 5; // 播放量对数权重
+            const existing = scoreMap.get(tagName) || { score: 0, searchCount: 0 };
+            scoreMap.set(tagName, {
+              score: existing.score + tagScore,
+              searchCount: existing.searchCount,
             });
-          }
+          });
         });
-      }
 
-      await setCache(cacheKey, hotSearches, 1800); // 缓存 30 分钟
+        // 4. 过滤和排序
+        const hotSearches = Array.from(scoreMap.entries())
+          .filter(([keyword]) => keyword.length >= 2 && keyword.length <= 20)
+          .sort((a, b) => b[1].score - a[1].score)
+          .slice(0, input.limit)
+          .map(([keyword, data], index) => ({
+            keyword,
+            score: Math.round(data.score),
+            isHot: index < 3 && data.searchCount > 5, // 前 3 且搜索次数 > 5 标记为热门
+          }));
 
-      return hotSearches;
+        // 5. 如果没有搜索记录，回退到标签热度
+        if (hotSearches.length < input.limit) {
+          const topTags = await ctx.prisma.tag.findMany({
+            select: { name: true },
+            orderBy: { videos: { _count: "desc" } },
+            take: input.limit - hotSearches.length,
+          });
+
+          const existingKeywords = new Set(hotSearches.map(h => h.keyword.toLowerCase()));
+          topTags.forEach((tag) => {
+            if (!existingKeywords.has(tag.name.toLowerCase())) {
+              hotSearches.push({
+                keyword: tag.name,
+                score: 0,
+                isHot: false,
+              });
+            }
+          });
+        }
+
+        return hotSearches;
+      }, 1800); // 缓存 30 分钟
     }),
 
   // 搜索建议
@@ -180,68 +177,52 @@ export const videoRouter = router({
       const { query, limit } = input;
       const cacheKey = `search:suggestions:${query.toLowerCase()}`;
 
-      // 尝试从缓存获取
-      const cached = await getCache<{ videos: { id: string; title: string }[]; tags: { id: string; name: string; slug: string }[] }>(cacheKey);
-      if (cached) return cached;
+      return getOrSet(cacheKey, async () => {
+        // 并行搜索视频标题和标签
+        const [videos, tags] = await Promise.all([
+          ctx.prisma.video.findMany({
+            where: {
+              status: "PUBLISHED",
+              title: { contains: query, mode: "insensitive" },
+            },
+            select: { id: true, title: true },
+            take: limit,
+            orderBy: { views: "desc" },
+          }),
+          ctx.prisma.tag.findMany({
+            where: {
+              name: { contains: query, mode: "insensitive" },
+            },
+            select: { id: true, name: true, slug: true },
+            take: 5,
+            orderBy: { videos: { _count: "desc" } },
+          }),
+        ]);
 
-      // 并行搜索视频标题和标签
-      const [videos, tags] = await Promise.all([
-        ctx.prisma.video.findMany({
-          where: {
-            status: "PUBLISHED",
-            title: { contains: query, mode: "insensitive" },
-          },
-          select: { id: true, title: true },
-          take: limit,
-          orderBy: { views: "desc" },
-        }),
-        ctx.prisma.tag.findMany({
-          where: {
-            name: { contains: query, mode: "insensitive" },
-          },
-          select: { id: true, name: true, slug: true },
-          take: 5,
-          orderBy: { videos: { _count: "desc" } },
-        }),
-      ]);
-
-      const result = { videos, tags };
-      await setCache(cacheKey, result, SEARCH_SUGGESTIONS_CACHE_TTL);
-
-      return result;
+        return { videos, tags };
+      }, SEARCH_SUGGESTIONS_CACHE_TTL);
     }),
 
   // 获取网站公开统计数据
   getPublicStats: publicProcedure.query(async ({ ctx }) => {
-    const cacheKey = "stats:public";
-    const cached = await getCache<{
-      videoCount: number;
-      userCount: number;
-      tagCount: number;
-      totalViews: number;
-    }>(cacheKey);
+    return getOrSet("stats:public", async () => {
+      const [videoCount, userCount, tagCount, viewsResult] = await Promise.all([
+        ctx.prisma.video.count({ where: { status: "PUBLISHED" } }),
+        ctx.prisma.user.count(),
+        ctx.prisma.tag.count(),
+        ctx.prisma.video.aggregate({
+          where: { status: "PUBLISHED" },
+          _sum: { views: true },
+        }),
+      ]);
 
-    if (cached) return cached;
-
-    const [videoCount, userCount, tagCount, viewsResult] = await Promise.all([
-      ctx.prisma.video.count({ where: { status: "PUBLISHED" } }),
-      ctx.prisma.user.count(),
-      ctx.prisma.tag.count(),
-      ctx.prisma.video.aggregate({
-        where: { status: "PUBLISHED" },
-        _sum: { views: true },
-      }),
-    ]);
-
-    const stats = {
-      videoCount,
-      userCount,
-      tagCount,
-      totalViews: viewsResult._sum.views || 0,
-    };
-
-    await setCache(cacheKey, stats, STATS_CACHE_TTL);
-    return stats;
+      return {
+        videoCount,
+        userCount,
+        tagCount,
+        totalViews: viewsResult._sum.views || 0,
+      };
+    }, STATS_CACHE_TTL);
   }),
 
   // 获取视频列表（支持页码分页）
@@ -466,7 +447,7 @@ export const videoRouter = router({
         where: { id: input.id },
         data: { views: { increment: 1 } },
       });
-      await deleteCachePattern(`video:${input.id}`);
+      await deleteCache(`video:${input.id}`);
       return { success: true };
     }),
 
@@ -979,7 +960,7 @@ export const videoRouter = router({
         });
       }
 
-      await deleteCachePattern(`video:${id}`);
+      await deleteCache(`video:${id}`);
 
       // 视频更新后通知搜索引擎重新索引
       submitVideoToIndexNow(id).catch(() => {});
@@ -1038,7 +1019,7 @@ export const videoRouter = router({
         });
       }
 
-      await deleteCachePattern(`video:${input.id}`);
+      await deleteCache(`video:${input.id}`);
       return { success: true };
     }),
 
@@ -1094,10 +1075,8 @@ export const videoRouter = router({
         });
       }
 
-      // 清理缓存
-      for (const id of videoIds) {
-        await deleteCachePattern(`video:${id}`);
-      }
+      // 清理缓存（批量 pipeline 删除，一次网络往返）
+      await deleteCacheKeys(videoIds.map(id => `video:${id}`));
 
       return { success: true, count: videoIds.length };
     }),
@@ -1313,7 +1292,7 @@ export const videoRouter = router({
         data: { status: input.status },
       });
 
-      await deleteCachePattern(`video:${input.id}`);
+      await deleteCache(`video:${input.id}`);
 
       // 审核通过时通知搜索引擎索引
       if (input.status === "PUBLISHED") {

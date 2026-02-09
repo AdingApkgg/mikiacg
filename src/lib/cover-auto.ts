@@ -4,7 +4,7 @@ import { prisma } from "@/lib/prisma";
 import { redis } from "@/lib/redis";
 import { COVER_CONFIG } from "@/lib/cover-config";
 import { generateCoverForVideo } from "@/lib/cover-generator";
-import { addToQueue, processQueue } from "@/lib/cover-queue";
+import { addToQueue, addToQueueBatch, processQueue } from "@/lib/cover-queue";
 
 const UPLOAD_DIR = process.env.UPLOAD_DIR || "./uploads";
 const COVER_DIR = path.join(process.cwd(), UPLOAD_DIR, "cover");
@@ -14,15 +14,20 @@ function log(msg: string, ...args: unknown[]) {
   console.log(`[${ts}][CoverWorker] ${msg}`, ...args);
 }
 
+// 封面目录只需创建一次
+let coverDirReady = false;
 async function ensureCoverDir() {
+  if (coverDirReady) return;
   await fs.mkdir(COVER_DIR, { recursive: true }).catch(() => {});
+  coverDirReady = true;
 }
 
 /**
  * 检查本地是否已存在封面文件
+ * 优化: 使用 Promise.all 并行检查所有格式
  */
 async function findExistingCover(videoId: string): Promise<string | null> {
-  for (const format of COVER_CONFIG.formats) {
+  const checks = COVER_CONFIG.formats.map(async (format) => {
     const filePath = path.join(COVER_DIR, `${videoId}.${format}`);
     try {
       const stat = await fs.stat(filePath);
@@ -32,8 +37,11 @@ async function findExistingCover(videoId: string): Promise<string | null> {
     } catch {
       // 文件不存在，继续
     }
-  }
-  return null;
+    return null;
+  });
+
+  const results = await Promise.all(checks);
+  return results.find((r) => r !== null) ?? null;
 }
 
 /**
@@ -112,6 +120,8 @@ export function startCoverWorker() {
   workerStarted = true;
 
   log("启动封面生成 worker...");
+  // 预创建目录，避免每个任务都检查
+  void ensureCoverDir();
   void processQueue(processVideo);
 }
 
@@ -145,9 +155,9 @@ async function backfillMissingCovers(): Promise<void> {
 
   if (videos.length > 0) {
     log(`补全: 找到 ${videos.length} 个缺少封面的视频`);
-    for (const video of videos) {
-      await addToQueue(video.id);
-    }
+    // 批量入队（1 次 pipeline 获取锁 + 1 次 pipeline 入队，替代 N 次循环）
+    const count = await addToQueueBatch(videos.map((v) => v.id));
+    log(`补全: 成功入队 ${count} 个视频`);
   }
 }
 

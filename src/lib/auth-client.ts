@@ -15,6 +15,11 @@ export const authClient = createAuthClient({
 export function useSession() {
   const { data, error, isPending, refetch } = authClient.useSession();
   const status = isPending ? "loading" : error || !data?.user ? "unauthenticated" : "authenticated";
+  const role = (data?.user as { role?: string } | undefined)?.role as "USER" | "ADMIN" | "OWNER" | undefined;
+  const rawCanUpload = (data?.user as { canUpload?: boolean } | undefined)?.canUpload;
+  // ADMIN/OWNER 始终拥有投稿权限，与服务端 getSession() 逻辑一致
+  const canUpload = role === "ADMIN" || role === "OWNER" || rawCanUpload === true;
+
   const session = data?.user
     ? {
         user: {
@@ -22,8 +27,8 @@ export function useSession() {
           email: data.user.email ?? "",
           name: data.user.name ?? null,
           image: data.user.image ?? null,
-          role: (data.user as { role?: string }).role as "USER" | "ADMIN" | "OWNER" | undefined,
-          canUpload: (data.user as { canUpload?: boolean }).canUpload,
+          role,
+          canUpload,
         },
         expires: data.session?.expiresAt?.toString?.() ?? "",
       }

@@ -6,6 +6,7 @@ import { Prisma } from "@/generated/prisma/client";
 import { nanoid } from "nanoid";
 import { parseShortcode } from "@/lib/shortcode-parser";
 import { enqueueCoverForVideo } from "@/lib/cover-auto";
+import { deleteCache } from "@/lib/redis";
 
 // 检查用户是否有特定权限
 async function hasScope(
@@ -1238,6 +1239,9 @@ export const adminRouter = router({
         create: { id: "default", ...cleaned },
         update: cleaned,
       });
+
+      // 清除站点配置缓存，使更改立即生效
+      await deleteCache("site:config");
 
       return config;
     }),

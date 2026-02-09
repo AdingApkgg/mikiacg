@@ -22,9 +22,19 @@ function sleep(ms: number) {
   return new Promise((resolve) => setTimeout(resolve, ms));
 }
 
+/**
+ * 获取用于限制远程 URL 流分析开销的 ffmpeg 参数
+ */
+function getStreamHints(): string[] {
+  return [
+    "-analyzeduration", String(COVER_CONFIG.analyzeDuration),
+    "-probesize", String(COVER_CONFIG.probeSize),
+  ];
+}
+
 function runFfmpeg(args: string[], timeoutMs: number): Promise<FfmpegResult> {
   return new Promise((resolve) => {
-    log("ffmpeg", `执行: ffmpeg ${args.slice(0, 8).join(" ")}...`);
+    log("ffmpeg", `执行: ffmpeg ${args.slice(0, 10).join(" ")}...`);
     const proc = spawn("ffmpeg", args);
     let stderr = "";
     let settled = false;
@@ -36,7 +46,7 @@ function runFfmpeg(args: string[], timeoutMs: number): Promise<FfmpegResult> {
       }
     }, timeoutMs);
 
-    proc.stderr.on("data", (data) => {
+    proc.stderr.on("data", (data: Buffer) => {
       stderr += data.toString();
     });
 
@@ -58,10 +68,12 @@ function runFfmpeg(args: string[], timeoutMs: number): Promise<FfmpegResult> {
 
 /**
  * 使用 ffprobe 获取视频时长（秒）
+ * 添加了 -analyzeduration / -probesize 限制远程 URL 的探测开销
  */
 export function getVideoDuration(videoUrl: string): Promise<number | null> {
   return new Promise((resolve) => {
     const args = [
+      ...getStreamHints(),
       "-v", "error",
       "-show_entries", "format=duration",
       "-of", "default=noprint_wrappers=1:nokey=1",
@@ -76,11 +88,12 @@ export function getVideoDuration(videoUrl: string): Promise<number | null> {
       if (!settled) {
         settled = true;
         proc.kill("SIGKILL");
+        log("ffprobe", `超时 (${COVER_CONFIG.probeTimeout}ms)，使用默认采样点`);
         resolve(null);
       }
     }, COVER_CONFIG.probeTimeout);
 
-    proc.stdout.on("data", (data) => {
+    proc.stdout.on("data", (data: Buffer) => {
       stdout += data.toString();
     });
     proc.on("close", (code) => {
@@ -145,6 +158,7 @@ async function extractFrame(
 ): Promise<boolean> {
   const args = [
     "-ss", String(timeSec),
+    ...getStreamHints(),
     "-i", videoUrl,
     "-vframes", "1",
     "-vf", `scale=${width}:-2`,
@@ -159,6 +173,8 @@ async function extractFrame(
 /**
  * 分析帧质量：亮度、对比度、锐度
  * 评分公式: brightness * 0.4 + contrast * 0.3 + sharpness * 0.3
+ *
+ * 优化: 先用 sharp 缩放到 analysisWidth 再分析，显著减少 CPU 开销
  */
 async function analyzeFrame(filePath: string): Promise<{
   brightness: number;
@@ -167,7 +183,29 @@ async function analyzeFrame(filePath: string): Promise<{
   score: number;
   valid: boolean;
 }> {
-  const stats = await sharp(filePath).stats();
+  // 缩放到分析尺寸，避免在全分辨率图像上做卷积
+  const analysisWidth = COVER_CONFIG.analysisWidth;
+  const resized = sharp(filePath).resize(analysisWidth, undefined, {
+    withoutEnlargement: true,
+    fastShrinkOnLoad: true,
+  });
+
+  // 并行执行统计分析和锐度分析
+  const [stats, sharpnessRaw] = await Promise.all([
+    resized.clone().stats(),
+    resized
+      .clone()
+      .greyscale()
+      .convolve({
+        width: 3,
+        height: 3,
+        kernel: [0, 1, 0, 1, -4, 1, 0, 1, 0],
+      })
+      .stats()
+      .then((s) => s.channels[0]?.stdev ?? 0)
+      .catch(() => 0), // 回退：卷积失败时锐度为 0
+  ]);
+
   const channels = stats.channels;
   const red = channels[0];
   const green = channels[1];
@@ -182,22 +220,8 @@ async function analyzeFrame(filePath: string): Promise<{
       ? (red.stdev + green.stdev + blue.stdev) / 3
       : channels[0]?.stdev ?? 0;
 
-  // 锐度: Laplacian 卷积后的标准差
-  let sharpnessRaw = 0;
-  try {
-    const laplacianStats = await sharp(filePath)
-      .greyscale()
-      .convolve({
-        width: 3,
-        height: 3,
-        kernel: [0, 1, 0, 1, -4, 1, 0, 1, 0],
-      })
-      .stats();
-    sharpnessRaw = laplacianStats.channels[0]?.stdev ?? 0;
-  } catch {
-    // 回退：使用对比度作为锐度近似值
-    sharpnessRaw = stddev;
-  }
+  // 如果锐度分析失败，使用对比度作为近似值
+  const finalSharpness = sharpnessRaw || stddev;
 
   const tooDark = mean < 10;
   const tooBright = mean > 245;
@@ -206,7 +230,7 @@ async function analyzeFrame(filePath: string): Promise<{
   // 归一化到 0-1
   const brightness = 1 - Math.min(1, Math.abs(mean - 128) / 128);
   const contrast = Math.min(1, stddev / 64);
-  const sharpness = Math.min(1, sharpnessRaw / 50);
+  const sharpness = Math.min(1, finalSharpness / 50);
 
   // 加权评分: 亮度 40% + 对比度 30% + 锐度 30%
   const score = brightness * 0.4 + contrast * 0.3 + sharpness * 0.3;
@@ -226,6 +250,11 @@ export interface BestFrameResult {
 /**
  * 智能选帧：并行提取采样帧 + 质量分析
  * 返回最佳帧的路径和临时目录（调用者负责清理 tempDir）
+ *
+ * 优化:
+ * - ffprobe 超时后立即回退到默认采样点（不阻塞）
+ * - ffmpeg 添加 -analyzeduration / -probesize 限制流分析
+ * - 帧分析在低分辨率下进行（analysisWidth）
  */
 export async function selectBestFrame(
   videoUrl: string,
@@ -238,7 +267,7 @@ export async function selectBestFrame(
   const width = options?.width ?? COVER_CONFIG.width;
   const timeoutMs = options?.timeoutMs ?? COVER_CONFIG.timeout;
 
-  // 获取视频时长 → 动态采样点
+  // 获取视频时长 → 动态采样点（超时自动回退到固定采样点）
   let samplePoints = options?.samplePoints;
   if (!samplePoints || samplePoints.length === 0) {
     const duration = await getVideoDuration(videoUrl);
@@ -249,7 +278,7 @@ export async function selectBestFrame(
   log("CoverGen", `采样点: [${samplePoints.map((t) => t.toFixed(1)).join(", ")}]s, 宽度: ${width}px`);
 
   try {
-    // 并行提取所有采样帧
+    // 并行提取所有采样帧（每个 ffmpeg 进程独立连接 + seek，适合远程 URL）
     const frameResults = await Promise.all(
       samplePoints.map(async (timeSec) => {
         const framePath = path.join(tempDir, `frame-${timeSec}.jpg`);
@@ -310,6 +339,8 @@ export async function selectBestFrame(
 /**
  * 使用 sharp 将 JPG 帧转换为目标格式
  * 比二次调用 ffmpeg 快得多
+ *
+ * 编码参数已从 cover-config 集中管理
  */
 export async function convertFrameToCover(
   framePath: string,
@@ -326,13 +357,19 @@ export async function convertFrameToCover(
 
     switch (format) {
       case "avif":
-        await pipeline.avif({ quality: 65, effort: 4 }).toFile(outputPath);
+        await pipeline
+          .avif({ quality: COVER_CONFIG.avifQuality, effort: COVER_CONFIG.avifEffort })
+          .toFile(outputPath);
         break;
       case "webp":
-        await pipeline.webp({ quality: 82 }).toFile(outputPath);
+        await pipeline
+          .webp({ quality: COVER_CONFIG.webpQuality })
+          .toFile(outputPath);
         break;
       case "jpg":
-        await pipeline.jpeg({ quality: 88, mozjpeg: true }).toFile(outputPath);
+        await pipeline
+          .jpeg({ quality: COVER_CONFIG.jpegQuality, mozjpeg: true })
+          .toFile(outputPath);
         break;
       default:
         await pipeline.jpeg({ quality: 88 }).toFile(outputPath);
@@ -366,12 +403,14 @@ export interface GenerateCoverOptions {
 /**
  * 为视频生成封面（完整流程）
  *
- * 优化点:
- * 1. 并行采样帧（4 个 ffmpeg 同时运行）
- * 2. ffprobe 获取时长 → 动态采样点
- * 3. 增加锐度指标的智能选帧
- * 4. sharp 格式转换（替代二次 ffmpeg）
- * 5. 重试仅重试转换步骤，不重复采样
+ * 性能优化:
+ * 1. 并行采样帧（4 个 ffmpeg 同时运行，各自独立 HTTP range seek）
+ * 2. ffprobe 超时 5s → 快速回退到固定采样点
+ * 3. ffmpeg -analyzeduration/-probesize 限制远程流探测开销
+ * 4. 帧分析在 480px 低分辨率下进行（减少 sharp 计算量）
+ * 5. 统计分析 + 锐度分析并行执行
+ * 6. AVIF effort=2（比 effort=4 快 2-3 倍，质量损失极小）
+ * 7. 重试仅重试转换步骤，不重复采样
  *
  * @returns coverUrl 路径（如 /uploads/cover/videoId.avif），失败返回 null
  */

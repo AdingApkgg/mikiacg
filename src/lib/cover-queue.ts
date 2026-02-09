@@ -70,14 +70,71 @@ export async function addToQueue(videoId: string): Promise<boolean> {
   }
 }
 
-async function incrementRetry(videoId: string): Promise<number> {
-  const count = await redis.incr(retryKey(videoId));
-  await redis.expire(retryKey(videoId), 3600);
-  return count;
+/**
+ * 批量入队（pipeline 减少网络往返）
+ * 返回成功入队的 videoId 数量
+ */
+export async function addToQueueBatch(videoIds: string[]): Promise<number> {
+  if (videoIds.length === 0) return 0;
+
+  // 批量尝试获取锁（pipeline）
+  const pipeline = redis.pipeline();
+  for (const id of videoIds) {
+    pipeline.set(lockKey(id), "1", "EX", COVER_CONFIG.lockTtlSeconds, "NX");
+  }
+  const lockResults = await pipeline.exec();
+
+  // 收集获取到锁的 videoId
+  const lockedIds: string[] = [];
+  if (lockResults) {
+    for (let i = 0; i < lockResults.length; i++) {
+      const [err, result] = lockResults[i];
+      if (!err && result === "OK") {
+        lockedIds.push(videoIds[i]);
+      }
+    }
+  }
+
+  if (lockedIds.length === 0) return 0;
+
+  // 批量入队（pipeline）
+  try {
+    const pushPipeline = redis.pipeline();
+    for (const id of lockedIds) {
+      pushPipeline.lpush(COVER_CONFIG.queueName, id);
+    }
+    await pushPipeline.exec();
+    log(`批量入队: ${lockedIds.length} 个视频`);
+    return lockedIds.length;
+  } catch (err) {
+    // push 失败，释放所有锁
+    const releasePipeline = redis.pipeline();
+    for (const id of lockedIds) {
+      releasePipeline.del(lockKey(id));
+    }
+    await releasePipeline.exec();
+    log(`批量入队失败: ${String(err)}`);
+    return 0;
+  }
 }
 
-async function resetRetry(videoId: string): Promise<void> {
-  await redis.del(retryKey(videoId));
+async function incrementRetry(videoId: string): Promise<number> {
+  // pipeline 合并 INCR + EXPIRE 为一次往返
+  const pipeline = redis.pipeline();
+  pipeline.incr(retryKey(videoId));
+  pipeline.expire(retryKey(videoId), 3600);
+  const results = await pipeline.exec();
+  return (results?.[0]?.[1] as number) ?? 0;
+}
+
+/**
+ * 清除重试计数 + 释放锁（pipeline 合并）
+ */
+async function cleanupAfterDone(videoId: string): Promise<void> {
+  const pipeline = redis.pipeline();
+  pipeline.del(retryKey(videoId));
+  pipeline.del(lockKey(videoId));
+  await pipeline.exec();
 }
 
 export async function processQueue(
@@ -119,8 +176,8 @@ export async function processQueue(
       processed += 1;
 
       if (ok) {
-        await resetRetry(videoId);
-        await releaseCoverLock(videoId);
+        // 成功：清除重试计数 + 释放锁（1 次网络往返）
+        await cleanupAfterDone(videoId);
         log(`Worker ${workerId} 完成: ${videoId} (${elapsed}ms)`);
       } else {
         errors += 1;
@@ -131,8 +188,7 @@ export async function processQueue(
           await redis.lpush(COVER_CONFIG.queueName, videoId);
         } else {
           log(`Worker ${workerId} 放弃: ${videoId} (已重试 ${maxRetries} 次)`);
-          await resetRetry(videoId);
-          await releaseCoverLock(videoId);
+          await cleanupAfterDone(videoId);
         }
       }
 
