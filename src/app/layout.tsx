@@ -89,6 +89,9 @@ export const viewport: Viewport = {
   userScalable: true,
 };
 
+// 强制服务端每次请求拉取配置（含广告），避免生产环境使用构建时空配置导致广告不加载
+export const dynamic = "force-dynamic";
+
 export default function RootLayout({
   children,
 }: Readonly<{

@@ -3,6 +3,7 @@
 import { useMemo } from "react";
 import { useSession } from "@/lib/auth-client";
 import { useSiteConfig } from "@/contexts/site-config";
+import { trpc } from "@/lib/trpc";
 import type { Ad } from "@/lib/ads";
 import { pickWeightedRandomAds } from "@/lib/ads";
 
@@ -21,12 +22,26 @@ function parseAds(raw: unknown): Ad[] {
 }
 
 /**
+ * 站点配置：优先 Context（SSR），Context 为空时用 tRPC 拉取（生产环境兜底）。
+ * 供 useAds 与 AdGate 等广告相关组件使用。
+ */
+export function useSiteConfigForAds() {
+  const fromContext = useSiteConfig();
+  const { data: fromApi } = trpc.site.getConfig.useQuery(undefined, {
+    enabled: fromContext == null,
+    staleTime: 5 * 60 * 1000,
+  });
+  return fromContext ?? fromApi ?? null;
+}
+
+/**
  * 获取可用广告列表和展示权限判断。
- * 优先从 SiteConfigContext（服务端预取、零延迟）读取。
+ * 优先从 SiteConfigContext（服务端预取、零延迟）读取；
+ * 若生产环境 Context 为空则回退到 tRPC site.getConfig 拉取配置，保证广告可加载。
  */
 export function useAds() {
   const { data: session, status } = useSession();
-  const siteConfig = useSiteConfig();
+  const siteConfig = useSiteConfigForAds();
 
   const siteAdsOn = siteConfig?.adsEnabled === true;
   const userAllowsAds =

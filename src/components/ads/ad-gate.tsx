@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useCallback, useMemo } from "react";
 import { useSession } from "@/lib/auth-client";
-import { useSiteConfig } from "@/contexts/site-config";
+import { useSiteConfigForAds } from "@/hooks/use-ads";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 import type { Ad } from "@/lib/ads";
@@ -30,7 +30,7 @@ function parseAds(raw: unknown): Ad[] {
 
 export function AdGate() {
   const { data: session, status } = useSession();
-  const siteConfig = useSiteConfig();
+  const siteConfig = useSiteConfigForAds();
   const [viewCount, setViewCount] = useState(0);
   const [freeUntil, setFreeUntil] = useState<number | null>(null);
   const [completed, setCompleted] = useState(false);
