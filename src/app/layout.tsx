@@ -8,6 +8,7 @@ import "@fontsource/noto-sans-jp/700.css";
 import "./globals.css";
 import { Providers } from "@/components/providers";
 import { AppLayout } from "@/components/layout/app-layout";
+import { getPublicSiteConfig } from "@/lib/site-config";
 
 const baseUrl = process.env.NEXT_PUBLIC_APP_URL || "http://localhost:3000";
 const siteName = process.env.NEXT_PUBLIC_APP_NAME || "Mikiacg";
@@ -15,10 +16,10 @@ const siteName = process.env.NEXT_PUBLIC_APP_NAME || "Mikiacg";
 export const metadata: Metadata = {
   metadataBase: new URL(baseUrl),
   title: {
-    default: `${siteName} - ACGN Fans 流式媒体内容分享平台`,
+    default: `${siteName} - Mikiacg 流式媒体内容分享平台`,
     template: `%s | ${siteName}`,
   },
-  description: `${siteName} 是一个 ACGN Fans 流式媒体内容分享平台，提供丰富的动画、漫画、游戏、轻小说相关内容。`,
+  description: `${siteName} 是一个 Mikiacg 流式媒体内容分享平台，提供丰富的动画、漫画、游戏、轻小说相关内容。`,
   keywords: ["ACGN", "动漫", "视频", "anime", "动画", "漫画", "游戏", "轻小说", "二次元"],
   authors: [{ name: siteName }],
   creator: siteName,
@@ -33,8 +34,8 @@ export const metadata: Metadata = {
     locale: "zh_CN",
     url: baseUrl,
     siteName: siteName,
-    title: `${siteName} - ACGN Fans 流式媒体内容分享平台`,
-    description: `${siteName} 是一个 ACGN Fans 流式媒体内容分享平台，提供丰富的动画、漫画、游戏、轻小说相关内容。`,
+    title: `${siteName} - Mikiacg 流式媒体内容分享平台`,
+    description: `${siteName} 是一个 Mikiacg 流式媒体内容分享平台，提供丰富的动画、漫画、游戏、轻小说相关内容。`,
     images: [
       {
         url: "/og-image.png",
@@ -46,8 +47,8 @@ export const metadata: Metadata = {
   },
   twitter: {
     card: "summary_large_image",
-    title: `${siteName} - ACGN Fans 流式媒体内容分享平台`,
-    description: `${siteName} 是一个 ACGN Fans 流式媒体内容分享平台`,
+    title: `${siteName} - Mikiacg 流式媒体内容分享平台`,
+    description: `${siteName} 是一个 Mikiacg 流式媒体内容分享平台`,
     images: ["/og-image.png"],
   },
   robots: {
@@ -97,7 +98,7 @@ export default function RootLayout({
     <html lang="zh-CN" suppressHydrationWarning>
       <head>
         <link rel="alternate" type="application/rss+xml" title="RSS Feed" href="/feed.xml" />
-        <link rel="apple-touch-icon" href="/apple-icon" />
+        <link rel="apple-touch-icon" href="/Mikiacg-logo.webp" />
         <meta name="apple-mobile-web-app-capable" content="yes" />
         {/* AI 友好标签 */}
         <meta name="ai-content-description" content="Mikiacg - 动画、漫画、游戏、轻小说相关视频内容分享平台" />
@@ -107,10 +108,19 @@ export default function RootLayout({
         <link rel="canonical" href={baseUrl} />
       </head>
       <body className="font-sans" suppressHydrationWarning>
-        <Providers>
-          <AppLayout>{children}</AppLayout>
-        </Providers>
+        {/* 异步数据获取移至子级 Server Component，避免 Turbopack 异步根 Layout 模块解析问题 */}
+        <RootProviders>{children}</RootProviders>
       </body>
     </html>
+  );
+}
+
+/** 异步 Server Component：预取站点配置并注入 Providers */
+async function RootProviders({ children }: { children: React.ReactNode }) {
+  const siteConfig = await getPublicSiteConfig();
+  return (
+    <Providers siteConfig={siteConfig}>
+      <AppLayout>{children}</AppLayout>
+    </Providers>
   );
 }

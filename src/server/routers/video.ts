@@ -1343,6 +1343,47 @@ export const videoRouter = router({
       };
     }),
 
+  // 获取用户喜欢（点赞）的视频列表
+  getLiked: protectedProcedure
+    .input(
+      z.object({
+        limit: z.number().min(1).max(50).default(20),
+        cursor: z.string().nullish(),
+      })
+    )
+    .query(async ({ ctx, input }) => {
+      const likes = await ctx.prisma.like.findMany({
+        where: { userId: ctx.session.user.id },
+        take: input.limit + 1,
+        cursor: input.cursor ? { id: input.cursor } : undefined,
+        orderBy: { createdAt: "desc" },
+        include: {
+          video: {
+            include: {
+              uploader: {
+                select: { id: true, username: true, nickname: true, avatar: true },
+              },
+              tags: {
+                include: { tag: { select: { id: true, name: true, slug: true } } },
+              },
+              _count: { select: { likes: true, dislikes: true, confused: true, comments: true, favorites: true } },
+            },
+          },
+        },
+      });
+
+      let nextCursor: string | undefined = undefined;
+      if (likes.length > input.limit) {
+        const nextItem = likes.pop();
+        nextCursor = nextItem!.id;
+      }
+
+      return {
+        videos: likes.map((l) => l.video),
+        nextCursor,
+      };
+    }),
+
   // 获取观看历史
   getHistory: protectedProcedure
     .input(

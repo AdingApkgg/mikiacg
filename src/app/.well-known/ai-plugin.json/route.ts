@@ -8,7 +8,7 @@ export async function GET() {
     schema_version: "v1",
     name_for_human: siteName,
     name_for_model: "acgn_flow",
-    description_for_human: `${siteName} - ACGN Fans 流式媒体内容分享平台，提供动画、漫画、游戏、轻小说相关视频内容。`,
+    description_for_human: `${siteName} - Mikiacg 流式媒体内容分享平台，提供动画、漫画、游戏、轻小说相关视频内容。`,
     description_for_model: `${siteName} is an ACGN (Anime, Comic, Game, Novel) streaming media content sharing platform. Users can browse and discover anime, comic, game, and light novel related video content. The platform supports video sharing, categorization, tagging, user interactions (likes, favorites, comments), and user profiles.`,
     auth: {
       type: "none",

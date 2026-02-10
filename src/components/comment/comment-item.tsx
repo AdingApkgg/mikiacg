@@ -276,6 +276,8 @@ export function CommentItem({
   const displayName = isGuest 
     ? (comment.guestName || "访客") 
     : (comment.user?.nickname || comment.user?.username || "用户");
+  // 头像 fallback 固定单字符，避免服务端/客户端不一致导致 hydration 报错
+  const avatarFallbackChar = ((displayName || "用").trim() || "用").charAt(0).toUpperCase();
   
   // 访客头像（支持 QQ 邮箱和 WeAvatar）
   const guestAvatarUrl = getAvatarUrlClient(comment.guestEmail);
@@ -340,13 +342,13 @@ export function CommentItem({
           <a href={comment.guestWebsite} target="_blank" rel="noopener noreferrer">
             <Avatar className="h-10 w-10 shrink-0">
               <AvatarImage src={guestAvatarUrl} />
-              <AvatarFallback>{displayName.charAt(0).toUpperCase()}</AvatarFallback>
+              <AvatarFallback>{avatarFallbackChar}</AvatarFallback>
             </Avatar>
           </a>
         ) : (
           <Avatar className="h-10 w-10 shrink-0">
             <AvatarImage src={guestAvatarUrl} />
-            <AvatarFallback>{displayName.charAt(0).toUpperCase()}</AvatarFallback>
+            <AvatarFallback>{avatarFallbackChar}</AvatarFallback>
           </Avatar>
         )
       ) : (
@@ -354,7 +356,7 @@ export function CommentItem({
         <Link href={`/user/${comment.user!.id}`}>
           <Avatar className="h-10 w-10 shrink-0">
             <AvatarImage src={comment.user!.avatar || undefined} />
-            <AvatarFallback>{displayName.charAt(0).toUpperCase()}</AvatarFallback>
+            <AvatarFallback>{avatarFallbackChar}</AvatarFallback>
           </Avatar>
         </Link>
       )}
@@ -649,7 +651,7 @@ export function CommentItem({
             <Avatar className="h-8 w-8 shrink-0">
               <AvatarImage src={session?.user?.image || undefined} />
               <AvatarFallback>
-                {session?.user?.name?.charAt(0).toUpperCase() || "U"}
+                {(session?.user?.name?.trim() ?? "").charAt(0).toUpperCase() || "U"}
               </AvatarFallback>
             </Avatar>
             <div className="flex-1 space-y-2">

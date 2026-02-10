@@ -28,7 +28,6 @@ const getUser = cache(async (id: string) => {
       createdAt: true,
       _count: {
         select: {
-          videos: true,
           likes: true,
           favorites: true,
         },
@@ -58,7 +57,7 @@ export async function generateMetadata({ params }: UserPageProps): Promise<Metad
   const displayName = user.nickname || user.username;
   const description = user.bio 
     ? user.bio.slice(0, 160) 
-    : `${displayName} 的个人主页，已发布 ${user._count.videos} 个视频`;
+    : `${displayName} 的个人主页`;
 
   const siteName = process.env.NEXT_PUBLIC_APP_NAME || "Mikiacg";
   const baseUrl = process.env.NEXT_PUBLIC_APP_URL || "https://www.mikiacg.vip";

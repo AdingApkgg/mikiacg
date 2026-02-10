@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useEffect } from "react";
-import { useForm } from "react-hook-form";
+import { useForm, useFieldArray, type Control } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
 import { trpc } from "@/lib/trpc";
@@ -35,6 +35,9 @@ import {
   FileText,
   Link2,
   Shield,
+  Megaphone,
+  Plus,
+  Trash2,
 } from "lucide-react";
 import { toast } from "sonner";
 
@@ -72,9 +75,163 @@ const configFormSchema = z.object({
   // 备案
   icpBeian: z.string().max(100).optional().nullable(),
   publicSecurityBeian: z.string().max(100).optional().nullable(),
+
+  // 广告系统
+  adsEnabled: z.boolean(),
+
+  // 广告门
+  adGateEnabled: z.boolean(),
+  adGateViewsRequired: z.number().int().min(1).max(20),
+  adGateHours: z.number().int().min(1).max(168),
+
+  // 广告列表（统一管理，广告门和页面广告位共用）
+  sponsorAds: z.array(z.object({
+    title: z.string().min(1, "标题必填").max(200),
+    platform: z.string().max(100),
+    url: z.string().url("请输入有效 URL"),
+    description: z.string().max(500),
+    imageUrl: z.string().max(2000),
+    weight: z.number().int().min(1).max(100),
+    enabled: z.boolean(),
+  })),
 });
 
 type ConfigFormValues = z.infer<typeof configFormSchema>;
+
+type AdsFieldArrayProps = {
+  control: Control<ConfigFormValues>;
+  fields: Array<{ id: string }>;
+  append: (item: { title: string; platform: string; url: string; description: string; imageUrl: string; weight: number; enabled: boolean }) => void;
+  remove: (index: number) => void;
+};
+
+function AdsFieldArray({ control, fields, append, remove }: AdsFieldArrayProps) {
+  return (
+    <div className="space-y-3">
+      {fields.map((field, index) => (
+        <div key={field.id} className="flex flex-col gap-2 rounded-lg border p-3">
+          <div className="flex justify-between items-center">
+            <span className="text-sm font-medium">广告 #{index + 1}</span>
+            <div className="flex items-center gap-2">
+              <FormField
+                control={control}
+                name={`sponsorAds.${index}.enabled`}
+                render={({ field: f }) => (
+                  <FormItem className="flex items-center gap-1.5 space-y-0">
+                    <FormLabel className="text-xs text-muted-foreground">启用</FormLabel>
+                    <FormControl>
+                      <Switch checked={f.value ?? true} onCheckedChange={f.onChange} />
+                    </FormControl>
+                  </FormItem>
+                )}
+              />
+              <Button type="button" variant="ghost" size="sm" onClick={() => remove(index)}>
+                <Trash2 className="h-4 w-4 text-destructive" />
+              </Button>
+            </div>
+          </div>
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
+            <FormField
+              control={control}
+              name={`sponsorAds.${index}.title`}
+              render={({ field: f }) => (
+                <FormItem>
+                  <FormLabel className="text-xs">广告标题</FormLabel>
+                  <FormControl>
+                    <Input {...f} placeholder="例如：XXX推广" />
+                  </FormControl>
+                  <FormMessage />
+                </FormItem>
+              )}
+            />
+            <FormField
+              control={control}
+              name={`sponsorAds.${index}.platform`}
+              render={({ field: f }) => (
+                <FormItem>
+                  <FormLabel className="text-xs">广告平台名</FormLabel>
+                  <FormControl>
+                    <Input {...f} value={f.value ?? ""} placeholder="例如：Google、百度联盟" />
+                  </FormControl>
+                  <FormMessage />
+                </FormItem>
+              )}
+            />
+            <FormField
+              control={control}
+              name={`sponsorAds.${index}.url`}
+              render={({ field: f }) => (
+                <FormItem>
+                  <FormLabel className="text-xs">跳转链接</FormLabel>
+                  <FormControl>
+                    <Input {...f} type="url" placeholder="https://..." />
+                  </FormControl>
+                  <FormMessage />
+                </FormItem>
+              )}
+            />
+            <FormField
+              control={control}
+              name={`sponsorAds.${index}.imageUrl`}
+              render={({ field: f }) => (
+                <FormItem>
+                  <FormLabel className="text-xs">图片链接</FormLabel>
+                  <FormControl>
+                    <Input {...f} value={f.value ?? ""} placeholder="https://...图片URL" />
+                  </FormControl>
+                  <FormMessage />
+                </FormItem>
+              )}
+            />
+            <FormField
+              control={control}
+              name={`sponsorAds.${index}.description`}
+              render={({ field: f }) => (
+                <FormItem>
+                  <FormLabel className="text-xs">描述（可选）</FormLabel>
+                  <FormControl>
+                    <Input {...f} value={f.value ?? ""} placeholder="简短广告描述" />
+                  </FormControl>
+                  <FormMessage />
+                </FormItem>
+              )}
+            />
+            <FormField
+              control={control}
+              name={`sponsorAds.${index}.weight`}
+              render={({ field: f }) => (
+                <FormItem>
+                  <FormLabel className="text-xs">权重（1-100）</FormLabel>
+                  <FormControl>
+                    <Input
+                      type="number"
+                      min={1}
+                      max={100}
+                      value={f.value ?? 1}
+                      onChange={(e) => f.onChange(parseInt(e.target.value, 10) || 1)}
+                      placeholder="1"
+                    />
+                  </FormControl>
+                  <FormDescription className="text-[10px]">数值越大展示概率越高</FormDescription>
+                  <FormMessage />
+                </FormItem>
+              )}
+            />
+          </div>
+        </div>
+      ))}
+      <Button
+        type="button"
+        variant="outline"
+        size="sm"
+        onClick={() => append({ title: "", platform: "", url: "", description: "", imageUrl: "", weight: 1, enabled: true })}
+      >
+        <Plus className="h-4 w-4 mr-2" />
+        添加广告
+      </Button>
+    </div>
+  );
+}
 
 interface SearchEngineStatus {
   indexnow: { configured: boolean; keyFile: string | null };
@@ -129,7 +286,16 @@ export default function AdminSettingsPage() {
       footerText: "",
       icpBeian: "",
       publicSecurityBeian: "",
+      adsEnabled: false,
+      adGateEnabled: false,
+      adGateViewsRequired: 3,
+      adGateHours: 12,
+      sponsorAds: [],
     },
+  });
+  const { fields: adsFields, append: appendAd, remove: removeAd } = useFieldArray({
+    control: form.control,
+    name: "sponsorAds",
   });
 
   // 当配置加载完成后，更新表单
@@ -155,6 +321,19 @@ export default function AdminSettingsPage() {
         footerText: config.footerText || "",
         icpBeian: config.icpBeian || "",
         publicSecurityBeian: config.publicSecurityBeian || "",
+        adsEnabled: (config as { adsEnabled?: boolean }).adsEnabled ?? false,
+        adGateEnabled: (config as { adGateEnabled?: boolean }).adGateEnabled ?? false,
+        adGateViewsRequired: (config as { adGateViewsRequired?: number }).adGateViewsRequired ?? 3,
+        adGateHours: (config as { adGateHours?: number }).adGateHours ?? 12,
+        sponsorAds: ((config as unknown as { sponsorAds?: ConfigFormValues["sponsorAds"] }).sponsorAds ?? []).map((item) => ({
+          title: item.title ?? "",
+          platform: item.platform ?? "",
+          url: item.url ?? "",
+          description: item.description ?? "",
+          imageUrl: item.imageUrl ?? "",
+          weight: item.weight ?? 1,
+          enabled: item.enabled !== false,
+        })),
       });
     }
   }, [config, form]);
@@ -231,7 +410,7 @@ export default function AdminSettingsPage() {
       </div>
 
       <Tabs defaultValue="basic" className="space-y-4">
-        <TabsList className="grid w-full grid-cols-5 lg:w-auto lg:inline-grid">
+        <TabsList className="grid w-full grid-cols-6 lg:w-auto lg:inline-grid">
           <TabsTrigger value="basic" className="gap-2">
             <Info className="h-4 w-4" />
             <span className="hidden sm:inline">基本信息</span>
@@ -247,6 +426,10 @@ export default function AdminSettingsPage() {
           <TabsTrigger value="footer" className="gap-2">
             <Link2 className="h-4 w-4" />
             <span className="hidden sm:inline">页脚备案</span>
+          </TabsTrigger>
+          <TabsTrigger value="ads" className="gap-2">
+            <Megaphone className="h-4 w-4" />
+            <span className="hidden sm:inline">广告</span>
           </TabsTrigger>
           <TabsTrigger value="seo" className="gap-2">
             <Search className="h-4 w-4" />
@@ -653,6 +836,126 @@ export default function AdminSettingsPage() {
                       </FormItem>
                     )}
                   />
+
+                  <Button type="submit" disabled={updateConfig.isPending}>
+                    {updateConfig.isPending ? (
+                      <Loader2 className="h-4 w-4 animate-spin mr-2" />
+                    ) : (
+                      <Save className="h-4 w-4 mr-2" />
+                    )}
+                    保存设置
+                  </Button>
+                </CardContent>
+              </Card>
+            </TabsContent>
+
+            {/* 广告 */}
+            <TabsContent value="ads">
+              <Card>
+                <CardHeader>
+                  <CardTitle className="flex items-center gap-2">
+                    <Megaphone className="h-5 w-5" />
+                    广告设置
+                  </CardTitle>
+                  <CardDescription>
+                    统一管理全站广告。广告将随机展示在首页视频列表、侧栏、视频页等广告位中，广告门也使用同一广告列表。可为每条广告设置权重来调整展示概率。
+                  </CardDescription>
+                </CardHeader>
+                <CardContent className="space-y-4">
+                  <FormField
+                    control={form.control}
+                    name="adsEnabled"
+                    render={({ field }) => (
+                      <FormItem className="flex items-center justify-between rounded-lg border p-3">
+                        <div className="space-y-0.5">
+                          <FormLabel>启用广告</FormLabel>
+                          <FormDescription>开启后，广告将展示在首页、侧栏等位置（可在「用户管理」中单独关闭某用户的广告）</FormDescription>
+                        </div>
+                        <FormControl>
+                          <Switch checked={field.value} onCheckedChange={field.onChange} />
+                        </FormControl>
+                      </FormItem>
+                    )}
+                  />
+
+                  {/* 广告列表 */}
+                  <div className="space-y-3">
+                    <FormLabel>广告列表</FormLabel>
+                    <FormDescription>
+                      配置多条广告，系统会按权重随机选取展示。每条广告可设置图片、跳转链接、平台名和权重。
+                    </FormDescription>
+                    <AdsFieldArray
+                      control={form.control}
+                      fields={adsFields}
+                      append={appendAd}
+                      remove={removeAd}
+                    />
+                  </div>
+
+                  {/* 广告门 */}
+                  <div className="border-t pt-6 space-y-4">
+                    <h4 className="font-medium">广告门</h4>
+                    <FormDescription className="mt-0">
+                      启用后，用户访问站点时需先点击广告链接并返回本页，满足指定次数后在设定时间内不再显示广告门。广告门使用上方同一广告列表。
+                    </FormDescription>
+                    <FormField
+                      control={form.control}
+                      name="adGateEnabled"
+                      render={({ field }) => (
+                        <FormItem className="flex items-center justify-between rounded-lg border p-3">
+                          <div className="space-y-0.5">
+                            <FormLabel>启用广告门</FormLabel>
+                            <FormDescription>开启后，未达成次数时访问站点会先看到广告页</FormDescription>
+                          </div>
+                          <FormControl>
+                            <Switch checked={field.value} onCheckedChange={field.onChange} />
+                          </FormControl>
+                        </FormItem>
+                      )}
+                    />
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                      <FormField
+                        control={form.control}
+                        name="adGateViewsRequired"
+                        render={({ field }) => (
+                          <FormItem>
+                            <FormLabel>需观看/点击次数</FormLabel>
+                            <FormControl>
+                              <Input
+                                type="number"
+                                min={1}
+                                max={20}
+                                {...field}
+                                onChange={(e) => field.onChange(parseInt(e.target.value, 10) || 3)}
+                              />
+                            </FormControl>
+                            <FormDescription>例如 3 次</FormDescription>
+                            <FormMessage />
+                          </FormItem>
+                        )}
+                      />
+                      <FormField
+                        control={form.control}
+                        name="adGateHours"
+                        render={({ field }) => (
+                          <FormItem>
+                            <FormLabel>免广告时长（小时）</FormLabel>
+                            <FormControl>
+                              <Input
+                                type="number"
+                                min={1}
+                                max={168}
+                                {...field}
+                                onChange={(e) => field.onChange(parseInt(e.target.value, 10) || 12)}
+                              />
+                            </FormControl>
+                            <FormDescription>达成后多少小时内不再显示，例如 12</FormDescription>
+                            <FormMessage />
+                          </FormItem>
+                        )}
+                      />
+                    </div>
+                  </div>
 
                   <Button type="submit" disabled={updateConfig.isPending}>
                     {updateConfig.isPending ? (

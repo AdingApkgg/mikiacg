@@ -73,7 +73,7 @@ interface WebsiteJsonLdProps {
 export function WebsiteJsonLd({
   siteName = "Mikiacg",
   siteUrl = "https://www.mikiacg.vip",
-  description = "ACGN Fans 流式媒体内容分享平台",
+  description = "Mikiacg 流式媒体内容分享平台",
 }: WebsiteJsonLdProps) {
   const jsonLd = {
     "@context": "https://schema.org",

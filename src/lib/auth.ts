@@ -1,6 +1,6 @@
 import { betterAuth } from "better-auth";
 import { prismaAdapter } from "better-auth/adapters/prisma";
-import { username } from "better-auth/plugins";
+import { username, customSession } from "better-auth/plugins";
 import { prisma } from "@/lib/prisma";
 import bcrypt from "bcryptjs";
 
@@ -28,6 +28,27 @@ export const auth = betterAuth({
       minUsernameLength: 1,
       maxUsernameLength: 64,
     }),
+    customSession(async ({ user, session }) => {
+      if (!user?.id) return { user, session };
+      const dbUser = await prisma.user.findUnique({
+        where: { id: user.id },
+        select: { role: true, canUpload: true, adsEnabled: true },
+      });
+      if (!dbUser) return { user, session };
+      const canUpload =
+        dbUser.role === "ADMIN" ||
+        dbUser.role === "OWNER" ||
+        dbUser.canUpload === true;
+      return {
+        session,
+        user: {
+          ...user,
+          role: dbUser.role,
+          canUpload,
+          adsEnabled: dbUser.adsEnabled ?? true,
+        },
+      };
+    }),
   ],
   user: {
     modelName: "user",
@@ -46,6 +67,12 @@ export const auth = betterAuth({
         type: "boolean",
         required: false,
         defaultValue: false,
+        input: false,
+      },
+      adsEnabled: {
+        type: "boolean",
+        required: false,
+        defaultValue: true,
         input: false,
       },
     },
@@ -94,6 +121,8 @@ export interface AppSession {
     image?: string | null;
     role?: "USER" | "ADMIN" | "OWNER";
     canUpload?: boolean;
+    /** 是否加载广告；false 表示站长/管理员已关闭该用户的广告 */
+    adsEnabled?: boolean;
   };
   /** Better Auth 使用 session.token；兼容旧逻辑用 jti 表示同一值 */
   jti?: string;
@@ -108,7 +137,7 @@ export async function getSession(): Promise<AppSession | null> {
   const { user, session } = result as { user: { id: string; email: string; name?: string | null; image?: string | null }; session: { id: string; token: string; expiresAt: Date } };
   const dbUser = await prisma.user.findUnique({
     where: { id: user.id },
-    select: { role: true, canUpload: true, nickname: true, username: true, avatar: true },
+    select: { role: true, canUpload: true, adsEnabled: true, nickname: true, username: true, avatar: true },
   });
   const canUpload =
     dbUser?.role === "ADMIN" ||
@@ -126,6 +155,7 @@ export async function getSession(): Promise<AppSession | null> {
       image: dbUser?.avatar ?? user.image ?? null,
       role: (dbUser?.role as "USER" | "ADMIN" | "OWNER") ?? "USER",
       canUpload,
+      adsEnabled: dbUser?.adsEnabled ?? true,
     },
     session: sessionPayload,
   };

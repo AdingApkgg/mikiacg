@@ -10,6 +10,7 @@ import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Checkbox } from "@/components/ui/checkbox";
+import { Switch } from "@/components/ui/switch";
 import {
   Dialog,
   DialogContent,
@@ -60,6 +61,7 @@ import {
   Square,
   UserX,
   UserCheck,
+  Megaphone,
 } from "lucide-react";
 import { ADMIN_SCOPES } from "@/lib/constants";
 import { cn } from "@/lib/utils";
@@ -77,6 +79,7 @@ interface UserItem {
   isBanned: boolean;
   banReason: string | null;
   lastIpLocation: string | null;
+  adsEnabled: boolean;
   createdAt: Date;
   _count: { videos: number; comments: number; likes: number };
 }
@@ -171,6 +174,14 @@ export default function AdminUsersPage() {
       setSelectedIds(new Set());
     },
     onError: (error) => toast.error(error.message || "批量解封失败"),
+  });
+
+  const updateAdsEnabledMutation = trpc.admin.updateUserAdsEnabled.useMutation({
+    onSuccess: (_, variables) => {
+      toast.success(variables.adsEnabled ? "已开启该用户广告加载" : "已关闭该用户广告加载");
+      utils.admin.listUsers.invalidate();
+    },
+    onError: (error) => toast.error(error.message || "更新失败"),
   });
 
   const users = useMemo(
@@ -590,6 +601,25 @@ export default function AdminUsersPage() {
                                 </Badge>
                               ))}
                             </div>
+                          </div>
+                        )}
+
+                        {permissions?.scopes.includes("user:manage") && user.role !== "OWNER" && (
+                          <div className="flex items-center justify-between gap-4 py-2 rounded bg-muted/50 px-3">
+                            <div className="flex items-center gap-2 font-medium text-foreground">
+                              <Megaphone className="h-3.5 w-3.5" />
+                              广告加载
+                            </div>
+                            <Switch
+                              checked={user.adsEnabled}
+                              disabled={updateAdsEnabledMutation.isPending}
+                              onCheckedChange={(checked) => {
+                                updateAdsEnabledMutation.mutate({
+                                  userId: user.id,
+                                  adsEnabled: !!checked,
+                                });
+                              }}
+                            />
                           </div>
                         )}
                       </div>

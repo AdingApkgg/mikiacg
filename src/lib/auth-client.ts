@@ -17,6 +17,7 @@ export function useSession() {
   const status = isPending ? "loading" : error || !data?.user ? "unauthenticated" : "authenticated";
   const role = (data?.user as { role?: string } | undefined)?.role as "USER" | "ADMIN" | "OWNER" | undefined;
   const rawCanUpload = (data?.user as { canUpload?: boolean } | undefined)?.canUpload;
+  const adsEnabled = (data?.user as { adsEnabled?: boolean } | undefined)?.adsEnabled ?? true;
   // ADMIN/OWNER 始终拥有投稿权限，与服务端 getSession() 逻辑一致
   const canUpload = role === "ADMIN" || role === "OWNER" || rawCanUpload === true;
 
@@ -29,6 +30,7 @@ export function useSession() {
           image: data.user.image ?? null,
           role,
           canUpload,
+          adsEnabled,
         },
         expires: data.session?.expiresAt?.toString?.() ?? "",
       }

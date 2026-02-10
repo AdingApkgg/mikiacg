@@ -204,7 +204,7 @@ async function getIpLocationFromApi(ip: string, cacheKey: string): Promise<strin
     // 添加 lang=zh-CN 获取中文结果
     const response = await fetch(
       `http://ip-api.com/json/${encodeURIComponent(ip)}?fields=status,message,country,regionName,city,isp,query&lang=zh-CN`,
-      { headers: { "User-Agent": "acgn-flow/1.0" } }
+      { headers: { "User-Agent": "mikiacg/1.0" } }
     );
 
     if (!response.ok) {

@@ -169,22 +169,22 @@ export function CommentSection({ videoId }: CommentSectionProps) {
         )}
       </div>
 
-      {/* 评论输入框 */}
+      {/* 评论输入框 - 挂载前用固定占位避免 hydration 不一致 */}
       <div className="flex gap-3">
         <Avatar className="h-10 w-10 shrink-0">
-          {session ? (
+          {!isMounted ? (
+            <AvatarFallback>U</AvatarFallback>
+          ) : session ? (
             <>
               <AvatarImage src={session.user?.image || undefined} />
               <AvatarFallback>
-                {session.user?.name?.charAt(0).toUpperCase() || "U"}
+                {(session.user?.name?.trim() || "").charAt(0).toUpperCase() || "U"}
               </AvatarFallback>
             </>
           ) : (
-            <>
-              <AvatarFallback>
-                <User className="h-5 w-5" />
-              </AvatarFallback>
-            </>
+            <AvatarFallback>
+              <User className="h-5 w-5" />
+            </AvatarFallback>
           )}
         </Avatar>
         <div className="flex-1 space-y-3">

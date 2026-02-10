@@ -75,7 +75,7 @@ pnpm dev
 # 配置环境变量
 export DEPLOY_USER=i
 export DEPLOY_HOST=your-server.com
-export DEPLOY_PATH=/home/i/acgn-flow
+export DEPLOY_PATH=/home/i/mikiacg
 
 # 运行部署脚本
 pnpm deploy

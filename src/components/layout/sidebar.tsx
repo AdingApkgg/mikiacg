@@ -27,6 +27,7 @@ import { ScrollArea } from "@/components/ui/scroll-area";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { useStableSession } from "@/lib/hooks";
 import type { AppSession } from "@/lib/auth";
+import { AdSlot } from "@/components/ads/ad-slot";
 
 /** 侧栏仅需 user，兼容服务端 AppSession 与客户端 useSession 的 data */
 type SessionWithUser = Pick<AppSession, "user"> | null;
@@ -61,8 +62,8 @@ const CONTENT_MODE_OPTIONS: { id: ContentMode; label: string; icon: React.Elemen
 ];
 
 const userNavItems: NavItem[] = [
-  { href: "/my-videos", icon: Video, label: "我的视频", auth: true },
-  { href: "/my-series", icon: Layers, label: "我的合集", auth: true },
+  { href: "/my-videos", icon: Video, label: "我的视频", auth: true, requireUpload: true },
+  { href: "/my-series", icon: Layers, label: "我的合集", auth: true, requireUpload: true },
   { href: "/favorites", icon: Heart, label: "收藏", auth: true },
   { href: "/history", icon: History, label: "历史", auth: true },
 ];
@@ -315,6 +316,13 @@ export function Sidebar({ collapsed, onToggle, overlay = false }: SidebarProps) 
             />
           </div>
         </ScrollArea>
+
+        {/* 广告位：仅对允许展示广告的用户显示 */}
+        {!collapsed && (
+          <div className="px-3 pb-2">
+            <AdSlot slotId="sidebar" minHeight={100} />
+          </div>
+        )}
 
         {/* 折叠按钮 */}
         <div className={cn("border-t p-2", collapsed ? "flex justify-center" : "")}>

@@ -25,8 +25,8 @@
 ### 1. 环境准备
 
 ```bash
-git clone https://github.com/your-repo/acgn-flow.git
-cd acgn-flow
+git clone https://github.com/your-repo/mikiacg.git
+cd mikiacg
 cp .env.example .env
 # 编辑 .env 配置
 ```
@@ -83,8 +83,8 @@ rathole -s deploy/rathole-server.toml
 ### 3. 配置 Nginx
 
 ```bash
-sudo cp deploy/nginx-public.conf /etc/nginx/sites-available/acgn-flow.conf
-sudo ln -s /etc/nginx/sites-available/acgn-flow.conf /etc/nginx/sites-enabled/
+sudo cp deploy/nginx-public.conf /etc/nginx/sites-available/mikiacg.conf
+sudo ln -s /etc/nginx/sites-available/mikiacg.conf /etc/nginx/sites-enabled/
 sudo certbot certonly --webroot -w /var/www/certbot -d www.mikiacg.vip
 sudo nginx -t && sudo systemctl reload nginx
 ```

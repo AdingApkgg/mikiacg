@@ -7,10 +7,11 @@ import { Sidebar } from "./sidebar";
 import { Footer } from "./footer";
 import { BottomNav } from "./bottom-nav";
 import { CommandPalette } from "./command-palette";
+import { AdGate } from "@/components/ads/ad-gate";
 import { cn } from "@/lib/utils";
 import { useIsMounted } from "@/components/motion";
 
-const SIDEBAR_COLLAPSED_KEY = "acgn-flow-sidebar-collapsed";
+const SIDEBAR_COLLAPSED_KEY = "mikiacg-sidebar-collapsed";
 
 // 这些页面侧边栏覆盖模式（展开时覆盖内容，不推移）
 const overlaySidebarPaths = ["/video/"];
@@ -123,6 +124,9 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
 
       {/* 全局命令面板 */}
       <CommandPalette />
+
+      {/* 赞助商广告门（启用且未达免广告时段时显示） */}
+      <AdGate />
     </div>
   );
 }

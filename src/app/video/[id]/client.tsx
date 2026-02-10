@@ -35,6 +35,7 @@ import Link from "next/link";
 import { CommentSection } from "@/components/comment/comment-section";
 import { VideoJsonLd, BreadcrumbJsonLd } from "@/components/seo/json-ld";
 import { getCoverUrl } from "@/lib/cover";
+import { AdSlot } from "@/components/ads/ad-slot";
 import type { SerializedVideo } from "./page";
 
 interface VideoPageClientProps {
@@ -994,6 +995,11 @@ export function VideoPageClient({ id: initialId, initialVideo }: VideoPageClient
                   </div>
                 </div>
               )}
+
+              {/* 右侧栏广告位 - 选集框下方 */}
+              <div className="mt-4 shrink-0">
+                <AdSlot slotId="video-sidebar" minHeight={100} className="w-full" />
+              </div>
             </div>
           </div>
         </div>

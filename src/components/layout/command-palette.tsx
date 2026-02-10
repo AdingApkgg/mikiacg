@@ -171,10 +171,12 @@ export function CommandPalette({ open, onOpenChange }: CommandPaletteProps) {
                 <CommandShortcut>⌘U</CommandShortcut>
               </CommandItem>
             )}
-            <CommandItem onSelect={() => runCommand(() => router.push("/my-videos"))}>
-              <Video className="mr-2 h-4 w-4" />
-              我的视频
-            </CommandItem>
+            {session.user?.canUpload && (
+              <CommandItem onSelect={() => runCommand(() => router.push("/my-videos"))}>
+                <Video className="mr-2 h-4 w-4" />
+                我的视频
+              </CommandItem>
+            )}
             <CommandItem onSelect={() => runCommand(() => router.push("/favorites"))}>
               <Heart className="mr-2 h-4 w-4" />
               我的收藏

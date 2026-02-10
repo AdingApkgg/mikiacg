@@ -78,7 +78,7 @@ export async function GET() {
   <channel>
     <title>${escapeXml(siteName)}</title>
     <link>${baseUrl}</link>
-    <description>ACGN Fans 流式媒体内容分享平台，分享动画、漫画、游戏、轻小说相关视频内容</description>
+    <description>Mikiacg 流式媒体内容分享平台，分享动画、漫画、游戏、轻小说相关视频内容</description>
     <language>zh-CN</language>
     <lastBuildDate>${new Date().toUTCString()}</lastBuildDate>
     <atom:link href="${baseUrl}/feed.xml" rel="self" type="application/rss+xml" />
@@ -88,7 +88,7 @@ export async function GET() {
       <link>${baseUrl}</link>
     </image>
     <itunes:author>${escapeXml(siteName)}</itunes:author>
-    <itunes:summary>ACGN Fans 流式媒体内容分享平台</itunes:summary>
+    <itunes:summary>Mikiacg 流式媒体内容分享平台</itunes:summary>
     <itunes:category text="Leisure">
       <itunes:category text="Animation &amp; Manga"/>
     </itunes:category>

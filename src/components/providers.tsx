@@ -8,6 +8,8 @@ import superjson from "superjson";
 import { ThemeProvider } from "next-themes";
 import { Toaster } from "@/components/ui/sonner";
 import { useVisualSettings } from "@/components/visual-settings";
+import { SiteConfigProvider } from "@/contexts/site-config";
+import type { PublicSiteConfig } from "@/lib/site-config";
 
 // 注册 Service Worker（仅生产环境）
 function ServiceWorkerRegistration() {
@@ -52,7 +54,7 @@ function getBaseUrl() {
   return `http://localhost:${process.env.PORT ?? 3000}`;
 }
 
-export function Providers({ children }: { children: React.ReactNode }) {
+export function Providers({ children, siteConfig }: { children: React.ReactNode; siteConfig: PublicSiteConfig }) {
   const [queryClient] = useState(
     () =>
       new QueryClient({
@@ -85,11 +87,13 @@ export function Providers({ children }: { children: React.ReactNode }) {
             enableSystem
             disableTransitionOnChange
           >
-            <VisualSettingsApplier>
-              <ServiceWorkerRegistration />
-              {children}
-              <Toaster richColors position="top-center" />
-            </VisualSettingsApplier>
+            <SiteConfigProvider value={siteConfig}>
+              <VisualSettingsApplier>
+                <ServiceWorkerRegistration />
+                {children}
+                <Toaster richColors position="top-center" />
+              </VisualSettingsApplier>
+            </SiteConfigProvider>
           </ThemeProvider>
       </QueryClientProvider>
     </trpc.Provider>

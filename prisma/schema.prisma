@@ -32,6 +32,7 @@ model User {
   banReason     String?   // 封禁原因
   bannedAt      DateTime? // 封禁时间
   lastIpLocation  String?  // 最后一次 IP 属地
+  adsEnabled    Boolean   @default(true)   // 是否加载广告（站长/管理员可在后台关闭某用户的广告）
   createdAt     DateTime  @default(now())
   updatedAt     DateTime  @updatedAt
 
@@ -537,6 +538,19 @@ model SiteConfig {
   // ICP 备案
   icpBeian        String?  // ICP 备案号
   publicSecurityBeian String? // 公安备案号
+  
+  // 广告系统（统一管理）
+  adsEnabled  Boolean @default(false)  // 全站是否展示广告位
+  adScript    String? @db.Text         // @deprecated 已废弃，保留字段兼容旧数据
+  
+  // 广告门（用户需点击广告并返回算一次，满 N 次可 Y 小时内关闭广告门）
+  adGateEnabled       Boolean @default(false)  // 是否启用广告门
+  adGateViewsRequired Int     @default(3)      // 需观看/点击次数
+  adGateHours         Int     @default(12)     // 达成后免广告时长（小时）
+  
+  // 广告列表（统一管理，广告门和页面广告位共用）
+  // [{ title, platform, url, description, imageUrl, weight, enabled }]
+  sponsorAds          Json?
   
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt

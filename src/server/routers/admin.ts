@@ -269,6 +269,7 @@ export const adminRouter = router({
           isBanned: true,
           banReason: true,
           lastIpLocation: true,
+          adsEnabled: true,
           createdAt: true,
           _count: { select: { videos: true, comments: true, likes: true } },
         },
@@ -435,6 +436,41 @@ export const adminRouter = router({
       });
 
       return { success: true, user };
+    }),
+
+  // 更新用户广告加载开关（站长或拥有 user:manage 的管理员）
+  updateUserAdsEnabled: adminProcedure
+    .input(
+      z.object({
+        userId: z.string(),
+        adsEnabled: z.boolean(),
+      })
+    )
+    .mutation(async ({ ctx, input }) => {
+      const canManage = await hasScope(ctx.prisma, ctx.session.user.id, "user:manage");
+      if (!canManage) {
+        throw new TRPCError({ code: "FORBIDDEN", message: "无用户管理权限" });
+      }
+
+      const targetUser = await ctx.prisma.user.findUnique({
+        where: { id: input.userId },
+        select: { role: true },
+      });
+
+      if (!targetUser) {
+        throw new TRPCError({ code: "NOT_FOUND", message: "用户不存在" });
+      }
+
+      if (targetUser.role === "OWNER") {
+        throw new TRPCError({ code: "FORBIDDEN", message: "不能修改站长的设置" });
+      }
+
+      await ctx.prisma.user.update({
+        where: { id: input.userId },
+        data: { adsEnabled: input.adsEnabled },
+      });
+
+      return { success: true };
     }),
 
   // ========== 视频管理 ==========
@@ -1245,6 +1281,25 @@ export const adminRouter = router({
       // 备案
       icpBeian: z.string().max(100).optional().nullable(),
       publicSecurityBeian: z.string().max(100).optional().nullable(),
+
+      // 广告系统
+      adsEnabled: z.boolean().optional(),
+
+      // 广告门
+      adGateEnabled: z.boolean().optional(),
+      adGateViewsRequired: z.number().int().min(1).max(20).optional(),
+      adGateHours: z.number().int().min(1).max(168).optional(),
+
+      // 广告列表（统一管理，广告门和页面广告位共用）
+      sponsorAds: z.array(z.object({
+        title: z.string().min(1).max(200),
+        platform: z.string().max(100).optional().default(""),
+        url: z.string().url(),
+        description: z.string().max(500).optional().default(""),
+        imageUrl: z.string().max(2000).optional().default(""),
+        weight: z.number().int().min(1).max(100).optional().default(1),
+        enabled: z.boolean().optional().default(true),
+      })).max(50).optional().nullable(),
     }))
     .mutation(async ({ ctx, input }) => {
       const canManage = await hasScope(ctx.prisma, ctx.session.user.id, "settings:manage");
@@ -1252,17 +1307,37 @@ export const adminRouter = router({
         throw new TRPCError({ code: "FORBIDDEN", message: "无系统设置权限" });
       }
 
-      // 清理：空字符串 → null，并去掉 undefined（避免 Prisma 报错）
+      // 仅保留 SiteConfig 存在的字段，空字符串转 null，并确保 Json 为可序列化值
+      const allowedKeys = new Set([
+        "siteName", "siteDescription", "siteLogo", "siteFavicon", "siteKeywords",
+        "announcement", "announcementEnabled", "allowRegistration", "allowUpload",
+        "allowComment", "requireEmailVerify", "videosPerPage", "commentsPerPage",
+        "maxUploadSize", "allowedVideoFormats", "contactEmail", "socialLinks",
+        "footerText", "footerLinks", "icpBeian", "publicSecurityBeian",
+        "adsEnabled", "adGateEnabled", "adGateViewsRequired", "adGateHours", "sponsorAds",
+      ]);
       const cleaned = Object.fromEntries(
         Object.entries(input)
+          .filter(([key]) => allowedKeys.has(key))
           .map(([key, value]) => [key, value === "" ? null : value])
           .filter(([, value]) => value !== undefined)
       ) as Record<string, unknown>;
 
+      // Json 字段传纯对象/数组，避免 Prisma 序列化问题
+      if (Array.isArray(cleaned.sponsorAds)) {
+        cleaned.sponsorAds = JSON.parse(JSON.stringify(cleaned.sponsorAds)) as Prisma.InputJsonValue;
+      }
+      if (cleaned.socialLinks != null && typeof cleaned.socialLinks === "object" && !Array.isArray(cleaned.socialLinks)) {
+        cleaned.socialLinks = JSON.parse(JSON.stringify(cleaned.socialLinks)) as Prisma.InputJsonValue;
+      }
+      if (Array.isArray(cleaned.footerLinks)) {
+        cleaned.footerLinks = JSON.parse(JSON.stringify(cleaned.footerLinks)) as Prisma.InputJsonValue;
+      }
+
       const config = await ctx.prisma.siteConfig.upsert({
         where: { id: "default" },
-        create: { id: "default", ...cleaned },
-        update: cleaned,
+        create: { id: "default", ...cleaned } as Prisma.SiteConfigCreateInput,
+        update: cleaned as Prisma.SiteConfigUpdateInput,
       });
 
       // 清除站点配置缓存，使更改立即生效

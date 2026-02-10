@@ -2,8 +2,9 @@
 
 import { trpc } from "@/lib/trpc";
 import { VideoGrid } from "@/components/video/video-grid";
+import { VideoCard } from "@/components/video/video-card";
 import { Button } from "@/components/ui/button";
-import { useState, useEffect, useRef } from "react";
+import { useState, useEffect, useRef, useMemo } from "react";
 import { AlertTriangle, X, ChevronLeft, ChevronRight, Play, Layers } from "lucide-react";
 import { PageWrapper, FadeIn } from "@/components/motion";
 import { cn } from "@/lib/utils";
@@ -13,6 +14,9 @@ import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Pagination } from "@/components/ui/pagination";
 import { getCoverUrl } from "@/lib/cover";
+import { AdCard } from "@/components/ads/ad-card";
+import { useRandomAds } from "@/hooks/use-ads";
+import type { Ad } from "@/lib/ads";
 
 type ViewMode = "videos" | "series";
 type SortBy = "latest" | "views" | "likes";
@@ -47,9 +51,11 @@ interface HomePageClientProps {
     announcement: string | null;
     announcementEnabled: boolean;
   } | null;
+  /** 服务端预选的广告（首页第一页 SSR 直出用） */
+  initialAds?: Ad[];
 }
 
-export function HomePageClient({ initialTags, initialVideos, siteConfig }: HomePageClientProps) {
+export function HomePageClient({ initialTags, initialVideos, siteConfig, initialAds = [] }: HomePageClientProps) {
   const [viewMode, setViewMode] = useState<ViewMode>("videos");
   const [sortBy, setSortBy] = useState<SortBy>("latest");
   const [selectedTag, setSelectedTag] = useState<string | null>(null);
@@ -95,6 +101,50 @@ export function HomePageClient({ initialTags, initialVideos, siteConfig }: HomeP
   const series = seriesData?.items ?? [];
   const seriesTotalPages = seriesData?.totalPages ?? 1;
 
+  // 广告选取：首页第一页用服务端预选的 initialAds（SSR 直出），后续页客户端按权重随机选取
+  const isFirstPage = videoPage === 1 && sortBy === "latest" && selectedTag === null;
+  const adSeed = `${videoPage}-${sortBy}-${selectedTag ?? ""}`;
+  const { ads: clientAds, showAds } = useRandomAds(4, adSeed);
+  const pickedAds = isFirstPage && initialAds.length > 0 ? initialAds : clientAds;
+
+  // 计算 4 个广告的插入位置（均匀分散在视频列表中，加一点随机偏移）
+  const adInsertPositions = useMemo(() => {
+    if (!showAds || pickedAds.length === 0 || videos.length < 4) return [];
+    const count = Math.min(pickedAds.length, Math.floor(videos.length / 3)); // 每 3 个视频最多插 1 条
+    if (count === 0) return [];
+    const step = Math.floor(videos.length / (count + 1));
+    const positions: number[] = [];
+    // 简易确定性 hash：用 adSeed 做偏移种子
+    let seedNum = 0;
+    for (let i = 0; i < adSeed.length; i++) seedNum = (seedNum * 31 + adSeed.charCodeAt(i)) | 0;
+    for (let i = 0; i < count; i++) {
+      const base = step * (i + 1);
+      const offset = Math.abs(seedNum + i * 7) % Math.max(1, Math.floor(step / 2));
+      positions.push(Math.min(base + offset, videos.length));
+    }
+    // 去重并排序（从大到小插入不影响前面的索引）
+    return [...new Set(positions)].sort((a, b) => a - b);
+  }, [showAds, pickedAds.length, videos.length, adSeed]);
+
+  // 视频 + 广告混合列表（用于网格渲染）
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  type GridItem = { type: "video"; video: any } | { type: "ad"; adIndex: number };
+  const gridItems = useMemo((): GridItem[] => {
+    if (adInsertPositions.length === 0) return videos.map((v) => ({ type: "video" as const, video: v }));
+    const items: GridItem[] = [];
+    let adIdx = 0;
+    for (let i = 0; i <= videos.length; i++) {
+      // 在当前位置插入广告（可能有多条）
+      while (adIdx < adInsertPositions.length && adInsertPositions[adIdx] === i) {
+        items.push({ type: "ad", adIndex: adIdx });
+        adIdx++;
+      }
+      if (i < videos.length) {
+        items.push({ type: "video", video: videos[i] });
+      }
+    }
+    return items;
+  }, [videos, adInsertPositions]);
 
   // 检查滚动箭头显示状态
   const checkScrollArrows = () => {
@@ -296,8 +346,25 @@ export function HomePageClient({ initialTags, initialVideos, siteConfig }: HomeP
             // 视频网格
             <>
               <div key={`${sortBy}-${selectedTag}-${videoPage}`}>
-                <VideoGrid videos={videos} isLoading={videoLoading && videos.length === 0} />
-                
+                {videoLoading && videos.length === 0 ? (
+                  <VideoGrid videos={[]} isLoading />
+                ) : gridItems.some((x) => x.type === "ad") ? (
+                  <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-3 sm:gap-4 lg:gap-5">
+                    {gridItems.map((item, index) =>
+                      item.type === "ad" ? (
+                        <AdCard
+                          key={`ad-${item.adIndex}`}
+                          ad={pickedAds[item.adIndex]}
+                        />
+                      ) : (
+                        <VideoCard key={item.video.id} video={item.video} index={index} />
+                      )
+                    )}
+                  </div>
+                ) : (
+                  <VideoGrid videos={videos} isLoading={false} />
+                )}
+
                 {/* 无结果提示 */}
                 {!videoLoading && videos.length === 0 && (
                   <div className="text-center py-16">

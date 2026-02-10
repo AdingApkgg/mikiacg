@@ -4,7 +4,7 @@ export default function manifest(): MetadataRoute.Manifest {
   return {
     name: "Mikiacg",
     short_name: "Mikiacg",
-    description: "ACGN Fans 流式媒体内容分享平台",
+    description: "Mikiacg 流式媒体内容分享平台",
     start_url: "/",
     display: "standalone",
     background_color: "#000000",
@@ -12,14 +12,9 @@ export default function manifest(): MetadataRoute.Manifest {
     orientation: "portrait-primary",
     icons: [
       {
-        src: "/apple-icon",
+        src: "/Mikiacg-logo.webp",
         sizes: "180x180",
-        type: "image/png",
-      },
-      {
-        src: "/icon",
-        sizes: "32x32",
-        type: "image/png",
+        type: "image/webp",
       },
     ],
     categories: ["entertainment", "video"],

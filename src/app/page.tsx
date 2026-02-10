@@ -2,10 +2,26 @@ import { prisma } from "@/lib/prisma";
 import { HomePageClient } from "./client";
 import { WebsiteJsonLd, OrganizationJsonLd } from "@/components/seo/json-ld";
 import { cache } from "react";
+import { getPublicSiteConfig } from "@/lib/site-config";
+import { pickWeightedRandomAds, type Ad } from "@/lib/ads";
+
+/** 从 JSON 解析广告列表（兼容旧格式） */
+function parseAds(raw: unknown): Ad[] {
+  if (!Array.isArray(raw)) return [];
+  return raw.map((item) => ({
+    title: item.title ?? "",
+    platform: item.platform ?? "",
+    url: item.url ?? "",
+    description: item.description ?? undefined,
+    imageUrl: item.imageUrl ?? undefined,
+    weight: typeof item.weight === "number" ? item.weight : 1,
+    enabled: item.enabled !== false,
+  }));
+}
 
 // 使用 React cache 避免重复查询
 const getInitialData = cache(async () => {
-  const [tags, videos, siteConfig] = await Promise.all([
+  const [tags, videos, siteConfig, fullConfig] = await Promise.all([
     // 获取热门标签
     prisma.tag.findMany({
       take: 30,
@@ -31,16 +47,22 @@ const getInitialData = cache(async () => {
         _count: { select: { likes: true, dislikes: true, favorites: true } },
       },
     }),
-    // 获取网站配置
+    // 获取公告配置
     prisma.siteConfig.findFirst({
       select: {
         announcement: true,
         announcementEnabled: true,
       },
     }),
+    // 获取完整站点配置（含广告列表，复用 Redis 缓存）
+    getPublicSiteConfig(),
   ]);
 
-  return { tags, videos, siteConfig };
+  // 服务端预选 4 条广告（SSR 直出，无需客户端等待）
+  const ads = parseAds(fullConfig.sponsorAds);
+  const initialAds = fullConfig.adsEnabled ? pickWeightedRandomAds(ads, 4) : [];
+
+  return { tags, videos, siteConfig, initialAds };
 });
 
 // 序列化视频数据
@@ -59,7 +81,7 @@ function serializeVideos(videos: Awaited<ReturnType<typeof getInitialData>>["vid
 }
 
 export default async function HomePage() {
-  const { tags, videos, siteConfig } = await getInitialData();
+  const { tags, videos, siteConfig, initialAds } = await getInitialData();
   const serializedVideos = serializeVideos(videos);
 
   return (
@@ -72,6 +94,7 @@ export default async function HomePage() {
         initialTags={tags}
         initialVideos={serializedVideos}
         siteConfig={siteConfig}
+        initialAds={initialAds}
       />
     </>
   );

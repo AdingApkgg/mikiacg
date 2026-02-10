@@ -502,12 +502,14 @@ export function Header({ onMenuClick }: HeaderProps) {
                         个人设置
                       </Link>
                     </DropdownMenuItem>
-                    <DropdownMenuItem asChild>
-                      <Link href="/my-videos">
-                        <Video className="mr-2 h-4 w-4" />
-                        我的视频
-                      </Link>
-                    </DropdownMenuItem>
+                    {session.user?.canUpload && (
+                      <DropdownMenuItem asChild>
+                        <Link href="/my-videos">
+                          <Video className="mr-2 h-4 w-4" />
+                          我的视频
+                        </Link>
+                      </DropdownMenuItem>
+                    )}
                     <DropdownMenuItem asChild>
                       <Link href="/favorites">
                         <Heart className="mr-2 h-4 w-4" />

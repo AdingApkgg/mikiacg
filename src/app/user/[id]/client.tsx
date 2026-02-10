@@ -8,12 +8,13 @@ import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Separator } from "@/components/ui/separator";
-import { Calendar, Video, Heart, Star, Loader2, MapPin, Globe, ExternalLink, Mail, Laptop, Smartphone } from "lucide-react";
+import { Calendar, Heart, Star, Loader2, MapPin, Globe, ExternalLink, Mail, Laptop, Smartphone, Clock, ThumbsUp } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { useInView } from "react-intersection-observer";
 import { EmptyState } from "@/components/ui/empty-state";
 import { formatRelativeTime } from "@/lib/format";
 import Link from "next/link";
+import { cn } from "@/lib/utils";
 import type { SerializedUser } from "./page";
 import { parseDeviceInfo, getHighEntropyDeviceInfo, mergeDeviceInfo, type DeviceInfo } from "@/lib/device-info";
 
@@ -117,6 +118,64 @@ function SocialLinks({ socialLinks }: { socialLinks: Record<string, string> | nu
   );
 }
 
+type ProfileTab = "history" | "favorites" | "liked";
+
+/** 无限滚动视频网格（通用） */
+function InfiniteVideoGrid({
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  videos, isLoading, isFetchingNextPage, hasNextPage, sentinelRef, emptyIcon, emptyTitle, emptyDescription,
+}: {
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  videos: any[];
+  isLoading: boolean;
+  isFetchingNextPage: boolean;
+  hasNextPage: boolean | undefined;
+  sentinelRef: React.Ref<HTMLDivElement>;
+  emptyIcon: React.ComponentType<{ className?: string }>;
+  emptyTitle: string;
+  emptyDescription: string;
+}) {
+  if (isLoading) {
+    return (
+      <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4">
+        {Array.from({ length: 8 }).map((_, i) => (
+          <Skeleton key={i} className="aspect-video rounded-lg" />
+        ))}
+      </div>
+    );
+  }
+
+  if (videos.length === 0) {
+    return (
+      <EmptyState
+        icon={emptyIcon}
+        title={emptyTitle}
+        description={emptyDescription}
+      />
+    );
+  }
+
+  return (
+    <>
+      <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4">
+        {videos.map((video, index) => (
+          <div key={video.id}>
+            <VideoCard video={video} index={index} />
+          </div>
+        ))}
+      </div>
+      <div ref={sentinelRef} className="flex justify-center py-8">
+        {isFetchingNextPage && (
+          <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
+        )}
+        {!hasNextPage && videos.length > 0 && (
+          <p className="text-sm text-muted-foreground">没有更多了</p>
+        )}
+      </div>
+    </>
+  );
+}
+
 interface UserPageClientProps {
   id: string;
   initialUser: SerializedUser | null;
@@ -124,9 +183,14 @@ interface UserPageClientProps {
 
 export function UserPageClient({ id, initialUser }: UserPageClientProps) {
   const { data: session } = useSession();
-  const { ref, inView } = useInView();
+  const [activeTab, setActiveTab] = useState<ProfileTab>("history");
+  const { ref: historyRef, inView: historyInView } = useInView();
+  const { ref: favRef, inView: favInView } = useInView();
+  const { ref: likedRef, inView: likedInView } = useInView();
   const [deviceInfo, setDeviceInfo] = useState<DeviceInfo | null>(null);
   const deviceRecordedRef = useRef(false);
+
+  const isOwnProfile = session?.user?.id === id;
 
   // 客户端获取用户数据
   const { data: user, isLoading: userLoading } = trpc.user.getProfile.useQuery(
@@ -144,7 +208,6 @@ export function UserPageClient({ id, initialUser }: UserPageClientProps) {
   useEffect(() => {
     if (typeof window === "undefined") return;
     const init = async () => {
-      // 先获取基础设备信息
       const baseInfo = parseDeviceInfo(navigator.userAgent, {
         platform: navigator.platform || null,
         language: navigator.language || null,
@@ -152,11 +215,8 @@ export function UserPageClient({ id, initialUser }: UserPageClientProps) {
         screen: `${window.screen.width}x${window.screen.height}`,
         pixelRatio: window.devicePixelRatio || null,
       });
-      
-      // 尝试获取高精度信息（真实 OS 版本等）
       const highEntropyInfo = await getHighEntropyDeviceInfo();
       const mergedInfo = mergeDeviceInfo(baseInfo, highEntropyInfo);
-      
       setDeviceInfo(mergedInfo);
     };
     init();
@@ -174,32 +234,70 @@ export function UserPageClient({ id, initialUser }: UserPageClientProps) {
     if (!session?.user?.id || session.user.id !== id) return;
     if (!deviceInfo || deviceRecordedRef.current) return;
     deviceRecordedRef.current = true;
-    const run = async () => {
-      recordDeviceMutation.mutate({
-        deviceInfo,
-      });
-    };
-    run();
+    recordDeviceMutation.mutate({ deviceInfo });
   }, [session?.user?.id, id, deviceInfo, recordDeviceMutation]);
 
+  // 观看记录（仅本人）
   const {
-    data,
-    isLoading: videosLoading,
-    fetchNextPage,
-    hasNextPage,
-    isFetchingNextPage,
-  } = trpc.user.getVideos.useInfiniteQuery(
-    { userId: id, limit: 20 },
+    data: historyData,
+    isLoading: historyLoading,
+    fetchNextPage: fetchHistoryNext,
+    hasNextPage: historyHasNext,
+    isFetchingNextPage: historyFetchingNext,
+  } = trpc.video.getHistory.useInfiniteQuery(
+    { limit: 20 },
     {
       getNextPageParam: (lastPage) => lastPage.nextCursor,
+      enabled: isOwnProfile && activeTab === "history",
     }
   );
 
-  useEffect(() => {
-    if (inView && hasNextPage && !isFetchingNextPage) {
-      fetchNextPage();
+  // 收藏列表（仅本人）
+  const {
+    data: favData,
+    isLoading: favLoading,
+    fetchNextPage: fetchFavNext,
+    hasNextPage: favHasNext,
+    isFetchingNextPage: favFetchingNext,
+  } = trpc.video.getFavorites.useInfiniteQuery(
+    { limit: 20 },
+    {
+      getNextPageParam: (lastPage) => lastPage.nextCursor,
+      enabled: isOwnProfile && activeTab === "favorites",
     }
-  }, [inView, hasNextPage, isFetchingNextPage, fetchNextPage]);
+  );
+
+  // 喜欢（点赞）列表（仅本人）
+  const {
+    data: likedData,
+    isLoading: likedLoading,
+    fetchNextPage: fetchLikedNext,
+    hasNextPage: likedHasNext,
+    isFetchingNextPage: likedFetchingNext,
+  } = trpc.video.getLiked.useInfiniteQuery(
+    { limit: 20 },
+    {
+      getNextPageParam: (lastPage) => lastPage.nextCursor,
+      enabled: isOwnProfile && activeTab === "liked",
+    }
+  );
+
+  // 无限滚动触发
+  useEffect(() => {
+    if (historyInView && historyHasNext && !historyFetchingNext) fetchHistoryNext();
+  }, [historyInView, historyHasNext, historyFetchingNext, fetchHistoryNext]);
+
+  useEffect(() => {
+    if (favInView && favHasNext && !favFetchingNext) fetchFavNext();
+  }, [favInView, favHasNext, favFetchingNext, fetchFavNext]);
+
+  useEffect(() => {
+    if (likedInView && likedHasNext && !likedFetchingNext) fetchLikedNext();
+  }, [likedInView, likedHasNext, likedFetchingNext, fetchLikedNext]);
+
+  const historyVideos = historyData?.pages.flatMap((p) => p.history.map((h) => h.video)) ?? [];
+  const favVideos = favData?.pages.flatMap((p) => p.favorites) ?? [];
+  const likedVideos = likedData?.pages.flatMap((p) => p.videos) ?? [];
 
   // 用户不存在
   if (!initialUser && !displayUser && !userLoading) {
@@ -213,8 +311,6 @@ export function UserPageClient({ id, initialUser }: UserPageClientProps) {
       </div>
     );
   }
-
-  const videos = data?.pages.flatMap((page) => page.videos) ?? [];
 
   // 如果没有数据且正在加载，显示骨架屏
   if (!displayUser) {
@@ -236,6 +332,12 @@ export function UserPageClient({ id, initialUser }: UserPageClientProps) {
       </div>
     );
   }
+
+  const tabs: { key: ProfileTab; label: string; icon: React.ComponentType<{ className?: string }>; count?: number }[] = [
+    { key: "history", label: "观看记录", icon: Clock },
+    { key: "favorites", label: "收藏", icon: Star, count: displayUser._count.favorites },
+    { key: "liked", label: "喜欢", icon: ThumbsUp, count: displayUser._count.likes },
+  ];
 
   return (
     <div className="container py-6">
@@ -311,10 +413,6 @@ export function UserPageClient({ id, initialUser }: UserPageClientProps) {
 
             <div className="flex items-center gap-6 mt-4 text-sm text-muted-foreground flex-wrap">
               <span className="flex items-center gap-1">
-                <Video className="h-4 w-4" />
-                {displayUser._count.videos} 视频
-              </span>
-              <span className="flex items-center gap-1">
                 <Heart className="h-4 w-4" />
                 {displayUser._count.likes} 点赞
               </span>
@@ -362,39 +460,81 @@ export function UserPageClient({ id, initialUser }: UserPageClientProps) {
           </div>
         )}
 
-        {/* 用户视频列表 */}
-        <h2 className="text-xl font-semibold mb-6">
-          发布的视频
-        </h2>
-
-        {videosLoading ? (
-          <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4">
-            {Array.from({ length: 8 }).map((_, i) => (
-              <Skeleton key={i} className="aspect-video rounded-lg" />
-            ))}
-          </div>
-        ) : videos.length === 0 ? (
-          <EmptyState
-            icon={Video}
-            title="暂无视频"
-            description="该用户还没有发布任何视频"
-          />
-        ) : (
+        {/* 观看记录 / 收藏 / 喜欢 - 仅本人可见 */}
+        {isOwnProfile && (
           <>
-            <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4">
-              {videos.map((video, index) => (
-                <div key={video.id}>
-                  <VideoCard video={video} index={index} />
-                </div>
-              ))}
+            {/* Tab 导航 */}
+            <div className="flex items-center gap-1 border-b mb-6">
+              {tabs.map((tab) => {
+                const Icon = tab.icon;
+                return (
+                  <button
+                    key={tab.key}
+                    onClick={() => setActiveTab(tab.key)}
+                    className={cn(
+                      "flex items-center gap-1.5 px-4 py-2.5 text-sm font-medium border-b-2 transition-colors -mb-px",
+                      activeTab === tab.key
+                        ? "border-primary text-primary"
+                        : "border-transparent text-muted-foreground hover:text-foreground hover:border-muted-foreground/30"
+                    )}
+                  >
+                    <Icon className="h-4 w-4" />
+                    {tab.label}
+                    {tab.count != null && (
+                      <span className="text-xs text-muted-foreground">({tab.count})</span>
+                    )}
+                  </button>
+                );
+              })}
             </div>
 
-            <div ref={ref} className="flex justify-center py-8">
-              {isFetchingNextPage && (
-                <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
-              )}
-            </div>
+            {/* Tab 内容 */}
+            {activeTab === "history" && (
+              <InfiniteVideoGrid
+                videos={historyVideos}
+                isLoading={historyLoading}
+                isFetchingNextPage={historyFetchingNext}
+                hasNextPage={historyHasNext}
+                sentinelRef={historyRef}
+                emptyIcon={Clock}
+                emptyTitle="暂无观看记录"
+                emptyDescription="你还没有观看过任何视频"
+              />
+            )}
+
+            {activeTab === "favorites" && (
+              <InfiniteVideoGrid
+                videos={favVideos}
+                isLoading={favLoading}
+                isFetchingNextPage={favFetchingNext}
+                hasNextPage={favHasNext}
+                sentinelRef={favRef}
+                emptyIcon={Star}
+                emptyTitle="暂无收藏"
+                emptyDescription="你还没有收藏过任何视频"
+              />
+            )}
+
+            {activeTab === "liked" && (
+              <InfiniteVideoGrid
+                videos={likedVideos}
+                isLoading={likedLoading}
+                isFetchingNextPage={likedFetchingNext}
+                hasNextPage={likedHasNext}
+                sentinelRef={likedRef}
+                emptyIcon={ThumbsUp}
+                emptyTitle="暂无喜欢"
+                emptyDescription="你还没有点赞过任何视频"
+              />
+            )}
           </>
+        )}
+
+        {/* 非本人查看时 */}
+        {!isOwnProfile && (
+          <div className="text-center py-12">
+            <p className="text-muted-foreground">这是 {displayUser.nickname || displayUser.username} 的个人主页</p>
+          </div>
         )}
     </div>
   );
