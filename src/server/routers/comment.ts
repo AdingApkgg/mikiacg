@@ -376,55 +376,13 @@ export const commentRouter = router({
         },
       });
 
-      // 仅登录用户更新位置和设备历史
+      // 仅登录用户更新最近位置
       if (userId) {
-        // 更新用户最近位置（优先使用 IPv4，其次 IPv6）
         const lastIpLocation = ipv4Location || ipv6Location;
         await ctx.prisma.user.update({
           where: { id: userId },
           data: {
             lastIpLocation: lastIpLocation || undefined,
-          },
-        });
-
-        // 记录设备历史
-        await ctx.prisma.userDevice.upsert({
-          where: {
-            userId_fingerprint: {
-              userId,
-              fingerprint: normalizedDeviceInfo.fingerprint,
-            },
-          },
-          update: {
-            deviceType: normalizedDeviceInfo.deviceType,
-            os: normalizedDeviceInfo.os,
-            osVersion: normalizedDeviceInfo.osVersion,
-            browser: normalizedDeviceInfo.browser,
-            browserVersion: normalizedDeviceInfo.browserVersion,
-            brand: normalizedDeviceInfo.brand,
-            model: normalizedDeviceInfo.model,
-            userAgent: normalizedDeviceInfo.userAgent,
-            ipv4Address: ctx.ipv4Address,
-            ipv4Location,
-            ipv6Address: ctx.ipv6Address,
-            ipv6Location,
-            lastActiveAt: new Date(),
-          },
-          create: {
-            userId,
-            fingerprint: normalizedDeviceInfo.fingerprint,
-            deviceType: normalizedDeviceInfo.deviceType,
-            os: normalizedDeviceInfo.os,
-            osVersion: normalizedDeviceInfo.osVersion,
-            browser: normalizedDeviceInfo.browser,
-            browserVersion: normalizedDeviceInfo.browserVersion,
-            brand: normalizedDeviceInfo.brand,
-            model: normalizedDeviceInfo.model,
-            userAgent: normalizedDeviceInfo.userAgent,
-            ipv4Address: ctx.ipv4Address,
-            ipv4Location,
-            ipv6Address: ctx.ipv6Address,
-            ipv6Location,
           },
         });
       }

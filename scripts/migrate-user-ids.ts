@@ -101,7 +101,6 @@ async function migrateUserIds() {
       { table: "Comment", column: "userId" },
       { table: "Comment", column: "replyToUserId" },
       { table: "CommentReaction", column: "userId" },
-      { table: "UserDevice", column: "userId" },
       { table: "SearchRecord", column: "userId" },
     ];
 

@@ -42,11 +42,6 @@ export default function SessionsPage() {
     { enabled: !!session?.user?.id }
   );
 
-  const { data: devices, isLoading: isLoadingDevices } = trpc.user.getDevices.useQuery(
-    { userId: session?.user?.id || "", limit: 10 },
-    { enabled: !!session?.user?.id }
-  );
-
   const revokeMutation = trpc.user.revokeLoginSession.useMutation({
     onSuccess: () => {
       utils.user.getLoginSessions.invalidate();
@@ -59,14 +54,6 @@ export default function SessionsPage() {
     onSuccess: (data) => {
       utils.user.getLoginSessions.invalidate();
       toast.success(`已撤销 ${data.count} 个会话`);
-    },
-    onError: (error) => toast.error(error.message),
-  });
-
-  const removeDeviceMutation = trpc.user.removeDevice.useMutation({
-    onSuccess: () => {
-      utils.user.getDevices.invalidate();
-      toast.success("设备记录已移除");
     },
     onError: (error) => toast.error(error.message),
   });
@@ -216,50 +203,6 @@ export default function SessionsPage() {
                       </AlertDialogContent>
                     </AlertDialog>
                   )}
-                </div>
-              );
-            })}
-          </div>
-        )}
-      </div>
-
-      {/* 设备历史 */}
-      <div className="pt-4 border-t">
-        <h3 className="font-medium mb-1">设备历史</h3>
-        <p className="text-sm text-muted-foreground mb-4">曾经登录过的设备记录</p>
-
-        {isLoadingDevices ? (
-          <div className="space-y-2">
-            {[1, 2].map((i) => <Skeleton key={i} className="h-16 w-full" />)}
-          </div>
-        ) : !devices?.length ? (
-          <p className="text-sm text-muted-foreground py-4">暂无设备历史</p>
-        ) : (
-          <div className="space-y-2">
-            {devices.map((device) => {
-              const isMobile = device.deviceType === "mobile" || device.deviceType === "tablet";
-              const DeviceIcon = isMobile ? Smartphone : Laptop;
-              const location = device.ipv4Location || device.ipv6Location;
-
-              return (
-                <div key={device.id} className="flex items-center gap-3 p-3 rounded-lg border bg-card text-sm">
-                  <DeviceIcon className="h-4 w-4 text-muted-foreground shrink-0" />
-                  <div className="flex-1 min-w-0">
-                    <span>{device.brand || ""} {device.model || device.deviceType || "未知设备"}</span>
-                    <span className="text-muted-foreground"> · {device.browser}</span>
-                  </div>
-                  <div className="flex items-center gap-3 text-xs text-muted-foreground shrink-0">
-                    {location && <span>{location}</span>}
-                    <span>{formatRelativeTime(device.lastActiveAt)}</span>
-                  </div>
-                  <Button
-                    variant="ghost"
-                    size="sm"
-                    className="h-7 w-7 p-0 text-muted-foreground hover:text-destructive shrink-0"
-                    onClick={() => removeDeviceMutation.mutate({ id: device.id })}
-                  >
-                    <Trash2 className="h-3.5 w-3.5" />
-                  </Button>
                 </div>
               );
             })}

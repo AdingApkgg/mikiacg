@@ -1312,7 +1312,10 @@ export const videoRouter = router({
     )
     .query(async ({ ctx, input }) => {
       const favorites = await ctx.prisma.favorite.findMany({
-        where: { userId: ctx.session.user.id },
+        where: {
+          userId: ctx.session.user.id,
+          video: { status: "PUBLISHED" },
+        },
         take: input.limit + 1,
         cursor: input.cursor ? { id: input.cursor } : undefined,
         orderBy: { createdAt: "desc" },
@@ -1338,7 +1341,9 @@ export const videoRouter = router({
       }
 
       return {
-        favorites: favorites.map((f) => f.video),
+        favorites: favorites
+          .filter((f) => f.video !== null)
+          .map((f) => f.video),
         nextCursor,
       };
     }),
@@ -1353,7 +1358,10 @@ export const videoRouter = router({
     )
     .query(async ({ ctx, input }) => {
       const likes = await ctx.prisma.like.findMany({
-        where: { userId: ctx.session.user.id },
+        where: {
+          userId: ctx.session.user.id,
+          video: { status: "PUBLISHED" },
+        },
         take: input.limit + 1,
         cursor: input.cursor ? { id: input.cursor } : undefined,
         orderBy: { createdAt: "desc" },
@@ -1379,7 +1387,9 @@ export const videoRouter = router({
       }
 
       return {
-        videos: likes.map((l) => l.video),
+        videos: likes
+          .filter((l) => l.video !== null)
+          .map((l) => l.video),
         nextCursor,
       };
     }),

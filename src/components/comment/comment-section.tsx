@@ -188,8 +188,8 @@ export function CommentSection({ videoId }: CommentSectionProps) {
           )}
         </Avatar>
         <div className="flex-1 space-y-3">
-          {/* 访客信息表单（未登录时显示） */}
-          {!session && (
+          {/* 访客信息表单（未登录时显示，使用 isMounted 避免 hydration 不匹配） */}
+          {isMounted && !session && (
             <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
               <div className="space-y-1">
                 <Label htmlFor="guest-name" className="text-xs">
