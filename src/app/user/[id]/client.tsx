@@ -178,15 +178,20 @@ function InfiniteVideoGrid({
 interface UserPageClientProps {
   id: string;
   initialUser: SerializedUser | null;
+  /** 服务端预判断：当前访问者是否为主页本人 */
+  isOwnProfile: boolean;
 }
 
-export function UserPageClient({ id, initialUser }: UserPageClientProps) {
-  const { data: session } = useSession();
+export function UserPageClient({ id, initialUser, isOwnProfile: serverIsOwn }: UserPageClientProps) {
+  const { data: session, status } = useSession();
   const [activeTab, setActiveTab] = useState<ProfileTab>("history");
   const { ref: historyRef, inView: historyInView } = useInView();
   const { ref: favRef, inView: favInView } = useInView();
   const { ref: likedRef, inView: likedInView } = useInView();
-  const isOwnProfile = session?.user?.id === id;
+
+  // 使用服务端预判断作为初始值；客户端 session 加载完成后以客户端结果为准
+  const clientIsOwn = status === "authenticated" && session?.user?.id === id;
+  const isOwnProfile = status === "loading" ? serverIsOwn : clientIsOwn;
 
   // 客户端获取用户数据
   const { data: user, isLoading: userLoading } = trpc.user.getProfile.useQuery(
@@ -200,48 +205,48 @@ export function UserPageClient({ id, initialUser }: UserPageClientProps) {
   // 优先使用客户端数据，然后是服务端数据
   const displayUser = user || initialUser;
 
-  // 观看记录（仅本人）
+  // 观看记录（公开，任何人可查看指定用户的观看记录）
   const {
     data: historyData,
     isLoading: historyLoading,
     fetchNextPage: fetchHistoryNext,
     hasNextPage: historyHasNext,
     isFetchingNextPage: historyFetchingNext,
-  } = trpc.video.getHistory.useInfiniteQuery(
-    { limit: 20 },
+  } = trpc.video.getUserHistory.useInfiniteQuery(
+    { userId: id, limit: 20 },
     {
       getNextPageParam: (lastPage) => lastPage.nextCursor,
-      enabled: isOwnProfile && activeTab === "history",
+      enabled: activeTab === "history",
     }
   );
 
-  // 收藏列表（仅本人）
+  // 收藏列表（公开，任何人可查看指定用户的收藏）
   const {
     data: favData,
     isLoading: favLoading,
     fetchNextPage: fetchFavNext,
     hasNextPage: favHasNext,
     isFetchingNextPage: favFetchingNext,
-  } = trpc.video.getFavorites.useInfiniteQuery(
-    { limit: 20 },
+  } = trpc.video.getUserFavorites.useInfiniteQuery(
+    { userId: id, limit: 20 },
     {
       getNextPageParam: (lastPage) => lastPage.nextCursor,
-      enabled: isOwnProfile && activeTab === "favorites",
+      enabled: activeTab === "favorites",
     }
   );
 
-  // 喜欢（点赞）列表（仅本人）
+  // 喜欢（点赞）列表（公开，任何人可查看指定用户的喜欢）
   const {
     data: likedData,
     isLoading: likedLoading,
     fetchNextPage: fetchLikedNext,
     hasNextPage: likedHasNext,
     isFetchingNextPage: likedFetchingNext,
-  } = trpc.video.getLiked.useInfiniteQuery(
-    { limit: 20 },
+  } = trpc.video.getUserLiked.useInfiniteQuery(
+    { userId: id, limit: 20 },
     {
       getNextPageParam: (lastPage) => lastPage.nextCursor,
-      enabled: isOwnProfile && activeTab === "liked",
+      enabled: activeTab === "liked",
     }
   );
 
@@ -392,81 +397,70 @@ export function UserPageClient({ id, initialUser }: UserPageClientProps) {
           </div>
       </div>
 
-        {/* 观看记录 / 收藏 / 喜欢 - 仅本人可见 */}
-        {isOwnProfile && (
-          <>
-            {/* Tab 导航 */}
-            <div className="flex items-center gap-1 border-b mb-6">
-              {tabs.map((tab) => {
-                const Icon = tab.icon;
-                return (
-                  <button
-                    key={tab.key}
-                    onClick={() => setActiveTab(tab.key)}
-                    className={cn(
-                      "flex items-center gap-1.5 px-4 py-2.5 text-sm font-medium border-b-2 transition-colors -mb-px",
-                      activeTab === tab.key
-                        ? "border-primary text-primary"
-                        : "border-transparent text-muted-foreground hover:text-foreground hover:border-muted-foreground/30"
-                    )}
-                  >
-                    <Icon className="h-4 w-4" />
-                    {tab.label}
-                    {tab.count != null && (
-                      <span className="text-xs text-muted-foreground">({tab.count})</span>
-                    )}
-                  </button>
-                );
-              })}
-            </div>
+        {/* 观看记录 / 收藏 / 喜欢 */}
+        {/* Tab 导航 */}
+        <div className="flex items-center gap-1 border-b mb-6">
+          {tabs.map((tab) => {
+            const Icon = tab.icon;
+            return (
+              <button
+                key={tab.key}
+                onClick={() => setActiveTab(tab.key)}
+                className={cn(
+                  "flex items-center gap-1.5 px-4 py-2.5 text-sm font-medium border-b-2 transition-colors -mb-px",
+                  activeTab === tab.key
+                    ? "border-primary text-primary"
+                    : "border-transparent text-muted-foreground hover:text-foreground hover:border-muted-foreground/30"
+                )}
+              >
+                <Icon className="h-4 w-4" />
+                {tab.label}
+                {tab.count != null && (
+                  <span className="text-xs text-muted-foreground">({tab.count})</span>
+                )}
+              </button>
+            );
+          })}
+        </div>
 
-            {/* Tab 内容 */}
-            {activeTab === "history" && (
-              <InfiniteVideoGrid
-                videos={historyVideos}
-                isLoading={historyLoading}
-                isFetchingNextPage={historyFetchingNext}
-                hasNextPage={historyHasNext}
-                sentinelRef={historyRef}
-                emptyIcon={Clock}
-                emptyTitle="暂无观看记录"
-                emptyDescription="你还没有观看过任何视频"
-              />
-            )}
-
-            {activeTab === "favorites" && (
-              <InfiniteVideoGrid
-                videos={favVideos}
-                isLoading={favLoading}
-                isFetchingNextPage={favFetchingNext}
-                hasNextPage={favHasNext}
-                sentinelRef={favRef}
-                emptyIcon={Star}
-                emptyTitle="暂无收藏"
-                emptyDescription="你还没有收藏过任何视频"
-              />
-            )}
-
-            {activeTab === "liked" && (
-              <InfiniteVideoGrid
-                videos={likedVideos}
-                isLoading={likedLoading}
-                isFetchingNextPage={likedFetchingNext}
-                hasNextPage={likedHasNext}
-                sentinelRef={likedRef}
-                emptyIcon={ThumbsUp}
-                emptyTitle="暂无喜欢"
-                emptyDescription="你还没有点赞过任何视频"
-              />
-            )}
-          </>
+        {/* Tab 内容 */}
+        {activeTab === "history" && (
+          <InfiniteVideoGrid
+            videos={historyVideos}
+            isLoading={historyLoading}
+            isFetchingNextPage={historyFetchingNext}
+            hasNextPage={historyHasNext}
+            sentinelRef={historyRef}
+            emptyIcon={Clock}
+            emptyTitle="暂无观看记录"
+            emptyDescription={isOwnProfile ? "你还没有观看过任何视频" : "该用户还没有观看过任何视频"}
+          />
         )}
 
-        {/* 非本人查看时 */}
-        {!isOwnProfile && (
-          <div className="text-center py-12">
-            <p className="text-muted-foreground">这是 {displayUser.nickname || displayUser.username} 的个人主页</p>
-          </div>
+        {activeTab === "favorites" && (
+          <InfiniteVideoGrid
+            videos={favVideos}
+            isLoading={favLoading}
+            isFetchingNextPage={favFetchingNext}
+            hasNextPage={favHasNext}
+            sentinelRef={favRef}
+            emptyIcon={Star}
+            emptyTitle="暂无收藏"
+            emptyDescription={isOwnProfile ? "你还没有收藏过任何视频" : "该用户还没有收藏过任何视频"}
+          />
+        )}
+
+        {activeTab === "liked" && (
+          <InfiniteVideoGrid
+            videos={likedVideos}
+            isLoading={likedLoading}
+            isFetchingNextPage={likedFetchingNext}
+            hasNextPage={likedHasNext}
+            sentinelRef={likedRef}
+            emptyIcon={ThumbsUp}
+            emptyTitle="暂无喜欢"
+            emptyDescription={isOwnProfile ? "你还没有点赞过任何视频" : "该用户还没有点赞过任何视频"}
+          />
         )}
     </div>
   );

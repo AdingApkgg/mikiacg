@@ -1394,7 +1394,154 @@ export const videoRouter = router({
       };
     }),
 
-  // 获取观看历史
+  // 获取指定用户的收藏列表（公开）
+  getUserFavorites: publicProcedure
+    .input(
+      z.object({
+        userId: z.string(),
+        limit: z.number().min(1).max(50).default(20),
+        cursor: z.string().nullish(),
+      })
+    )
+    .query(async ({ ctx, input }) => {
+      const favorites = await ctx.prisma.favorite.findMany({
+        where: {
+          userId: input.userId,
+          video: { status: "PUBLISHED" },
+        },
+        take: input.limit + 1,
+        cursor: input.cursor ? { id: input.cursor } : undefined,
+        orderBy: { createdAt: "desc" },
+        include: {
+          video: {
+            include: {
+              uploader: {
+                select: { id: true, username: true, nickname: true, avatar: true },
+              },
+              tags: {
+                include: { tag: { select: { id: true, name: true, slug: true } } },
+              },
+              _count: { select: { likes: true, dislikes: true, confused: true, comments: true, favorites: true } },
+            },
+          },
+        },
+      });
+
+      let nextCursor: string | undefined = undefined;
+      if (favorites.length > input.limit) {
+        const nextItem = favorites.pop();
+        nextCursor = nextItem!.id;
+      }
+
+      return {
+        favorites: favorites
+          .filter((f) => f.video !== null)
+          .map((f) => f.video),
+        nextCursor,
+      };
+    }),
+
+  // 获取指定用户喜欢（点赞）的视频列表（公开）
+  getUserLiked: publicProcedure
+    .input(
+      z.object({
+        userId: z.string(),
+        limit: z.number().min(1).max(50).default(20),
+        cursor: z.string().nullish(),
+      })
+    )
+    .query(async ({ ctx, input }) => {
+      const likes = await ctx.prisma.like.findMany({
+        where: {
+          userId: input.userId,
+          video: { status: "PUBLISHED" },
+        },
+        take: input.limit + 1,
+        cursor: input.cursor ? { id: input.cursor } : undefined,
+        orderBy: { createdAt: "desc" },
+        include: {
+          video: {
+            include: {
+              uploader: {
+                select: { id: true, username: true, nickname: true, avatar: true },
+              },
+              tags: {
+                include: { tag: { select: { id: true, name: true, slug: true } } },
+              },
+              _count: { select: { likes: true, dislikes: true, confused: true, comments: true, favorites: true } },
+            },
+          },
+        },
+      });
+
+      let nextCursor: string | undefined = undefined;
+      if (likes.length > input.limit) {
+        const nextItem = likes.pop();
+        nextCursor = nextItem!.id;
+      }
+
+      return {
+        videos: likes
+          .filter((l) => l.video !== null)
+          .map((l) => l.video),
+        nextCursor,
+      };
+    }),
+
+  // 获取指定用户的观看历史（公开）
+  getUserHistory: publicProcedure
+    .input(
+      z.object({
+        userId: z.string(),
+        limit: z.number().min(1).max(50).default(20),
+        cursor: z.string().nullish(),
+      })
+    )
+    .query(async ({ ctx, input }) => {
+      const history = await ctx.prisma.watchHistory.findMany({
+        where: {
+          userId: input.userId,
+          video: {
+            status: "PUBLISHED",
+          },
+        },
+        take: input.limit + 1,
+        cursor: input.cursor ? { id: input.cursor } : undefined,
+        orderBy: { updatedAt: "desc" },
+        include: {
+          video: {
+            include: {
+              uploader: {
+                select: { id: true, username: true, nickname: true, avatar: true },
+              },
+              tags: {
+                include: { tag: { select: { id: true, name: true, slug: true } } },
+              },
+              _count: { select: { likes: true, dislikes: true, confused: true, comments: true, favorites: true } },
+            },
+          },
+        },
+      });
+
+      let nextCursor: string | undefined = undefined;
+      if (history.length > input.limit) {
+        const nextItem = history.pop();
+        nextCursor = nextItem!.id;
+      }
+
+      return {
+        history: history
+          .filter((h) => h.video !== null)
+          .map((h) => ({
+            ...h.video,
+            watchedAt: h.updatedAt,
+            progress: h.progress,
+          })),
+        nextCursor,
+      };
+    }),
+
+  // 获取观看历史（当前用户自己的，保留兼容）
   getHistory: protectedProcedure
     .input(
       z.object({

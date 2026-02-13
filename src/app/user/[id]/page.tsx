@@ -122,10 +122,14 @@ export default async function UserPage({ params }: UserPageProps) {
     }
   }
 
-  const user = await getUser(id);
+  // 并行获取用户数据和当前会话
+  const [user, session] = await Promise.all([getUser(id), getSession()]);
 
   // 服务端预取用户数据
   const initialUser = user ? serializeUser(user) : null;
 
-  return <UserPageClient id={id} initialUser={initialUser} />;
+  // 服务端判断是否为本人主页，作为客户端的可信初始值
+  const isOwnProfile = session?.user?.id === id;
+
+  return <UserPageClient key={id} id={id} initialUser={initialUser} isOwnProfile={isOwnProfile} />;
 }
