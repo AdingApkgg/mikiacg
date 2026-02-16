@@ -277,11 +277,9 @@
   }
 }
 
-/* Header 玻璃态效果 */
+/* Header 背景（YouTube 风格: 纯色） */
 header.sticky {
-  background-color: hsl(var(--background) / var(--visual-opacity)) !important;
-  backdrop-filter: blur(var(--visual-blur));
-  -webkit-backdrop-filter: blur(var(--visual-blur));
+  background-color: var(--background) !important;
 }
 
 /* Card 圆角应用 */

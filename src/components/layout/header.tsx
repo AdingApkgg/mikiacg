@@ -345,15 +345,15 @@ export function Header({ onMenuClick }: HeaderProps) {
 
   return (
     <>
-      <header className="sticky top-0 z-50 w-full border-b bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60">
-        <div className="flex h-16 items-center px-4">
-          {/* Left Section - Menu & Logo */}
-          <div className="flex items-center gap-2 shrink-0">
+      <header className="sticky top-0 z-50 w-full border-b bg-background">
+        <div className="flex h-14 items-center gap-1 px-2 md:px-4">
+          {/* Left: Menu + Logo */}
+          <div className="flex items-center shrink-0">
             {/* Desktop Menu Toggle */}
             <Button
               variant="ghost"
               size="icon"
-              className="hidden md:flex"
+              className="hidden md:inline-flex h-10 w-10 rounded-full"
               onClick={onMenuClick}
               aria-label="切换侧边栏"
             >
@@ -363,7 +363,7 @@ export function Header({ onMenuClick }: HeaderProps) {
             {/* Mobile Menu */}
             <Sheet open={mobileMenuOpen} onOpenChange={setMobileMenuOpen}>
               <SheetTrigger asChild className="md:hidden">
-                <Button variant="ghost" size="icon" aria-label="打开菜单">
+                <Button variant="ghost" size="icon" className="h-10 w-10 rounded-full" aria-label="打开菜单">
                   <Menu className="h-5 w-5" />
                 </Button>
               </SheetTrigger>
@@ -385,48 +385,50 @@ export function Header({ onMenuClick }: HeaderProps) {
             </Sheet>
 
             {/* Logo */}
-            <Link href="/" className="flex items-center transition-transform duration-200 hover:scale-105 active:scale-95">
+            <Link href="/" className="flex items-center ml-1 md:ml-2">
               <Image
                 src="/Mikiacg-logo.webp"
                 alt="Mikiacg"
-                width={120}
-                height={32}
-                className="h-8 w-auto"
+                width={108}
+                height={28}
+                className="h-7 w-auto"
                 priority
               />
             </Link>
           </div>
 
-          {/* Center Section - Desktop Search */}
-          <div className="flex-1 flex justify-center px-4 lg:px-8">
-            <form onSubmit={handleSearchSubmit} className="hidden md:flex w-full max-w-xl">
+          {/* Center: YouTube-style pill search bar */}
+          <div className="flex-1 flex justify-center px-2 md:px-8 lg:px-16">
+            <form onSubmit={handleSearchSubmit} className="hidden md:flex w-full max-w-[560px]">
               <div className="relative w-full">
                 <div className="flex">
-                  <Input
-                    ref={searchInputRef}
-                    type="search"
-                    placeholder="搜索视频、标签..."
-                    value={searchQuery}
-                    onChange={(e) => handleSearchChange(e.target.value)}
-                    onFocus={() => setShowSuggestions(true)}
-                    onKeyDown={handleKeyDown}
-                    className="rounded-r-none border-r-0 focus-visible:ring-0 focus-visible:ring-offset-0"
-                    autoComplete="off"
-                  />
+                  <div className="relative flex-1">
+                    <Input
+                      ref={searchInputRef}
+                      type="search"
+                      placeholder="搜索"
+                      value={searchQuery}
+                      onChange={(e) => handleSearchChange(e.target.value)}
+                      onFocus={() => setShowSuggestions(true)}
+                      onKeyDown={handleKeyDown}
+                      className="h-10 rounded-l-full rounded-r-none border border-r-0 pl-4 pr-3 bg-transparent focus-visible:ring-0 focus-visible:ring-offset-0 focus-visible:border-primary"
+                      autoComplete="off"
+                    />
+                  </div>
                   <Button 
                     type="submit" 
                     variant="secondary" 
-                    className="rounded-l-none border border-input border-l-0 px-6"
+                    className="h-10 rounded-l-none rounded-r-full border border-l-0 border-input px-5 bg-muted/60 hover:bg-muted"
                   >
-                    <Search className="h-4 w-4" />
+                    <Search className="h-5 w-5" />
                   </Button>
                 </div>
                 
-                {/* 桌面端搜索建议下拉 */}
+                {/* 搜索建议下拉 */}
                 {showSuggestions && hasSuggestionItems && (
                   <div
                     ref={suggestionsRef}
-                    className="absolute top-full left-0 right-0 mt-1 bg-background border rounded-lg shadow-lg z-50 overflow-hidden max-h-[420px] overflow-y-auto"
+                    className="absolute top-full left-0 right-0 mt-2 bg-background border rounded-2xl shadow-xl z-50 overflow-hidden max-h-[420px] overflow-y-auto"
                   >
                     <SearchSuggestionsList
                       items={suggestionItems}
@@ -443,13 +445,13 @@ export function Header({ onMenuClick }: HeaderProps) {
             </form>
           </div>
 
-          {/* Right Section */}
-          <div className="flex items-center gap-1 shrink-0">
+          {/* Right: Search (mobile) + User */}
+          <div className="flex items-center gap-0.5 shrink-0">
             {/* Mobile Search Toggle */}
             <Button
               variant="ghost"
               size="icon"
-              className="md:hidden"
+              className="md:hidden h-10 w-10 rounded-full"
               onClick={() => setShowMobileSearch(true)}
               aria-label="搜索"
             >
@@ -459,102 +461,97 @@ export function Header({ onMenuClick }: HeaderProps) {
             {isLoading ? (
               <div className="h-8 w-8 animate-pulse rounded-full bg-muted" />
             ) : session?.user ? (
-              <>
-                {/* User Menu */}
-                <DropdownMenu>
-                  <DropdownMenuTrigger asChild>
-                    <Button
-                      variant="ghost"
-                      className="relative h-8 w-8 rounded-full"
-                    >
-                      <Avatar className="h-8 w-8">
-                        <AvatarImage
-                          src={session.user.image || undefined}
-                          alt={session.user.name || ""}
-                        />
+              <DropdownMenu>
+                <DropdownMenuTrigger asChild>
+                  <button
+                    className="relative h-8 w-8 rounded-full focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring ml-1"
+                  >
+                    <Avatar className="h-8 w-8">
+                      <AvatarImage
+                        src={session.user.image || undefined}
+                        alt={session.user.name || ""}
+                      />
+                      <AvatarFallback className="text-xs">
+                        {session.user.name?.charAt(0).toUpperCase() || "U"}
+                      </AvatarFallback>
+                    </Avatar>
+                  </button>
+                </DropdownMenuTrigger>
+                <DropdownMenuContent align="end" className="w-60 rounded-xl">
+                  <DropdownMenuLabel className="font-normal px-3 py-3">
+                    <div className="flex items-center gap-3">
+                      <Avatar className="h-10 w-10">
+                        <AvatarImage src={session.user.image || undefined} />
                         <AvatarFallback>
                           {session.user.name?.charAt(0).toUpperCase() || "U"}
                         </AvatarFallback>
                       </Avatar>
-                    </Button>
-                  </DropdownMenuTrigger>
-                  <DropdownMenuContent align="end" className="w-56">
-                    <DropdownMenuLabel className="font-normal">
-                      <div className="flex items-center gap-3">
-                        <Avatar className="h-10 w-10">
-                          <AvatarImage src={session.user.image || undefined} />
-                          <AvatarFallback>
-                            {session.user.name?.charAt(0).toUpperCase() || "U"}
-                          </AvatarFallback>
-                        </Avatar>
-                        <div className="flex flex-col space-y-1 leading-none min-w-0">
-                          <p className="font-medium truncate">{session.user.name}</p>
-                          <p className="text-xs text-muted-foreground truncate">
-                            {session.user.email}
-                          </p>
-                        </div>
+                      <div className="flex flex-col space-y-0.5 leading-none min-w-0">
+                        <p className="font-medium truncate">{session.user.name}</p>
+                        <p className="text-xs text-muted-foreground truncate">
+                          {session.user.email}
+                        </p>
                       </div>
-                    </DropdownMenuLabel>
-                    <DropdownMenuSeparator />
+                    </div>
+                  </DropdownMenuLabel>
+                  <DropdownMenuSeparator />
+                  <DropdownMenuItem asChild>
+                    <Link href="/settings">
+                      <User className="mr-2 h-4 w-4" />
+                      个人设置
+                    </Link>
+                  </DropdownMenuItem>
+                  {session.user?.canUpload && (
                     <DropdownMenuItem asChild>
-                      <Link href="/settings">
-                        <User className="mr-2 h-4 w-4" />
-                        个人设置
+                      <Link href="/my-videos">
+                        <Video className="mr-2 h-4 w-4" />
+                        我的视频
                       </Link>
                     </DropdownMenuItem>
-                    {session.user?.canUpload && (
-                      <DropdownMenuItem asChild>
-                        <Link href="/my-videos">
-                          <Video className="mr-2 h-4 w-4" />
-                          我的视频
-                        </Link>
-                      </DropdownMenuItem>
-                    )}
-                    <DropdownMenuItem asChild>
-                      <Link href="/favorites">
-                        <Heart className="mr-2 h-4 w-4" />
-                        我的收藏
-                      </Link>
-                    </DropdownMenuItem>
-                    <DropdownMenuItem asChild>
-                      <Link href="/history">
-                        <History className="mr-2 h-4 w-4" />
-                        观看历史
-                      </Link>
-                    </DropdownMenuItem>
-                    <DropdownMenuItem asChild>
-                      <Link href="/dashboard">
-                        <Shield className="mr-2 h-4 w-4" />
-                        管理面板
-                      </Link>
-                    </DropdownMenuItem>
-                    <DropdownMenuSeparator />
-                    {/* 外观设置 */}
-                    <SettingsPanelInMenu />
-                    <DropdownMenuSeparator />
-                    <AccountSwitcher />
-                    <DropdownMenuSeparator />
-                    <DropdownMenuItem
-                      className="text-red-600"
-                      onClick={() => authClient.signOut({ fetchOptions: { onSuccess: () => window.location.reload() } })}
-                    >
-                      <LogOut className="mr-2 h-4 w-4" />
-                      退出登录
-                    </DropdownMenuItem>
-                  </DropdownMenuContent>
-                </DropdownMenu>
-              </>
+                  )}
+                  <DropdownMenuItem asChild>
+                    <Link href="/favorites">
+                      <Heart className="mr-2 h-4 w-4" />
+                      我的收藏
+                    </Link>
+                  </DropdownMenuItem>
+                  <DropdownMenuItem asChild>
+                    <Link href="/history">
+                      <History className="mr-2 h-4 w-4" />
+                      观看历史
+                    </Link>
+                  </DropdownMenuItem>
+                  <DropdownMenuItem asChild>
+                    <Link href="/dashboard">
+                      <Shield className="mr-2 h-4 w-4" />
+                      管理面板
+                    </Link>
+                  </DropdownMenuItem>
+                  <DropdownMenuSeparator />
+                  <SettingsPanelInMenu />
+                  <DropdownMenuSeparator />
+                  <AccountSwitcher />
+                  <DropdownMenuSeparator />
+                  <DropdownMenuItem
+                    className="text-red-600"
+                    onClick={() => authClient.signOut({ fetchOptions: { onSuccess: () => window.location.reload() } })}
+                  >
+                    <LogOut className="mr-2 h-4 w-4" />
+                    退出登录
+                  </DropdownMenuItem>
+                </DropdownMenuContent>
+              </DropdownMenu>
             ) : (
               <div className="flex items-center gap-1">
-                <Button variant="ghost" size="sm" asChild className="px-2 sm:px-4">
+                <Button variant="ghost" size="sm" asChild className="rounded-full px-3">
                   <Link href="/login">
-                    <LogIn className="h-4 w-4 sm:hidden" />
+                    <LogIn className="h-4 w-4 sm:mr-1.5" />
                     <span className="hidden sm:inline">登录</span>
                   </Link>
                 </Button>
-                <Button size="sm" asChild className="px-2 sm:px-4">
+                <Button size="sm" asChild className="rounded-full px-3">
                   <Link href="/register">
-                    <UserPlus className="h-4 w-4 sm:hidden" />
+                    <UserPlus className="h-4 w-4 sm:mr-1.5" />
                     <span className="hidden sm:inline">注册</span>
                   </Link>
                 </Button>

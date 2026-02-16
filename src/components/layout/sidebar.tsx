@@ -9,8 +9,6 @@ import {
   Heart,
   History,
   Video,
-  ChevronLeft,
-  ChevronRight,
   User,
   Layers,
   MessageCircle,
@@ -20,8 +18,6 @@ import {
   Play,
 } from "lucide-react";
 import { useUIStore, type ContentMode } from "@/stores/app";
-import { Button } from "@/components/ui/button";
-import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import { Separator } from "@/components/ui/separator";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
@@ -81,35 +77,43 @@ function NavLink({
   collapsed: boolean;
   isActive: boolean;
 }) {
-  const content = (
-    <Link
-      href={item.href}
-      className={cn(
-        "flex items-center gap-3 rounded-lg px-3 py-2.5 text-sm font-medium transition-all",
-        "hover:bg-accent hover:text-accent-foreground",
-        isActive
-          ? "bg-accent text-accent-foreground"
-          : "text-muted-foreground",
-        collapsed && "justify-center px-2"
-      )}
-    >
-      <item.icon className={cn("h-5 w-5 shrink-0", isActive && "text-primary")} />
-      {!collapsed && <span className="truncate">{item.label}</span>}
-    </Link>
-  );
-
   if (collapsed) {
+    // YouTube mini sidebar: icon centered + small text below
     return (
-      <Tooltip delayDuration={0}>
-        <TooltipTrigger asChild>{content}</TooltipTrigger>
-        <TooltipContent side="right" className="font-medium">
+      <Link
+        href={item.href}
+        className={cn(
+          "flex flex-col items-center justify-center gap-1 rounded-xl px-1 py-3 transition-all",
+          "hover:bg-accent/60",
+          isActive && "bg-accent"
+        )}
+      >
+        <item.icon className={cn("h-5 w-5", isActive ? "stroke-[2.5px]" : "stroke-[1.5px]")} />
+        <span className={cn(
+          "text-[10px] leading-tight",
+          isActive ? "font-semibold" : "font-normal"
+        )}>
           {item.label}
-        </TooltipContent>
-      </Tooltip>
+        </span>
+      </Link>
     );
   }
 
-  return content;
+  return (
+    <Link
+      href={item.href}
+      className={cn(
+        "flex items-center gap-5 rounded-xl px-3 py-2 text-sm transition-all",
+        "hover:bg-accent/60",
+        isActive
+          ? "bg-accent font-semibold"
+          : "font-normal text-foreground"
+      )}
+    >
+      <item.icon className={cn("h-[22px] w-[22px] shrink-0", isActive ? "stroke-[2.5px]" : "stroke-[1.5px]")} />
+      <span className="truncate">{item.label}</span>
+    </Link>
+  );
 }
 
 function NavGroup({
@@ -134,9 +138,9 @@ function NavGroup({
   if (filteredItems.length === 0) return null;
 
   return (
-    <div className="space-y-1">
+    <div className={collapsed ? "space-y-0.5" : "space-y-0.5"}>
       {title && !collapsed && (
-        <h3 className="mb-2 px-3 text-xs font-semibold uppercase tracking-wider text-muted-foreground/70">
+        <h3 className="mb-1 px-3 pt-1 text-sm font-semibold text-foreground">
           {title}
         </h3>
       )}
@@ -158,41 +162,36 @@ function ContentModeSwitcher({ collapsed }: { collapsed: boolean }) {
   const setContentMode = useUIStore((s) => s.setContentMode);
 
   if (collapsed) {
-    // 折叠态：纵向图标列
+    // 折叠态：纵向图标 + 小文字（YouTube mini 风格）
     return (
-      <div className="flex flex-col items-center gap-1">
+      <div className="flex flex-col items-center gap-0.5">
         {CONTENT_MODE_OPTIONS.map((opt) => {
           const Icon = opt.icon;
           const isSelected = contentMode === opt.id;
           return (
-            <Tooltip key={opt.id} delayDuration={0}>
-              <TooltipTrigger asChild>
-                <button
-                  type="button"
-                  onClick={() => setContentMode(opt.id)}
-                  className={cn(
-                    "flex items-center justify-center w-10 h-8 rounded-lg transition-colors",
-                    isSelected
-                      ? "bg-primary text-primary-foreground"
-                      : "text-muted-foreground hover:bg-accent hover:text-accent-foreground"
-                  )}
-                >
-                  <Icon className="h-4 w-4" />
-                </button>
-              </TooltipTrigger>
-              <TooltipContent side="right" className="font-medium">
-                {opt.label}
-              </TooltipContent>
-            </Tooltip>
+            <button
+              key={opt.id}
+              type="button"
+              onClick={() => setContentMode(opt.id)}
+              className={cn(
+                "flex flex-col items-center justify-center gap-0.5 rounded-xl px-1 py-2 w-full transition-colors",
+                isSelected
+                  ? "bg-accent font-semibold"
+                  : "text-muted-foreground hover:bg-accent/60"
+              )}
+            >
+              <Icon className="h-4 w-4" />
+              <span className="text-[10px] leading-tight">{opt.label}</span>
+            </button>
           );
         })}
       </div>
     );
   }
 
-  // 展开态：横向按钮条
+  // 展开态：横向按钮条（胶囊 chip 风格）
   return (
-    <div className="flex items-center gap-1 rounded-lg bg-muted/60 p-1">
+    <div className="flex items-center gap-1 rounded-xl bg-muted/50 p-1">
       {CONTENT_MODE_OPTIONS.map((opt) => {
         const Icon = opt.icon;
         const isSelected = contentMode === opt.id;
@@ -202,9 +201,9 @@ function ContentModeSwitcher({ collapsed }: { collapsed: boolean }) {
             type="button"
             onClick={() => setContentMode(opt.id)}
             className={cn(
-              "flex flex-1 items-center justify-center gap-1.5 rounded-md px-2 py-1.5 text-sm font-medium transition-colors",
+              "flex flex-1 items-center justify-center gap-1.5 rounded-lg px-2 py-1.5 text-sm transition-colors",
               isSelected
-                ? "bg-background text-foreground shadow-sm"
+                ? "bg-background text-foreground font-medium shadow-sm"
                 : "text-muted-foreground hover:text-foreground"
             )}
           >
@@ -219,56 +218,53 @@ function ContentModeSwitcher({ collapsed }: { collapsed: boolean }) {
 
 // 用户个人主页链接
 function UserProfileLink({ collapsed, session }: { collapsed: boolean; session: NonNullable<SessionWithUser> }) {
-  const content = (
+  if (collapsed) {
+    // YouTube mini: avatar centered + small text
+    return (
+      <Link
+        href={`/user/${session.user.id}`}
+        className="flex flex-col items-center justify-center gap-1 rounded-xl px-1 py-3 hover:bg-accent/60 transition-all"
+      >
+        <Avatar className="h-6 w-6">
+          <AvatarImage src={session.user.image || undefined} alt={session.user.name || ""} />
+          <AvatarFallback className="text-[10px]">
+            {session.user.name?.charAt(0).toUpperCase() || <User className="h-3 w-3" />}
+          </AvatarFallback>
+        </Avatar>
+        <span className="text-[10px] leading-tight font-normal">你</span>
+      </Link>
+    );
+  }
+
+  return (
     <Link
       href={`/user/${session.user.id}`}
-      className={cn(
-        "flex items-center gap-3 rounded-lg px-3 py-2.5 text-sm font-medium transition-all",
-        "hover:bg-accent hover:text-accent-foreground text-muted-foreground",
-        collapsed && "justify-center px-2"
-      )}
+      className="flex items-center gap-3 rounded-xl px-3 py-2 text-sm hover:bg-accent/60 transition-all"
     >
-      <Avatar className={cn("shrink-0", collapsed ? "h-5 w-5" : "h-8 w-8")}>
+      <Avatar className="h-7 w-7 shrink-0">
         <AvatarImage src={session.user.image || undefined} alt={session.user.name || ""} />
         <AvatarFallback className="text-xs">
           {session.user.name?.charAt(0).toUpperCase() || <User className="h-3 w-3" />}
         </AvatarFallback>
       </Avatar>
-      {!collapsed && (
-        <div className="flex flex-col min-w-0">
-          <span className="truncate">{session.user.name || "我的主页"}</span>
-          <span className="text-xs text-muted-foreground truncate">查看个人主页</span>
-        </div>
-      )}
+      <div className="flex flex-col min-w-0">
+        <span className="font-medium truncate">{session.user.name || "我的主页"}</span>
+        <span className="text-xs text-muted-foreground truncate">查看个人主页</span>
+      </div>
     </Link>
   );
-
-  if (collapsed) {
-    return (
-      <Tooltip delayDuration={0}>
-        <TooltipTrigger asChild>{content}</TooltipTrigger>
-        <TooltipContent side="right" className="font-medium">
-          我的主页
-        </TooltipContent>
-      </Tooltip>
-    );
-  }
-
-  return content;
 }
 
 export function Sidebar({ collapsed, onToggle, overlay = false }: SidebarProps) {
   const pathname = usePathname();
   const { session } = useStableSession();
 
-  // 覆盖模式展开时不需要特殊处理，侧边栏覆盖在内容上方
-
   return (
     <>
       {/* 遮罩层 - 覆盖模式展开时显示 */}
       <div 
         className={cn(
-          "fixed inset-0 top-16 z-30 bg-black/50 hidden md:block transition-opacity duration-300",
+          "fixed inset-0 top-14 z-30 bg-black/50 hidden md:block transition-opacity duration-300",
           overlay && !collapsed ? "opacity-100" : "opacity-0 pointer-events-none"
         )}
         onClick={onToggle}
@@ -276,24 +272,25 @@ export function Sidebar({ collapsed, onToggle, overlay = false }: SidebarProps) 
       
       <aside
         className={cn(
-          "fixed left-0 top-16 z-40 h-[calc(100vh-4rem)] border-r bg-background transition-all duration-300 ease-in-out",
+          "fixed left-0 top-14 z-40 h-[calc(100vh-3.5rem)] bg-background transition-all duration-200 ease-in-out",
           "hidden md:flex md:flex-col",
-          // 覆盖模式：通过 translate 滑入滑出，避免闪烁
           overlay 
             ? collapsed ? "w-[240px] -translate-x-full" : "w-[240px] translate-x-0"
-            : collapsed ? "w-[72px]" : "w-[240px]"
+            : collapsed ? "w-[72px]" : "w-[220px]"
         )}
       >
-        <ScrollArea className="flex-1 py-4">
-          <div className={cn("space-y-4", collapsed ? "px-2" : "px-3")}>
+        <ScrollArea className="flex-1 py-2">
+          <div className={cn(collapsed ? "px-1" : "px-2 space-y-2")}>
+            {/* 内容模式切换 */}
             <ContentModeSwitcher collapsed={collapsed} />
+            
+            {/* 主导航 */}
             <NavGroup items={mainNavItems} collapsed={collapsed} pathname={pathname} session={session} />
             
             {session && (
               <>
-                <Separator className={collapsed ? "mx-auto w-8" : ""} />
+                <Separator className={collapsed ? "mx-auto w-10 my-1" : "my-2"} />
                 
-                {/* 用户个人主页入口 */}
                 <UserProfileLink collapsed={collapsed} session={session} />
                 
                 <NavGroup
@@ -306,7 +303,7 @@ export function Sidebar({ collapsed, onToggle, overlay = false }: SidebarProps) 
               </>
             )}
             
-            <Separator className={collapsed ? "mx-auto w-8" : ""} />
+            <Separator className={collapsed ? "mx-auto w-10 my-1" : "my-2"} />
             
             <NavGroup
               items={moreNavItems}
@@ -317,34 +314,12 @@ export function Sidebar({ collapsed, onToggle, overlay = false }: SidebarProps) 
           </div>
         </ScrollArea>
 
-        {/* 广告位：仅对允许展示广告的用户显示 */}
+        {/* 广告位 */}
         {!collapsed && (
           <div className="px-3 pb-2">
             <AdSlot slotId="sidebar" minHeight={100} />
           </div>
         )}
-
-        {/* 折叠按钮 */}
-        <div className={cn("border-t p-2", collapsed ? "flex justify-center" : "")}>
-          <Button
-            variant="ghost"
-            size="sm"
-            onClick={onToggle}
-            className={cn(
-              "w-full justify-center gap-2",
-              collapsed && "w-auto px-2"
-            )}
-          >
-            {collapsed ? (
-              <ChevronRight className="h-4 w-4" />
-            ) : (
-              <>
-                <ChevronLeft className="h-4 w-4" />
-                <span>收起</span>
-              </>
-            )}
-          </Button>
-        </div>
       </aside>
     </>
   );
@@ -432,14 +407,14 @@ function NavGroupMobile({
             href={item.href}
             onClick={onClick}
             className={cn(
-              "flex items-center gap-3 rounded-lg px-3 py-2.5 text-sm font-medium transition-all",
-              "hover:bg-accent hover:text-accent-foreground",
+              "flex items-center gap-5 rounded-xl px-3 py-2 text-sm transition-all",
+              "hover:bg-accent/60",
               isActive
-                ? "bg-accent text-accent-foreground"
-                : "text-muted-foreground"
+                ? "bg-accent font-semibold"
+                : "font-normal text-foreground"
             )}
           >
-            <item.icon className={cn("h-5 w-5 shrink-0", isActive && "text-primary")} />
+            <item.icon className={cn("h-[22px] w-[22px] shrink-0", isActive ? "stroke-[2.5px]" : "stroke-[1.5px]")} />
             <span>{item.label}</span>
           </Link>
         );

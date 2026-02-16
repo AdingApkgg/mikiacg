@@ -104,9 +104,9 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
         {/* 主内容区 */}
         <main
           className={cn(
-            "flex-1 flex flex-col min-h-[calc(100vh-4rem)] min-w-0 overflow-x-hidden transition-[margin] duration-300",
+            "flex-1 flex flex-col min-h-[calc(100vh-3.5rem)] min-w-0 overflow-x-hidden transition-[margin] duration-200",
             // YouTube 风格：展开时内容区推移（非覆盖模式）
-            showSidebar && !useOverlayMode && isExpanded && "md:ml-[240px]",
+            showSidebar && !useOverlayMode && isExpanded && "md:ml-[220px]",
             showSidebar && !useOverlayMode && !isExpanded && "md:ml-[72px]",
             // 覆盖模式：固定小边距
             showSidebar && useOverlayMode && "md:ml-0",
