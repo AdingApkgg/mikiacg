@@ -283,7 +283,7 @@ export default function AdminVideosPage() {
       utils.admin.listAllVideos.invalidate();
       utils.admin.getVideoStats.invalidate();
     },
-    onError: (error: Error) => toast.error(error.message || "操作失败"),
+    onError: (error: { message: string }) => toast.error(error.message || "操作失败"),
   });
 
   const deleteMutation = trpc.admin.deleteVideo.useMutation({
@@ -293,7 +293,7 @@ export default function AdminVideosPage() {
       utils.admin.getVideoStats.invalidate();
       setDeletingId(null);
     },
-    onError: (error: Error) => toast.error(error.message || "删除失败"),
+    onError: (error: { message: string }) => toast.error(error.message || "删除失败"),
   });
 
   const batchModerateMutation = trpc.admin.batchModerateVideos.useMutation({
@@ -303,7 +303,7 @@ export default function AdminVideosPage() {
       utils.admin.getVideoStats.invalidate();
       setSelectedIds(new Set());
     },
-    onError: (error: Error) => toast.error(error.message || "批量操作失败"),
+    onError: (error: { message: string }) => toast.error(error.message || "批量操作失败"),
   });
 
   const batchDeleteMutation = trpc.admin.batchDeleteVideos.useMutation({
@@ -314,7 +314,7 @@ export default function AdminVideosPage() {
       setSelectedIds(new Set());
       setBatchAction(null);
     },
-    onError: (error: Error) => toast.error(error.message || "批量删除失败"),
+    onError: (error: { message: string }) => toast.error(error.message || "批量删除失败"),
   });
 
   const batchRegexUpdateMutation = trpc.admin.batchRegexUpdate.useMutation({
@@ -327,7 +327,7 @@ export default function AdminVideosPage() {
       setRegexPattern("");
       setRegexReplacement("");
     },
-    onError: (error: Error) => toast.error(error.message || "批量编辑失败"),
+    onError: (error: { message: string }) => toast.error(error.message || "批量编辑失败"),
   });
 
   const videos = useMemo(
