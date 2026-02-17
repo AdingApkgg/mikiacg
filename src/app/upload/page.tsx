@@ -3,7 +3,7 @@
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { useSession } from "@/lib/auth-client";
-import { useForm } from "react-hook-form";
+import { useForm, type UseFormReturn } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
 import { Button } from "@/components/ui/button";
@@ -17,6 +17,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Separator } from "@/components/ui/separator";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
+import { Switch } from "@/components/ui/switch";
 import { toast } from "sonner";
 import {
   Loader2,
@@ -28,6 +29,7 @@ import {
   EyeOff,
   Image as ImageIcon,
   FileVideo,
+  Gamepad2,
   Tag,
   Info,
   ChevronDown,
@@ -42,6 +44,7 @@ import {
   CheckCircle,
   XCircle,
   FolderOpen,
+  Construction,
 } from "lucide-react";
 import { trpc } from "@/lib/trpc";
 import {
@@ -55,6 +58,10 @@ import Link from "next/link";
 import { VideoPlayer } from "@/components/video/video-player";
 import { cn } from "@/lib/utils";
 import type { VideoExtraInfo } from "@/lib/shortcode-parser";
+import { GAME_TYPES } from "@/lib/constants";
+
+/** 上传内容类型 */
+type UploadContentType = "video" | "game" | "image";
 
 const uploadSchema = z.object({
   title: z.string().min(1, "请输入标题").max(100, "标题最多100个字符"),
@@ -64,6 +71,22 @@ const uploadSchema = z.object({
 });
 
 type UploadForm = z.infer<typeof uploadSchema>;
+
+const gameUploadSchema = z.object({
+  title: z.string().min(1, "请输入游戏标题").max(200, "标题最多200个字符"),
+  description: z.string().max(5000, "简介最多5000个字符").optional().or(z.literal("")),
+  coverUrl: z.string().url("请输入有效的封面URL").optional().or(z.literal("")),
+  gameType: z.string().optional(),
+  isFree: z.boolean(),
+  version: z.string().max(50).optional().or(z.literal("")),
+  originalName: z.string().max(200).optional().or(z.literal("")),
+  originalAuthor: z.string().max(200).optional().or(z.literal("")),
+  originalAuthorUrl: z.string().url().optional().or(z.literal("")),
+  fileSize: z.string().max(50).optional().or(z.literal("")),
+  platforms: z.string().max(200).optional().or(z.literal("")),
+});
+
+type GameUploadForm = z.infer<typeof gameUploadSchema>;
 
 // 批量导入数据结构
 interface ParsedVideo {
@@ -88,351 +111,146 @@ interface ParsedBatchData {
 }
 
 /**
- * 解析批量导入文本
- * 
- * 格式（每行一个字段，用前缀标识）：
- * 
- * 作者：作者名（同时充当合集分组，也可用"合集："代替）
- * 封面：封面URL（可选，合集级共享）
- * 标签：标签1,标签2（可选，合集级共享）
- * 描述：描述（可选，合集级共享）
- * 下载：名称|URL|密码（可选；多个用 ; 分隔）
- * 
- * 标题：视频标题1
- * 视频：视频URL
- * 
- * 标题：视频标题2
- * 视频：视频URL
- * 
- * 作者：另一个作者
- * 
- * 标题：视频标题3
+ * 解析视频批量导入 JSON 数据
+ *
+ * 支持两种 JSON 格式：
+ *
+ * 格式一（按合集分组）：
+ * {
+ *   "series": [
+ *     {
+ *       "seriesTitle": "合集名",
+ *       "description": "描述",
+ *       "coverUrl": "url",
+ *       "videos": [
+ *         { "title": "标题", "videoUrl": "url", "coverUrl": "url", "tagNames": ["tag1"], "extraInfo": {...} }
+ *       ]
+ *     }
+ *   ]
+ * }
+ *
+ * 格式二（扁平数组，每项单独为 1 个合集）：
+ * [
+ *   { "title": "标题", "videoUrl": "url", "tagNames": ["tag1"], ... }
+ * ]
+ */
+function parseVideoBatchJson(data: unknown): ParsedBatchData {
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const raw = data as any;
+
+  if (raw?.series && Array.isArray(raw.series)) {
+    const series: ParsedSeries[] = raw.series.map(
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      (s: any) => ({
+        seriesTitle: (s.seriesTitle as string) || "",
+        description: (s.description as string) || undefined,
+        coverUrl: (s.coverUrl as string) || undefined,
+        videos: (Array.isArray(s.videos) ? s.videos : []).map(
+          // eslint-disable-next-line @typescript-eslint/no-explicit-any
+          (v: any) => ({
+            title: (v.title as string) || "",
+            description: (v.description as string) || "",
+            coverUrl: (v.coverUrl as string) || "",
+            videoUrl: (v.videoUrl as string) || "",
+            tags: (v.tagNames as string[]) || (v.tags as string[]) || [],
+            extraInfo: v.extraInfo || undefined,
+          }),
+        ),
+      }),
+    );
+    const totalVideos = series.reduce((sum, s) => sum + s.videos.length, 0);
+    return { series, totalVideos };
+  }
+
+  if (Array.isArray(raw)) {
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const videos: ParsedVideo[] = raw.map((v: any) => ({
+      title: (v.title as string) || "",
+      description: (v.description as string) || "",
+      coverUrl: (v.coverUrl as string) || "",
+      videoUrl: (v.videoUrl as string) || "",
+      tags: (v.tagNames as string[]) || (v.tags as string[]) || [],
+      extraInfo: v.extraInfo || undefined,
+    }));
+    return {
+      series: [{ seriesTitle: "", videos }],
+      totalVideos: videos.length,
+    };
+  }
+
+  return { series: [], totalVideos: 0 };
+}
+
+// ==================== 游戏批量导入解析 ====================
+
+interface ParsedGame {
+  title: string;
+  description: string;
+  coverUrl: string;
+  gameType: string;
+  isFree: boolean;
+  version: string;
+  tags: string[];
+  downloads: { name: string; url: string; password?: string }[];
+  screenshots: string[];
+  videos: string[];
+  originalName: string;
+  originalAuthor: string;
+  originalAuthorUrl: string;
+  fileSize: string;
+  platforms: string[];
+}
+
+interface ParsedGameBatchData {
+  games: ParsedGame[];
+}
+
+/**
+ * 解析游戏批量导入文本
+ *
+ * 格式（每行一个字段，用前缀标识，游戏间用空行分隔）：
+ *
+ * 标题：游戏标题1
+ * 类型：ADV
+ * 免费：是（默认免费，写"否"表示付费）
+ * 版本：Ver1.0.3
+ * 描述：游戏介绍...
+ * 封面：https://example.com/cover.jpg
+ * 标签：标签1,标签2,标签3
+ * 下载：夸克|https://url|密码
+ * 截图：https://screenshot1.jpg
+ * 截图：https://screenshot2.jpg
+ * 原名：原作名称
+ * 作者：开发者名称
+ * 作者链接：https://...
+ * 大小：2.5GB
+ * 平台：Windows,Mac,Android
+ *
+ * 标题：游戏标题2
  * ...
  */
-function parseBatchInput(input: string): ParsedBatchData {
-  const lines = input.split('\n');
-  const series: ParsedSeries[] = [];
-  let currentSeries: ParsedSeries | null = null;
-  let currentVideo: Partial<ParsedVideo> = {};
-  let currentSeriesExtra: VideoExtraInfo = {};
-  let currentVideoExtra: VideoExtraInfo = {};
-  let lastField: { target: "series" | "video"; key: string } | null = null;
-
-  // 合集级共享字段（描述/封面/标签不在 extraInfo 内，单独追踪）
-  let seriesDescription = "";
-  let seriesCoverUrl = "";
-  let seriesTags: string[] = [];
-
-  // 解析带前缀的行
-  const parseField = (line: string): { key: string; value: string } | null => {
-    const trimmed = line.trim();
-    // 支持中英文冒号
-    const match = trimmed.match(/^(合集|标题|描述|封面|视频|标签|作品介绍|作者|作者介绍|关键词|下载|公告|视频信息|相关)[：:]\s*(.*)$/);
-    if (match) {
-      return { key: match[1], value: match[2].trim() };
-    }
-    return null;
-  };
-
-  const setExtraField = (target: "series" | "video", updater: (info: VideoExtraInfo) => VideoExtraInfo) => {
-    if (target === "series") {
-      currentSeriesExtra = updater(currentSeriesExtra);
-    } else {
-      currentVideoExtra = updater(currentVideoExtra);
-    }
-  };
-
-  const appendNotice = (target: "series" | "video", notice: { type: 'info' | 'success' | 'warning' | 'error'; content: string }) => {
-    setExtraField(target, (info) => ({
-      ...info,
-      notices: [...(info.notices || []), notice],
-    }));
-  };
-
-  const appendNoticeLine = (target: "series" | "video", content: string) => {
-    setExtraField(target, (info) => {
-      const notices = [...(info.notices || [])];
-      if (notices.length === 0) {
-        notices.push({ type: "info", content });
-      } else {
-        notices[notices.length - 1] = {
-          ...notices[notices.length - 1],
-          content: `${notices[notices.length - 1].content}\n${content}`,
-        };
-      }
-      return { ...info, notices };
-    });
-  };
-
-  const parseDownloads = (value: string) => {
-    const items = value.split(/[;；]/).map(item => item.trim()).filter(Boolean);
-    return items.map((item) => {
-      const parts = item.split(/[|｜]/).map(p => p.trim());
-      return {
-        name: parts[0] || "下载",
-        url: parts[1] || "",
-        password: parts[2] || undefined,
-      };
-    }).filter(d => d.url);
-  };
-
-  const parseNotice = (value: string, defaultType: 'info' | 'success' | 'warning' | 'error' = "info") => {
-    const match = value.match(/^(info|success|warning|error)[：:|]\s*(.+)$/i);
-    if (match) {
-      return { type: match[1].toLowerCase() as 'info' | 'success' | 'warning' | 'error', content: match[2].trim() };
-    }
-    return { type: defaultType, content: value };
-  };
-
-  const mergeExtraInfo = (base?: VideoExtraInfo, override?: VideoExtraInfo): VideoExtraInfo | undefined => {
-    const result: VideoExtraInfo = {};
-    const pickText = (a?: string, b?: string) => b || a;
-    const mergeArray = <T,>(a?: T[], b?: T[]) => {
-      if (!a || a.length === 0) return b;
-      if (!b || b.length === 0) return a;
-      return [...a, ...b];
-    };
-    const mergeKeywords = (a?: string[], b?: string[]) => {
-      const merged = mergeArray(a, b) || [];
-      const unique = Array.from(new Set(merged.map(k => k.trim()).filter(Boolean)));
-      return unique.length > 0 ? unique : undefined;
-    };
-
-    result.intro = pickText(base?.intro, override?.intro);
-    result.author = pickText(base?.author, override?.author);
-    result.authorIntro = pickText(base?.authorIntro, override?.authorIntro);
-    result.episodes = mergeArray(base?.episodes, override?.episodes);
-    result.downloads = mergeArray(base?.downloads, override?.downloads);
-    result.relatedVideos = mergeArray(base?.relatedVideos, override?.relatedVideos);
-    result.notices = mergeArray(base?.notices, override?.notices);
-    result.keywords = mergeKeywords(base?.keywords, override?.keywords);
-
-    const hasContent = result.intro || result.author || result.authorIntro ||
-      (result.keywords && result.keywords.length > 0) ||
-      (result.downloads && result.downloads.length > 0) ||
-      (result.episodes && result.episodes.length > 0) ||
-      (result.relatedVideos && result.relatedVideos.length > 0) ||
-      (result.notices && result.notices.length > 0);
-
-    return hasContent ? result : undefined;
-  };
-
-  // 保存当前视频（从合集级继承共享字段）
-  const saveCurrentVideo = () => {
-    if (currentVideo.title && currentVideo.videoUrl) {
-      if (!currentSeries) {
-        currentSeries = { seriesTitle: '', videos: [] };
-      }
-      const mergedExtra = mergeExtraInfo(currentSeriesExtra, currentVideoExtra);
-      currentSeries.videos.push({
-        title: currentVideo.title || '',
-        description: currentVideo.description || seriesDescription || '',
-        // 视频封面只用视频自己的，不继承合集封面
-        // 合集封面是作者/系列的代表图，不是视频截图
-        // 视频没有封面时让自动生成器从视频流提取
-        coverUrl: currentVideo.coverUrl || '',
-        videoUrl: currentVideo.videoUrl || '',
-        tags: currentVideo.tags?.length ? currentVideo.tags : [...seriesTags],
-        extraInfo: mergedExtra,
-      });
-    }
-    currentVideo = {};
-    currentVideoExtra = {};
-    lastField = null;
-  };
-
-  for (const line of lines) {
-    const field = parseField(line);
-    
-    if (!field) {
-      const trimmed = line.trim();
-      // 空行时保存当前视频
-      if (trimmed === '' && currentVideo.title) {
-        saveCurrentVideo();
-        continue;
-      }
-      // 多行字段续写
-      if (lastField && trimmed !== '') {
-        const { target, key } = lastField;
-        if (key === '描述') {
-          if (target === 'series') {
-            seriesDescription = seriesDescription
-              ? `${seriesDescription}\n${trimmed}`
-              : trimmed;
-          } else {
-            currentVideo.description = currentVideo.description
-              ? `${currentVideo.description}\n${trimmed}`
-              : trimmed;
-          }
-          continue;
-        }
-        if (key === '作品介绍') {
-          setExtraField(target, (info) => ({
-            ...info,
-            intro: info.intro ? `${info.intro}\n${trimmed}` : trimmed,
-          }));
-          continue;
-        }
-        if (key === '作者介绍') {
-          setExtraField(target, (info) => ({
-            ...info,
-            authorIntro: info.authorIntro ? `${info.authorIntro}\n${trimmed}` : trimmed,
-          }));
-          continue;
-        }
-        if (key === '视频信息' || key === '公告') {
-          appendNoticeLine(target, trimmed);
-          continue;
-        }
-      }
-      continue;
-    }
-
-    const target: "series" | "video" =
-      !currentVideo.title && currentSeries ? "series" : "video";
-
-    switch (field.key) {
-      case '合集':
-        // 保存之前的视频和合集
-        saveCurrentVideo();
-        if (currentSeries && currentSeries.videos.length > 0) {
-          // 保存合集级字段到 ParsedSeries
-          if (seriesDescription) currentSeries.description = seriesDescription;
-          if (seriesCoverUrl) currentSeries.coverUrl = seriesCoverUrl;
-          series.push(currentSeries);
-        }
-        // 开始新合集，重置合集级共享字段
-        currentSeries = {
-          seriesTitle: field.value,
-          videos: [],
-        };
-        currentSeriesExtra = {};
-        seriesDescription = "";
-        seriesCoverUrl = "";
-        seriesTags = [];
-        break;
-      case '标题':
-        // 新视频开始前，保存之前的视频
-        if (currentVideo.title) {
-          saveCurrentVideo();
-        }
-        currentVideo.title = field.value;
-        break;
-      case '描述':
-        if (target === "series") {
-          seriesDescription = field.value;
-          lastField = { target: "series", key: "描述" };
-        } else {
-          currentVideo.description = field.value;
-          lastField = { target: "video", key: "描述" };
-        }
-        break;
-      case '封面':
-        if (target === "series") {
-          seriesCoverUrl = field.value;
-        } else {
-          currentVideo.coverUrl = field.value;
-        }
-        break;
-      case '视频':
-        currentVideo.videoUrl = field.value;
-        break;
-      case '标签':
-        if (target === "series") {
-          seriesTags = field.value.split(/[,，]/).map(t => t.trim()).filter(Boolean);
-        } else {
-          currentVideo.tags = field.value.split(/[,，]/).map(t => t.trim()).filter(Boolean);
-        }
-        break;
-      case '作品介绍':
-        setExtraField(target, (info) => ({ ...info, intro: field.value }));
-        lastField = { target, key: "作品介绍" };
-        break;
-      case '作者': {
-        // 作者可充当合集分隔符：当前无视频标题（合集级）时自动新建合集
-        const isSeriesLevel = !currentVideo.title;
-        if (isSeriesLevel) {
-          if (!currentSeries || currentSeries.videos.length > 0) {
-            // 新建合集
-            saveCurrentVideo();
-            if (currentSeries && currentSeries.videos.length > 0) {
-              if (seriesDescription) currentSeries.description = seriesDescription;
-              if (seriesCoverUrl) currentSeries.coverUrl = seriesCoverUrl;
-              series.push(currentSeries);
-            }
-            currentSeries = { seriesTitle: field.value, videos: [] };
-            currentSeriesExtra = {};
-            seriesDescription = "";
-            seriesCoverUrl = "";
-            seriesTags = [];
-          } else if (!currentSeries.seriesTitle) {
-            // 合集存在但无标题，用作者名作为标题
-            currentSeries.seriesTitle = field.value;
-          }
-          setExtraField("series", (info) => ({ ...info, author: field.value }));
-        } else {
-          setExtraField("video", (info) => ({ ...info, author: field.value }));
-        }
-        break;
-      }
-      case '作者介绍':
-        setExtraField(target, (info) => ({ ...info, authorIntro: field.value }));
-        lastField = { target, key: "作者介绍" };
-        break;
-      case '关键词':
-        setExtraField(target, (info) => ({
-          ...info,
-          keywords: field.value.split(/[,，]/).map(k => k.trim()).filter(Boolean),
-        }));
-        break;
-      case '下载': {
-        const downloads = parseDownloads(field.value);
-        setExtraField(target, (info) => ({
-          ...info,
-          downloads: [...(info.downloads || []), ...downloads],
-        }));
-        break;
-      }
-      case '公告': {
-        const notice = parseNotice(field.value, "info");
-        appendNotice(target, notice);
-        lastField = { target, key: "公告" };
-        break;
-      }
-      case '视频信息': {
-        const notice = parseNotice(field.value, "info");
-        appendNotice(target, notice);
-        lastField = { target, key: "视频信息" };
-        break;
-      }
-      case '相关':
-        setExtraField(target, (info) => ({
-          ...info,
-          relatedVideos: field.value.split(/[,，]/).map(v => v.trim()).filter(Boolean),
-        }));
-        break;
-    }
-    if (!['描述', '作品介绍', '作者介绍', '视频信息', '公告'].includes(field.key)) {
-      lastField = null;
-    }
-  }
-
-  // 处理最后一个视频和合集
-  saveCurrentVideo();
-  if (currentSeries && currentSeries.videos.length > 0) {
-    if (seriesDescription) currentSeries.description = seriesDescription;
-    if (seriesCoverUrl) currentSeries.coverUrl = seriesCoverUrl;
-    series.push(currentSeries);
-  }
-
-  const totalVideos = series.reduce((sum, s) => sum + s.videos.length, 0);
-
-  return { series, totalVideos };
+function buildGameExtraInfo(g: ParsedGame): Record<string, unknown> | undefined {
+  const info: Record<string, unknown> = {};
+  if (g.originalName) info.originalName = g.originalName;
+  if (g.originalAuthor) info.originalAuthor = g.originalAuthor;
+  if (g.originalAuthorUrl) info.originalAuthorUrl = g.originalAuthorUrl;
+  if (g.fileSize) info.fileSize = g.fileSize;
+  if (g.platforms?.length > 0) info.platforms = g.platforms;
+  if (g.screenshots?.length > 0) info.screenshots = g.screenshots;
+  if (g.videos?.length > 0) info.videos = g.videos;
+  if (g.downloads?.length > 0) info.downloads = g.downloads;
+  return Object.keys(info).length > 0 ? info : undefined;
 }
+
 
 export default function UploadPage() {
   const router = useRouter();
   const { data: session, status } = useSession();
+  
+  // 内容类型选择
+  const [contentType, setContentType] = useState<UploadContentType>("video");
+
+  // ========== 视频上传状态 ==========
   const [isLoading, setIsLoading] = useState(false);
   const [selectedTags, setSelectedTags] = useState<{ id: string; name: string }[]>([]);
   const [newTags, setNewTags] = useState<string[]>([]);
@@ -452,10 +270,26 @@ export default function UploadPage() {
 
   // 批量导入相关状态
   const [uploadMode, setUploadMode] = useState<"single" | "batch">("single");
-  const [batchInput, setBatchInput] = useState("");
   const [parsedBatch, setParsedBatch] = useState<ParsedBatchData | null>(null);
   const [batchImporting, setBatchImporting] = useState(false);
   const [batchResults, setBatchResults] = useState<{ title: string; seriesTitle?: string; id?: string; error?: string; merged?: boolean }[]>([]);
+  const [videoBatchFileName, setVideoBatchFileName] = useState("");
+
+  // ========== 游戏上传状态 ==========
+  const [gameUploadMode, setGameUploadMode] = useState<"single" | "batch">("single");
+  const [gameLoading, setGameLoading] = useState(false);
+  const [gameSelectedTags, setGameSelectedTags] = useState<{ id: string; name: string }[]>([]);
+  const [gameNewTags, setGameNewTags] = useState<string[]>([]);
+  const [gameTagSearch, setGameTagSearch] = useState("");
+  const [gameNewTagInput, setGameNewTagInput] = useState("");
+  const [gameScreenshots, setGameScreenshots] = useState<string[]>([""]);
+  const [gameVideos, setGameVideos] = useState<string[]>([""]);
+  const [gameDownloads, setGameDownloads] = useState<{ name: string; url: string; password?: string }[]>([]);
+  // 游戏批量导入
+  const [parsedGameBatch, setParsedGameBatch] = useState<ParsedGameBatchData | null>(null);
+  const [gameBatchImporting, setGameBatchImporting] = useState(false);
+  const [gameBatchResults, setGameBatchResults] = useState<{ title: string; id?: string; error?: string; updated?: boolean }[]>([]);
+  const [gameBatchFileName, setGameBatchFileName] = useState("");
 
   const { data: allTags } = trpc.tag.list.useQuery({ limit: 100 });
   
@@ -490,19 +324,38 @@ export default function UploadPage() {
 
   const batchCreateMutation = trpc.video.batchCreate.useMutation();
 
-  // 解析批量输入
-  const handleParseBatch = () => {
-    if (!batchInput.trim()) {
-      toast.error("请输入批量导入内容");
-      return;
-    }
-    const parsed = parseBatchInput(batchInput);
-    if (parsed.totalVideos === 0) {
-      toast.error("未能解析出任何视频，请检查格式");
-      return;
-    }
-    setParsedBatch(parsed);
-    toast.success(`解析成功：${parsed.series.length} 个合集，${parsed.totalVideos} 个视频`);
+  const createGameMutation = trpc.game.create.useMutation({
+    onError: (error) => {
+      toast.error("发布失败", { description: error.message });
+    },
+  });
+
+  const batchCreateGameMutation = trpc.game.batchCreate.useMutation();
+
+  // 视频批量解析 JSON 文件
+  const handleVideoBatchFile = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    setVideoBatchFileName(file.name);
+    setParsedBatch(null);
+    setBatchResults([]);
+
+    const reader = new FileReader();
+    reader.onload = (ev) => {
+      try {
+        const data = JSON.parse(ev.target?.result as string);
+        const parsed = parseVideoBatchJson(data);
+        if (parsed.totalVideos === 0) {
+          toast.error("JSON 文件中未找到有效视频数据");
+          return;
+        }
+        setParsedBatch(parsed);
+        toast.success(`解析成功：${parsed.series.length} 个合集，${parsed.totalVideos} 个视频`);
+      } catch {
+        toast.error("JSON 文件解析失败，请检查文件格式");
+      }
+    };
+    reader.readAsText(file);
   };
 
   // 批量导入 — 按合集分批调用 batchCreate，一次事务完成
@@ -584,6 +437,23 @@ export default function UploadPage() {
   const coverUrl = form.watch("coverUrl");
   const videoUrl = form.watch("videoUrl");
 
+  const gameForm = useForm<GameUploadForm>({
+    resolver: zodResolver(gameUploadSchema),
+    defaultValues: {
+      title: "",
+      description: "",
+      coverUrl: "",
+      gameType: "",
+      isFree: true,
+      version: "",
+      originalName: "",
+      originalAuthor: "",
+      originalAuthorUrl: "",
+      fileSize: "",
+      platforms: "",
+    },
+  });
+
   // 过滤标签
   const filteredTags = allTags?.filter((tag) => {
     if (!tagSearch.trim()) return true;
@@ -663,6 +533,154 @@ export default function UploadPage() {
     }
   }
 
+  // ========== 游戏标签相关函数 ==========
+  const gameFilteredTags = allTags?.filter((tag) => {
+    if (!gameTagSearch.trim()) return true;
+    return tag.name.toLowerCase().includes(gameTagSearch.toLowerCase());
+  }) || [];
+
+  const toggleGameTag = (tag: { id: string; name: string }) => {
+    const exists = gameSelectedTags.find((t) => t.id === tag.id);
+    if (exists) {
+      setGameSelectedTags(gameSelectedTags.filter((t) => t.id !== tag.id));
+    } else if (gameSelectedTags.length + gameNewTags.length < 10) {
+      setGameSelectedTags([...gameSelectedTags, tag]);
+    }
+  };
+
+  const handleAddGameNewTag = () => {
+    const tag = gameNewTagInput.trim();
+    if (!tag || gameNewTags.length + gameSelectedTags.length >= 10) return;
+    if (gameNewTags.includes(tag)) return;
+    if (gameSelectedTags.some((t) => t.name.toLowerCase() === tag.toLowerCase())) return;
+
+    const existingTag = allTags?.find((t) => t.name.toLowerCase() === tag.toLowerCase());
+    if (existingTag) {
+      toggleGameTag(existingTag);
+    } else {
+      setGameNewTags([...gameNewTags, tag]);
+    }
+    setGameNewTagInput("");
+  };
+
+  // 游戏批量解析 JSON 文件
+  const handleGameBatchFile = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    setGameBatchFileName(file.name);
+    setParsedGameBatch(null);
+    setGameBatchResults([]);
+
+    const reader = new FileReader();
+    reader.onload = (ev) => {
+      try {
+        const data = JSON.parse(ev.target?.result as string);
+        const games: ParsedGame[] = (Array.isArray(data) ? data : data.games ?? []).map(
+          (g: Record<string, unknown>) => ({
+            title: (g.title as string) || "",
+            description: (g.description as string) || "",
+            coverUrl: (g.coverUrl as string) || "",
+            gameType: (g.gameType as string) || "",
+            isFree: g.isFree !== false,
+            version: (g.version as string) || "",
+            tags: (g.tagNames as string[]) || [],
+            downloads: ((g.extraInfo as Record<string, unknown>)?.downloads as { name: string; url: string; password?: string }[]) || [],
+            screenshots: ((g.extraInfo as Record<string, unknown>)?.screenshots as string[]) || [],
+            videos: ((g.extraInfo as Record<string, unknown>)?.videos as string[]) || [],
+            originalName: ((g.extraInfo as Record<string, unknown>)?.originalName as string) || "",
+            originalAuthor: ((g.extraInfo as Record<string, unknown>)?.originalAuthor as string) || "",
+            originalAuthorUrl: ((g.extraInfo as Record<string, unknown>)?.originalAuthorUrl as string) || "",
+            fileSize: ((g.extraInfo as Record<string, unknown>)?.fileSize as string) || "",
+            platforms: ((g.extraInfo as Record<string, unknown>)?.platforms as string[]) || [],
+          })
+        );
+        if (games.length === 0 || !games[0].title) {
+          toast.error("JSON 文件中未找到有效游戏数据");
+          return;
+        }
+        setParsedGameBatch({ games });
+        toast.success(`解析成功：${games.length} 个游戏`);
+      } catch {
+        toast.error("JSON 文件解析失败，请检查文件格式");
+      }
+    };
+    reader.readAsText(file);
+  };
+
+  // 游戏批量导入
+  const handleGameBatchImport = async () => {
+    if (!parsedGameBatch || parsedGameBatch.games.length === 0) {
+      toast.error("请先解析内容");
+      return;
+    }
+
+    setGameBatchImporting(true);
+    setGameBatchResults([]);
+
+    try {
+      const res = await batchCreateGameMutation.mutateAsync({
+        games: parsedGameBatch.games.map((g) => ({
+          title: g.title,
+          description: g.description || undefined,
+          coverUrl: g.coverUrl || undefined,
+          gameType: g.gameType || undefined,
+          isFree: g.isFree,
+          version: g.version || undefined,
+          tagNames: g.tags?.length > 0 ? g.tags : undefined,
+          extraInfo: buildGameExtraInfo(g),
+        })),
+      });
+
+      const newCount = res.results.filter((r: { id?: string; updated?: boolean }) => r.id && !r.updated).length;
+      const updatedCount = res.results.filter((r: { updated?: boolean }) => r.updated).length;
+      const failCount = res.results.filter((r: { error?: string }) => r.error).length;
+      toast.success(`导入完成：新建 ${newCount}，更新 ${updatedCount}，失败 ${failCount}`);
+      setGameBatchResults(res.results);
+    } catch (err) {
+      toast.error("批量导入失败", {
+        description: err instanceof Error ? err.message : "未知错误",
+      });
+    } finally {
+      setGameBatchImporting(false);
+    }
+  };
+
+  async function onGameSubmit(data: GameUploadForm) {
+    setGameLoading(true);
+    try {
+      const extraInfo: Record<string, unknown> = {};
+      if (data.originalName) extraInfo.originalName = data.originalName;
+      if (data.originalAuthor) extraInfo.originalAuthor = data.originalAuthor;
+      if (data.originalAuthorUrl) extraInfo.originalAuthorUrl = data.originalAuthorUrl;
+      if (data.fileSize) extraInfo.fileSize = data.fileSize;
+      if (data.platforms) extraInfo.platforms = data.platforms.split(/[,，]/).map(s => s.trim()).filter(Boolean);
+      const validScreenshots = gameScreenshots.filter(s => s.trim());
+      if (validScreenshots.length > 0) extraInfo.screenshots = validScreenshots;
+      const validVideos = gameVideos.filter(s => s.trim());
+      if (validVideos.length > 0) extraInfo.videos = validVideos;
+      if (gameDownloads.length > 0) extraInfo.downloads = gameDownloads.filter(d => d.url.trim());
+
+      const result = await createGameMutation.mutateAsync({
+        title: data.title,
+        description: data.description || undefined,
+        coverUrl: data.coverUrl || undefined,
+        gameType: data.gameType || undefined,
+        isFree: data.isFree,
+        version: data.version || undefined,
+        tagIds: gameSelectedTags.map((t) => t.id),
+        tagNames: gameNewTags,
+        extraInfo: Object.keys(extraInfo).length > 0 ? extraInfo : undefined,
+      });
+
+      toast.success(result.status === "PUBLISHED" ? "发布成功" : "提交成功，等待审核");
+      router.push(`/game/${result.id}`);
+    } catch {
+      // onError 已处理
+    } finally {
+      setGameLoading(false);
+    }
+  }
+
   if (status === "loading") {
     return (
       <div className="min-h-[60vh] flex items-center justify-center">
@@ -678,7 +696,7 @@ export default function UploadPage() {
           <Upload className="h-12 w-12 text-muted-foreground" />
         </div>
         <h1 className="text-2xl font-bold">请先登录</h1>
-        <p className="text-muted-foreground">登录后才能发布视频</p>
+        <p className="text-muted-foreground">登录后才能投稿</p>
         <Button asChild size="lg">
           <Link href="/login?callbackUrl=/upload">去登录</Link>
         </Button>
@@ -703,19 +721,61 @@ export default function UploadPage() {
     );
   }
 
+  const contentTypeOptions = [
+    { id: "video" as const, label: "视频", icon: FileVideo, description: "上传视频作品" },
+    { id: "game" as const, label: "游戏", icon: Gamepad2, description: "上传游戏资源" },
+    { id: "image" as const, label: "图片", icon: ImageIcon, description: "上传图片（即将开放）" },
+  ];
+
   return (
     <div className="container py-6 max-w-5xl">
       {/* 页面标题 */}
       <div className="mb-6">
         <h1 className="text-2xl font-bold flex items-center gap-2">
           <Upload className="h-6 w-6" />
-          发布视频
+          上传
         </h1>
         <p className="text-muted-foreground mt-1">
-          填写视频信息，支持单个发布或批量导入
+          选择内容类型，填写信息后发布
         </p>
       </div>
 
+      {/* 内容类型选择 */}
+      <div className="grid grid-cols-3 gap-3 mb-6">
+        {contentTypeOptions.map((opt) => {
+          const Icon = opt.icon;
+          const isActive = contentType === opt.id;
+          const isDisabled = opt.id === "image";
+          return (
+            <button
+              key={opt.id}
+              type="button"
+              disabled={isDisabled}
+              onClick={() => setContentType(opt.id)}
+              className={cn(
+                "relative flex flex-col items-center gap-2 rounded-lg border-2 p-4 transition-all",
+                isActive
+                  ? "border-primary bg-primary/5 text-primary"
+                  : "border-muted hover:border-muted-foreground/30 hover:bg-muted/50",
+                isDisabled && "opacity-50 cursor-not-allowed hover:border-muted hover:bg-transparent"
+              )}
+            >
+              <Icon className="h-6 w-6" />
+              <span className="font-medium text-sm">{opt.label}</span>
+              {isDisabled && (
+                <Badge variant="secondary" className="absolute top-1.5 right-1.5 text-[10px] px-1.5 py-0">
+                  <Construction className="h-3 w-3 mr-0.5" />
+                  敬请期待
+                </Badge>
+              )}
+            </button>
+          );
+        })}
+      </div>
+
+      {/* ==================== 视频上传 ==================== */}
+      {contentType === "video" && (
+      <>
       {/* 模式切换 */}
       <Tabs value={uploadMode} onValueChange={(v) => setUploadMode(v as "single" | "batch")} className="mb-6">
         <TabsList className="grid w-full max-w-md grid-cols-2">
@@ -735,53 +795,42 @@ export default function UploadPage() {
                 <CardHeader>
                   <CardTitle className="text-lg flex items-center gap-2">
                     <FileText className="h-5 w-5" />
-                    手动输入
+                    JSON 文件导入
                   </CardTitle>
                   <CardDescription>
-                    按格式粘贴内容，自动创建合集并导入视频
+                    选择 JSON 文件，自动解析合集与视频并批量导入
                   </CardDescription>
                 </CardHeader>
                 <CardContent className="space-y-4">
                   <div className="space-y-2">
-                    <Label>导入内容</Label>
-                    <Textarea
-                      value={batchInput}
-                      onChange={(e) => setBatchInput(e.target.value)}
-                      placeholder={`作者：作者名1
-封面：https://example.com/cover1.jpg（可选）
-标签：标签1,标签2,标签3（可选）
-描述：作者/合集描述（可选）
-下载：夸克|https://example.com/file1|1234（可选）
-
-标题：视频标题1
-视频：https://example.com/video1.mp4
-
-标题：视频标题2
-视频：https://example.com/video2.mp4
-
-作者：作者名2
-封面：https://example.com/cover2.jpg
-标签：标签1,标签2
-
-标题：视频标题3
-视频：https://example.com/video3.mp4`}
-                      className="min-h-[300px] font-mono text-sm"
-                    />
+                    <Label>选择 JSON 文件</Label>
+                    <div className="flex items-center gap-3">
+                      <label className="cursor-pointer">
+                        <Button type="button" variant="outline" asChild>
+                          <span>
+                            <FolderOpen className="h-4 w-4 mr-2" />
+                            {videoBatchFileName || "选择文件"}
+                          </span>
+                        </Button>
+                        <input
+                          type="file"
+                          accept=".json"
+                          className="hidden"
+                          onChange={handleVideoBatchFile}
+                        />
+                      </label>
+                      {parsedBatch && (
+                        <span className="text-sm text-muted-foreground">
+                          已解析 {parsedBatch.series.length} 个合集，{parsedBatch.totalVideos} 个视频
+                        </span>
+                      )}
+                    </div>
                     <p className="text-xs text-muted-foreground">
-                      格式说明：「作者:」开头定义合集分组，后跟封面/标签/描述等共享字段，再逐条列出「标题:」+「视频:」。支持中英文冒号，视频间用空行分隔
+                      JSON 格式：包含 series 数组（每个合集含 videos 数组），每个视频需要 title, videoUrl 字段。可通过抓取脚本生成
                     </p>
                   </div>
 
                   <div className="flex gap-2">
-                    <Button
-                      type="button"
-                      variant="outline"
-                      onClick={handleParseBatch}
-                      disabled={!batchInput.trim()}
-                    >
-                      <Eye className="h-4 w-4 mr-2" />
-                      预览解析
-                    </Button>
                     <Button
                       type="button"
                       onClick={handleBatchImport}
@@ -1657,6 +1706,862 @@ export default function UploadPage() {
           </Form>
         </TabsContent>
       </Tabs>
+      </>
+      )}
+
+      {/* ==================== 游戏上传 ==================== */}
+      {contentType === "game" && (
+      <>
+        <Tabs value={gameUploadMode} onValueChange={(v) => setGameUploadMode(v as "single" | "batch")} className="mb-6">
+          <TabsList className="grid w-full max-w-md grid-cols-2">
+            <TabsTrigger value="single" className="gap-2">
+              <Gamepad2 className="h-4 w-4" />
+              单个发布
+            </TabsTrigger>
+            <TabsTrigger value="batch" className="gap-2">
+              <FolderOpen className="h-4 w-4" />
+              批量导入
+            </TabsTrigger>
+          </TabsList>
+
+          {/* 游戏批量导入 */}
+          <TabsContent value="batch" className="space-y-6 mt-6">
+            <Card>
+              <CardHeader>
+                <CardTitle className="text-lg flex items-center gap-2">
+                  <FileText className="h-5 w-5" />
+                  批量导入游戏
+                </CardTitle>
+                <CardDescription>
+                  选择 JSON 文件批量导入游戏资源
+                </CardDescription>
+              </CardHeader>
+              <CardContent className="space-y-4">
+                <div className="space-y-2">
+                  <Label>选择 JSON 文件</Label>
+                  <div className="flex items-center gap-3">
+                    <label className="cursor-pointer inline-flex items-center gap-2 px-4 py-2 border border-input rounded-md bg-background hover:bg-accent hover:text-accent-foreground transition-colors text-sm font-medium">
+                      <FileText className="h-4 w-4" />
+                      {gameBatchFileName || "选择文件"}
+                      <input
+                        type="file"
+                        accept=".json"
+                        className="hidden"
+                        onChange={handleGameBatchFile}
+                      />
+                    </label>
+                    {parsedGameBatch && (
+                      <span className="text-sm text-muted-foreground">
+                        已解析 {parsedGameBatch.games.length} 个游戏
+                      </span>
+                    )}
+                  </div>
+                  <p className="text-xs text-muted-foreground">
+                    JSON 格式：数组，每项包含 title, description, coverUrl, gameType, isFree, version, tagNames, extraInfo 等字段。可通过抓取脚本 --batch-text 生成
+                  </p>
+                </div>
+
+                <div className="flex gap-2">
+                  <Button
+                    type="button"
+                    onClick={handleGameBatchImport}
+                    disabled={!parsedGameBatch || parsedGameBatch.games.length === 0 || gameBatchImporting}
+                  >
+                    {gameBatchImporting ? (
+                      <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                    ) : (
+                      <Upload className="h-4 w-4 mr-2" />
+                    )}
+                    开始导入 {parsedGameBatch ? `(${parsedGameBatch.games.length} 个游戏)` : ""}
+                  </Button>
+                </div>
+              </CardContent>
+            </Card>
+
+            {/* 解析预览 */}
+            {parsedGameBatch && parsedGameBatch.games.length > 0 && (
+              <Card>
+                <CardHeader>
+                  <CardTitle className="text-lg">解析预览</CardTitle>
+                  <CardDescription>
+                    共 {parsedGameBatch.games.length} 个游戏
+                  </CardDescription>
+                </CardHeader>
+                <CardContent>
+                  <ScrollArea className="max-h-[500px]">
+                    <div className="space-y-2">
+                      {parsedGameBatch.games.map((game, index) => (
+                        <div
+                          key={index}
+                          className="flex items-center gap-3 p-3 rounded-lg bg-muted/50"
+                        >
+                          {game.coverUrl ? (
+                            <div className="shrink-0 w-16 h-10 rounded overflow-hidden bg-muted">
+                              {/* eslint-disable-next-line @next/next/no-img-element */}
+                              <img
+                                src={game.coverUrl}
+                                alt={game.title}
+                                className="w-full h-full object-cover"
+                                onError={(e) => { e.currentTarget.style.display = "none"; }}
+                              />
+                            </div>
+                          ) : null}
+                          <div className="flex-1 min-w-0">
+                            <div className="font-medium truncate">{game.title}</div>
+                            <div className="flex items-center gap-1.5 mt-0.5 flex-wrap">
+                              {game.gameType && (
+                                <Badge variant="default" className="text-[10px] py-0">
+                                  {game.gameType}
+                                </Badge>
+                              )}
+                              <Badge variant={game.isFree ? "secondary" : "outline"} className="text-[10px] py-0">
+                                {game.isFree ? "免费" : "付费"}
+                              </Badge>
+                              {game.version && (
+                                <span className="text-[10px] text-muted-foreground">{game.version}</span>
+                              )}
+                              {game.downloads?.length > 0 && (
+                                <span className="text-[10px] text-muted-foreground">
+                                  <Download className="h-2.5 w-2.5 inline mr-0.5" />
+                                  {game.downloads.length} 个下载
+                                </span>
+                              )}
+                              {game.screenshots?.length > 0 && (
+                                <span className="text-[10px] text-muted-foreground">
+                                  <ImageIcon className="h-2.5 w-2.5 inline mr-0.5" />
+                                  {game.screenshots.length} 张截图
+                                </span>
+                              )}
+                              {game.videos?.length > 0 && (
+                                <span className="text-[10px] text-muted-foreground">
+                                  <FileVideo className="h-2.5 w-2.5 inline mr-0.5" />
+                                  {game.videos.length} 个视频
+                                </span>
+                              )}
+                              {game.tags?.length > 0 && (
+                                <span className="text-[10px] text-muted-foreground">
+                                  <Tag className="h-2.5 w-2.5 inline mr-0.5" />
+                                  {game.tags.length} 个标签
+                                </span>
+                              )}
+                            </div>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  </ScrollArea>
+                </CardContent>
+              </Card>
+            )}
+
+            {/* 导入结果 */}
+            {gameBatchResults.length > 0 && (
+              <Card>
+                <CardHeader>
+                  <CardTitle className="text-lg">导入结果</CardTitle>
+                  <CardDescription>
+                    新建 {gameBatchResults.filter(r => r.id && !r.updated).length}，更新 {gameBatchResults.filter(r => r.updated).length}，失败 {gameBatchResults.filter(r => r.error).length}
+                  </CardDescription>
+                </CardHeader>
+                <CardContent>
+                  <ScrollArea className="max-h-[300px]">
+                    <div className="space-y-2">
+                      {gameBatchResults.map((result, index) => (
+                        <div
+                          key={index}
+                          className="flex items-center justify-between p-2 rounded-lg bg-muted/50"
+                        >
+                          <div className="flex items-center gap-2 min-w-0">
+                            {result.id ? (
+                              <CheckCircle className="h-4 w-4 text-green-500 shrink-0" />
+                            ) : (
+                              <XCircle className="h-4 w-4 text-red-500 shrink-0" />
+                            )}
+                            <span className="truncate text-sm">{result.title}</span>
+                          </div>
+                          {result.id ? (
+                            <div className="flex items-center gap-1.5">
+                              {result.updated && (
+                                <Badge variant="outline" className="text-xs text-yellow-600 border-yellow-400">
+                                  已更新
+                                </Badge>
+                              )}
+                              <Link href={`/game/${result.id}`}>
+                                <Badge variant="secondary" className="text-xs">
+                                  {result.id}
+                                </Badge>
+                              </Link>
+                            </div>
+                          ) : (
+                            <Badge variant="destructive" className="text-xs">
+                              {result.error}
+                            </Badge>
+                          )}
+                        </div>
+                      ))}
+                    </div>
+                  </ScrollArea>
+                </CardContent>
+              </Card>
+            )}
+          </TabsContent>
+
+          {/* 单个发布模式 */}
+          <TabsContent value="single" className="mt-6">
+            <GameUploadFormSection
+              form={gameForm}
+              onSubmit={onGameSubmit}
+              isLoading={gameLoading}
+              allTags={allTags}
+              selectedTags={gameSelectedTags}
+              newTags={gameNewTags}
+              tagSearch={gameTagSearch}
+              setTagSearch={setGameTagSearch}
+              newTagInput={gameNewTagInput}
+              setNewTagInput={setGameNewTagInput}
+              toggleTag={toggleGameTag}
+              handleAddNewTag={handleAddGameNewTag}
+              filteredTags={gameFilteredTags}
+              screenshots={gameScreenshots}
+              setScreenshots={setGameScreenshots}
+              videos={gameVideos}
+              setVideos={setGameVideos}
+              downloads={gameDownloads}
+              setDownloads={setGameDownloads}
+            />
+          </TabsContent>
+        </Tabs>
+      </>
+      )}
+
+      {/* ==================== 图片上传（预留） ==================== */}
+      {contentType === "image" && (
+        <div className="min-h-[40vh] flex flex-col items-center justify-center gap-4">
+          <div className="p-6 rounded-full bg-muted">
+            <Construction className="h-16 w-16 text-muted-foreground" />
+          </div>
+          <h2 className="text-xl font-semibold">图片上传即将开放</h2>
+          <p className="text-muted-foreground text-center max-w-md">
+            图片上传功能正在开发中，敬请期待
+          </p>
+        </div>
+      )}
     </div>
+  );
+}
+
+// ==================== 游戏上传表单子组件 ====================
+
+interface GameUploadFormSectionProps {
+  form: UseFormReturn<GameUploadForm>;
+  onSubmit: (data: GameUploadForm) => void;
+  isLoading: boolean;
+  allTags: { id: string; name: string }[] | undefined;
+  selectedTags: { id: string; name: string }[];
+  newTags: string[];
+  tagSearch: string;
+  setTagSearch: (s: string) => void;
+  newTagInput: string;
+  setNewTagInput: (s: string) => void;
+  toggleTag: (tag: { id: string; name: string }) => void;
+  handleAddNewTag: () => void;
+  filteredTags: { id: string; name: string }[];
+  screenshots: string[];
+  setScreenshots: (s: string[]) => void;
+  videos: string[];
+  setVideos: (v: string[]) => void;
+  downloads: { name: string; url: string; password?: string }[];
+  setDownloads: (d: { name: string; url: string; password?: string }[]) => void;
+}
+
+function GameUploadFormSection({
+  form,
+  onSubmit,
+  isLoading,
+  selectedTags,
+  newTags,
+  tagSearch,
+  setTagSearch,
+  newTagInput,
+  setNewTagInput,
+  toggleTag,
+  handleAddNewTag,
+  filteredTags,
+  screenshots,
+  setScreenshots,
+  videos,
+  setVideos,
+  downloads,
+  setDownloads,
+}: GameUploadFormSectionProps) {
+  const gameCoverUrl = form.watch("coverUrl");
+
+  return (
+    <Form {...form}>
+      <form onSubmit={form.handleSubmit(onSubmit)}>
+        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+          {/* 左侧：主要信息 */}
+          <div className="lg:col-span-2 space-y-6">
+            {/* 基本信息 */}
+            <Card>
+              <CardHeader className="pb-4">
+                <CardTitle className="text-lg flex items-center gap-2">
+                  <Gamepad2 className="h-5 w-5" />
+                  游戏基本信息
+                </CardTitle>
+              </CardHeader>
+              <CardContent className="space-y-4">
+                <FormField
+                  control={form.control}
+                  name="title"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>游戏标题 *</FormLabel>
+                      <FormControl>
+                        <Input placeholder="输入游戏标题" {...field} className="text-base" />
+                      </FormControl>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+
+                <div className="grid gap-4 md:grid-cols-3">
+                  <FormField
+                    control={form.control}
+                    name="gameType"
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormLabel>游戏类型</FormLabel>
+                        <Select value={field.value || ""} onValueChange={field.onChange}>
+                          <FormControl>
+                            <SelectTrigger>
+                              <SelectValue placeholder="选择类型" />
+                            </SelectTrigger>
+                          </FormControl>
+                          <SelectContent>
+                            {GAME_TYPES.map((t) => (
+                              <SelectItem key={t} value={t}>{t}</SelectItem>
+                            ))}
+                          </SelectContent>
+                        </Select>
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
+
+                  <FormField
+                    control={form.control}
+                    name="version"
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormLabel>版本号</FormLabel>
+                        <FormControl>
+                          <Input placeholder="Ver1.0.0" {...field} />
+                        </FormControl>
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
+
+                  <FormField
+                    control={form.control}
+                    name="isFree"
+                    render={({ field }) => (
+                      <FormItem className="flex flex-row items-center justify-between rounded-lg border p-3">
+                        <div className="space-y-0.5">
+                          <FormLabel>免费游戏</FormLabel>
+                        </div>
+                        <FormControl>
+                          <Switch checked={field.value} onCheckedChange={field.onChange} />
+                        </FormControl>
+                      </FormItem>
+                    )}
+                  />
+                </div>
+
+                <FormField
+                  control={form.control}
+                  name="description"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>游戏介绍</FormLabel>
+                      <FormControl>
+                        <Textarea
+                          placeholder="游戏介绍（可选）"
+                          className="min-h-[120px] resize-none"
+                          {...field}
+                        />
+                      </FormControl>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+              </CardContent>
+            </Card>
+
+            {/* 标签选择 */}
+            <Card>
+              <CardHeader className="pb-4">
+                <CardTitle className="text-lg flex items-center gap-2">
+                  <Tag className="h-5 w-5" />
+                  标签
+                </CardTitle>
+                <CardDescription>选择或创建标签，最多 10 个</CardDescription>
+              </CardHeader>
+              <CardContent className="space-y-4">
+                {(selectedTags.length > 0 || newTags.length > 0) && (
+                  <div className="flex flex-wrap gap-2">
+                    {selectedTags.map((tag) => (
+                      <Badge
+                        key={tag.id}
+                        variant="default"
+                        className="cursor-pointer hover:bg-primary/80 transition-colors gap-1 px-3 py-1"
+                        onClick={() => toggleTag(tag)}
+                      >
+                        {tag.name}
+                        <X className="h-3 w-3" />
+                      </Badge>
+                    ))}
+                    {newTags.map((tag) => (
+                      <Badge
+                        key={tag}
+                        variant="secondary"
+                        className="cursor-pointer hover:bg-secondary/80 transition-colors gap-1 px-3 py-1"
+                      >
+                        <Plus className="h-3 w-3" />
+                        {tag}
+                        <X className="h-3 w-3" />
+                      </Badge>
+                    ))}
+                  </div>
+                )}
+
+                <div className="flex gap-2">
+                  <div className="relative flex-1">
+                    <Tag className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+                    <Input
+                      placeholder="输入新标签名称..."
+                      value={newTagInput}
+                      onChange={(e) => setNewTagInput(e.target.value)}
+                      onKeyDown={(e) => {
+                        if (e.key === "Enter") {
+                          e.preventDefault();
+                          handleAddNewTag();
+                        }
+                      }}
+                      disabled={selectedTags.length + newTags.length >= 10}
+                      className="pl-9"
+                    />
+                  </div>
+                  <Button
+                    type="button"
+                    variant="outline"
+                    onClick={handleAddNewTag}
+                    disabled={selectedTags.length + newTags.length >= 10 || !newTagInput.trim()}
+                  >
+                    <Plus className="h-4 w-4" />
+                  </Button>
+                </div>
+
+                <p className="text-xs text-muted-foreground">
+                  已选择 {selectedTags.length + newTags.length} / 10 个标签
+                </p>
+
+                <Separator />
+
+                <div className="space-y-3">
+                  <div className="relative">
+                    <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+                    <Input
+                      placeholder="搜索已有标签..."
+                      value={tagSearch}
+                      onChange={(e) => setTagSearch(e.target.value)}
+                      className="pl-9 h-9"
+                    />
+                  </div>
+                  <ScrollArea className="h-40 rounded-md border p-3 bg-muted/30">
+                    <div className="flex flex-wrap gap-1.5">
+                      {filteredTags.length > 0 ? (
+                        filteredTags.map((tag) => {
+                          const isSelected = selectedTags.some((t) => t.id === tag.id);
+                          return (
+                            <Badge
+                              key={tag.id}
+                              variant={isSelected ? "default" : "outline"}
+                              className={cn(
+                                "cursor-pointer text-xs transition-all",
+                                isSelected
+                                  ? "hover:bg-primary/80"
+                                  : "hover:bg-accent hover:text-accent-foreground"
+                              )}
+                              onClick={() => toggleTag(tag)}
+                            >
+                              {tag.name}
+                            </Badge>
+                          );
+                        })
+                      ) : (
+                        <p className="text-xs text-muted-foreground py-2">
+                          {tagSearch ? "未找到匹配的标签" : "暂无标签"}
+                        </p>
+                      )}
+                    </div>
+                  </ScrollArea>
+                </div>
+              </CardContent>
+            </Card>
+
+            {/* 扩展信息 */}
+            <Card>
+              <CardHeader className="pb-4">
+                <CardTitle className="text-lg flex items-center gap-2">
+                  <Info className="h-5 w-5" />
+                  扩展信息
+                </CardTitle>
+                <CardDescription>原作信息、截图、下载链接等（可选）</CardDescription>
+              </CardHeader>
+              <CardContent>
+                <Tabs defaultValue="origin" className="w-full">
+                  <TabsList className="grid w-full grid-cols-4">
+                    <TabsTrigger value="origin" className="text-xs">原作信息</TabsTrigger>
+                    <TabsTrigger value="screenshots" className="text-xs">游戏截图</TabsTrigger>
+                    <TabsTrigger value="videos" className="text-xs">游戏视频</TabsTrigger>
+                    <TabsTrigger value="downloads" className="text-xs">下载链接</TabsTrigger>
+                  </TabsList>
+
+                  <TabsContent value="origin" className="space-y-4 mt-4">
+                    <div className="grid gap-4 md:grid-cols-2">
+                      <FormField
+                        control={form.control}
+                        name="originalName"
+                        render={({ field }) => (
+                          <FormItem>
+                            <FormLabel>原作名称</FormLabel>
+                            <FormControl>
+                              <Input placeholder="游戏原名（日/英文）" {...field} />
+                            </FormControl>
+                            <FormMessage />
+                          </FormItem>
+                        )}
+                      />
+                      <FormField
+                        control={form.control}
+                        name="originalAuthor"
+                        render={({ field }) => (
+                          <FormItem>
+                            <FormLabel>原作作者</FormLabel>
+                            <FormControl>
+                              <Input placeholder="开发者/社团名称" {...field} />
+                            </FormControl>
+                            <FormMessage />
+                          </FormItem>
+                        )}
+                      />
+                    </div>
+                    <FormField
+                      control={form.control}
+                      name="originalAuthorUrl"
+                      render={({ field }) => (
+                        <FormItem>
+                          <FormLabel>原作链接</FormLabel>
+                          <FormControl>
+                            <div className="relative">
+                              <Link2 className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+                              <Input placeholder="https://..." {...field} className="pl-9" />
+                            </div>
+                          </FormControl>
+                          <FormMessage />
+                        </FormItem>
+                      )}
+                    />
+                    <div className="grid gap-4 md:grid-cols-2">
+                      <FormField
+                        control={form.control}
+                        name="fileSize"
+                        render={({ field }) => (
+                          <FormItem>
+                            <FormLabel>文件大小</FormLabel>
+                            <FormControl>
+                              <Input placeholder="如：2.5GB" {...field} />
+                            </FormControl>
+                            <FormMessage />
+                          </FormItem>
+                        )}
+                      />
+                      <FormField
+                        control={form.control}
+                        name="platforms"
+                        render={({ field }) => (
+                          <FormItem>
+                            <FormLabel>支持平台</FormLabel>
+                            <FormControl>
+                              <Input placeholder="Windows, Mac, Android（逗号分隔）" {...field} />
+                            </FormControl>
+                            <FormMessage />
+                          </FormItem>
+                        )}
+                      />
+                    </div>
+                  </TabsContent>
+
+                  <TabsContent value="screenshots" className="space-y-4 mt-4">
+                    <div className="flex items-center justify-between">
+                      <FormLabel className="flex items-center gap-2">
+                        <ImageIcon className="h-4 w-4" />
+                        截图链接
+                      </FormLabel>
+                      <Button
+                        type="button"
+                        variant="outline"
+                        size="sm"
+                        onClick={() => setScreenshots([...screenshots, ""])}
+                      >
+                        <Plus className="h-4 w-4 mr-1" />
+                        添加截图
+                      </Button>
+                    </div>
+                    {screenshots.map((url, index) => (
+                      <div key={index} className="flex gap-2">
+                        <div className="relative flex-1">
+                          <ImageIcon className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+                          <Input
+                            placeholder="https://example.com/screenshot.jpg"
+                            value={url}
+                            onChange={(e) => {
+                              const updated = [...screenshots];
+                              updated[index] = e.target.value;
+                              setScreenshots(updated);
+                            }}
+                            className="pl-9"
+                          />
+                        </div>
+                        {screenshots.length > 1 && (
+                          <Button
+                            type="button"
+                            variant="ghost"
+                            size="icon"
+                            onClick={() => setScreenshots(screenshots.filter((_, i) => i !== index))}
+                          >
+                            <Trash2 className="h-4 w-4" />
+                          </Button>
+                        )}
+                      </div>
+                    ))}
+                    {screenshots.some(s => s.trim()) && (
+                      <div className="flex gap-2 flex-wrap mt-2">
+                        {screenshots.filter(s => s.trim()).map((url, i) => (
+                          <div key={i} className="w-24 h-16 rounded border overflow-hidden bg-muted">
+                            {/* eslint-disable-next-line @next/next/no-img-element */}
+                            <img
+                              src={url}
+                              alt={`截图 ${i + 1}`}
+                              className="w-full h-full object-cover"
+                              onError={(e) => { e.currentTarget.style.display = "none"; }}
+                            />
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                  </TabsContent>
+
+                  <TabsContent value="videos" className="space-y-4 mt-4">
+                    <div className="flex items-center justify-between">
+                      <FormLabel className="flex items-center gap-2">
+                        <FileVideo className="h-4 w-4" />
+                        视频链接
+                      </FormLabel>
+                      <Button
+                        type="button"
+                        variant="outline"
+                        size="sm"
+                        onClick={() => setVideos([...videos, ""])}
+                      >
+                        <Plus className="h-4 w-4 mr-1" />
+                        添加视频
+                      </Button>
+                    </div>
+                    <p className="text-xs text-muted-foreground">
+                      支持 mp4、webm 等直链或 m3u8 流媒体地址
+                    </p>
+                    {videos.map((url, index) => (
+                      <div key={index} className="flex gap-2">
+                        <div className="relative flex-1">
+                          <FileVideo className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+                          <Input
+                            placeholder="https://example.com/preview.mp4"
+                            value={url}
+                            onChange={(e) => {
+                              const updated = [...videos];
+                              updated[index] = e.target.value;
+                              setVideos(updated);
+                            }}
+                            className="pl-9"
+                          />
+                        </div>
+                        {videos.length > 1 && (
+                          <Button
+                            type="button"
+                            variant="ghost"
+                            size="icon"
+                            onClick={() => setVideos(videos.filter((_, i) => i !== index))}
+                          >
+                            <Trash2 className="h-4 w-4" />
+                          </Button>
+                        )}
+                      </div>
+                    ))}
+                  </TabsContent>
+
+                  <TabsContent value="downloads" className="space-y-4 mt-4">
+                    <div className="flex items-center justify-between">
+                      <FormLabel className="flex items-center gap-2">
+                        <Download className="h-4 w-4" />
+                        下载链接
+                      </FormLabel>
+                      <Button
+                        type="button"
+                        variant="outline"
+                        size="sm"
+                        onClick={() => setDownloads([...downloads, { name: "", url: "", password: "" }])}
+                      >
+                        <Plus className="h-4 w-4 mr-1" />
+                        添加链接
+                      </Button>
+                    </div>
+                    {downloads.map((dl, index) => (
+                      <div key={index} className="flex gap-2 items-start p-3 border rounded-lg bg-muted/30">
+                        <div className="flex-1 grid gap-2 md:grid-cols-3">
+                          <Input
+                            placeholder="网盘名称"
+                            value={dl.name}
+                            onChange={(e) => {
+                              const updated = [...downloads];
+                              updated[index] = { ...updated[index], name: e.target.value };
+                              setDownloads(updated);
+                            }}
+                          />
+                          <Input
+                            placeholder="下载链接"
+                            value={dl.url}
+                            onChange={(e) => {
+                              const updated = [...downloads];
+                              updated[index] = { ...updated[index], url: e.target.value };
+                              setDownloads(updated);
+                            }}
+                          />
+                          <Input
+                            placeholder="提取码（可选）"
+                            value={dl.password || ""}
+                            onChange={(e) => {
+                              const updated = [...downloads];
+                              updated[index] = { ...updated[index], password: e.target.value };
+                              setDownloads(updated);
+                            }}
+                          />
+                        </div>
+                        <Button
+                          type="button"
+                          variant="ghost"
+                          size="icon"
+                          onClick={() => setDownloads(downloads.filter((_, i) => i !== index))}
+                        >
+                          <Trash2 className="h-4 w-4" />
+                        </Button>
+                      </div>
+                    ))}
+                    {downloads.length === 0 && (
+                      <p className="text-sm text-muted-foreground text-center py-4">
+                        暂无下载链接，点击上方按钮添加
+                      </p>
+                    )}
+                  </TabsContent>
+                </Tabs>
+              </CardContent>
+            </Card>
+          </div>
+
+          {/* 右侧：封面和发布 */}
+          <div className="space-y-6">
+            {/* 封面 */}
+            <Card>
+              <CardHeader className="pb-4">
+                <CardTitle className="text-lg flex items-center gap-2">
+                  <ImageIcon className="h-5 w-5" />
+                  封面
+                </CardTitle>
+              </CardHeader>
+              <CardContent className="space-y-4">
+                <FormField
+                  control={form.control}
+                  name="coverUrl"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormControl>
+                        <Input placeholder="封面图片链接（可选）" {...field} />
+                      </FormControl>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+                <div
+                  className={cn(
+                    "relative aspect-video rounded-lg border-2 border-dashed overflow-hidden transition-colors group",
+                    gameCoverUrl ? "border-transparent" : "border-muted-foreground/25"
+                  )}
+                >
+                  {gameCoverUrl ? (
+                    <>
+                      {/* eslint-disable-next-line @next/next/no-img-element */}
+                      <img
+                        src={gameCoverUrl}
+                        alt="封面预览"
+                        className="w-full h-full object-cover"
+                        onError={(e) => {
+                          e.currentTarget.style.display = "none";
+                        }}
+                      />
+                      <Button
+                        type="button"
+                        variant="secondary"
+                        size="icon"
+                        className="absolute top-2 right-2 h-8 w-8 opacity-0 group-hover:opacity-100 transition-opacity"
+                        onClick={() => form.setValue("coverUrl", "")}
+                      >
+                        <X className="h-4 w-4" />
+                      </Button>
+                    </>
+                  ) : (
+                    <div className="absolute inset-0 flex flex-col items-center justify-center text-muted-foreground">
+                      <ImageIcon className="h-12 w-12 mb-2 opacity-50" />
+                      <span className="text-sm">输入链接预览</span>
+                    </div>
+                  )}
+                </div>
+              </CardContent>
+            </Card>
+
+            {/* 发布按钮 */}
+            <Button
+              type="submit"
+              className="w-full h-12 text-base"
+              disabled={isLoading}
+              size="lg"
+            >
+              {isLoading ? (
+                <>
+                  <Loader2 className="mr-2 h-5 w-5 animate-spin" />
+                  发布中...
+                </>
+              ) : (
+                <>
+                  <Gamepad2 className="mr-2 h-5 w-5" />
+                  发布游戏
+                </>
+              )}
+            </Button>
+          </div>
+        </div>
+      </form>
+    </Form>
   );
 }

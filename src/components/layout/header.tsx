@@ -33,6 +33,7 @@ import {
   Sun,
   Moon,
   Monitor,
+  Gamepad2,
 } from "lucide-react";
 import { useState, useRef, useEffect, useCallback } from "react";
 import { useRouter } from "next/navigation";
@@ -52,7 +53,7 @@ interface HeaderProps {
 // ========== 搜索建议列表（桌面 + 移动端共用） ==========
 
 interface SuggestionItem {
-  type: "search" | "history" | "tag" | "video" | "hot";
+  type: "search" | "history" | "tag" | "video" | "game" | "hot";
   label: string;
   value: string;
   index?: number;
@@ -120,6 +121,7 @@ function SearchSuggestionsList({
               {(item.type === "search" || item.type === "tag" || item.type === "video") && (
                 <Search className="h-4 w-4 text-muted-foreground shrink-0" />
               )}
+              {item.type === "game" && <Gamepad2 className="h-4 w-4 text-muted-foreground shrink-0" />}
               {item.type === "hot" && (
                 <span className={cn(
                   "w-5 text-center text-xs font-bold shrink-0",
@@ -263,11 +265,15 @@ export function Header({ onMenuClick }: HeaderProps) {
         break;
       case "tag":
         setSearchQuery("");
-        router.push(`/tag/${item.value}`);
+        router.push(`/video/tag/${item.value}`);
         break;
       case "video":
         setSearchQuery("");
         router.push(`/video/${item.value}`);
+        break;
+      case "game":
+        setSearchQuery("");
+        router.push(`/game/${item.value}`);
         break;
     }
   }, [handleSearch, router]);
@@ -300,6 +306,12 @@ export function Header({ onMenuClick }: HeaderProps) {
         // 视频建议
         for (const video of suggestions.videos) {
           items.push({ type: "video", label: video.title, value: video.id });
+        }
+        // 游戏建议
+        if (suggestions.games) {
+          for (const game of suggestions.games) {
+            items.push({ type: "game", label: game.title, value: game.id });
+          }
         }
       }
     } else {
@@ -618,7 +630,7 @@ export function Header({ onMenuClick }: HeaderProps) {
               <Input
                 ref={mobileSearchInputRef}
                 type="search"
-                placeholder="搜索视频、标签..."
+                placeholder="搜索视频、游戏、标签..."
                 value={searchQuery}
                 onChange={(e) => handleSearchChange(e.target.value)}
                 onKeyDown={handleKeyDown}
@@ -655,7 +667,7 @@ export function Header({ onMenuClick }: HeaderProps) {
             ) : (
               <div className="flex flex-col items-center justify-center py-16 text-muted-foreground">
                 <Search className="h-10 w-10 mb-3 opacity-30" />
-                <p className="text-sm">搜索视频、标签...</p>
+                <p className="text-sm">搜索视频、游戏、标签...</p>
               </div>
             )}
           </div>

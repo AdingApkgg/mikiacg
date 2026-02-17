@@ -26,7 +26,7 @@ interface NavItem {
 const navItems: NavItem[] = [
   { href: "/", icon: Home, label: "首页" },
   { href: "/search", icon: Compass, label: "发现" },
-  { href: "/upload", icon: Upload, label: "投稿", auth: true, loginHref: "/login", requireUpload: true },
+  { href: "/upload", icon: Upload, label: "上传", auth: true, loginHref: "/login", requireUpload: true },
   { href: "/favorites", icon: Heart, label: "收藏", auth: true, loginHref: "/login" },
   { href: "/settings", icon: User, label: "我的", auth: true, loginHref: "/login" },
 ];
@@ -51,8 +51,9 @@ export function BottomNav() {
       <div className="flex h-14 items-center justify-around px-1">
         {visibleItems.map((item) => {
           const href = item.auth && !effectiveSession ? (item.loginHref || "/login") : item.href;
-          const isActive = pathname === item.href || 
-            (item.href !== "/" && pathname.startsWith(item.href));
+          const isActive = item.href === "/"
+            ? pathname === "/" || pathname === "/video" || pathname === "/game"
+            : pathname === item.href || pathname.startsWith(item.href);
           
           return (
             <Link

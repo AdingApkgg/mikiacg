@@ -15,14 +15,14 @@ export async function generateMetadata({ searchParams }: SearchPageProps): Promi
 
   if (!query) {
     return {
-      title: "搜索视频",
-      description: `在 ${siteName} 搜索 ACGN 相关视频内容`,
+      title: "搜索",
+      description: `在 ${siteName} 搜索 ACGN 相关视频和游戏内容`,
     };
   }
 
   return {
     title: `"${query}" 的搜索结果`,
-    description: `在 ${siteName} 搜索 "${query}" 的相关视频`,
+    description: `在 ${siteName} 搜索 "${query}" 的相关内容`,
     robots: {
       index: false, // 搜索结果页不索引
       follow: true,

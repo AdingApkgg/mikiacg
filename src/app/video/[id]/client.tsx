@@ -528,7 +528,7 @@ export function VideoPageClient({ id: initialId, initialVideo }: VideoPageClient
                       {displayVideo.tags.map(({ tag }) => (
                         <Link 
                           key={tag.id} 
-                          href={`/tag/${tag.slug}`}
+                          href={`/video/tag/${tag.slug}`}
                           className="text-xs text-primary bg-primary/10 px-2 py-0.5 rounded-full"
                         >
                           #{tag.name}
@@ -923,7 +923,7 @@ export function VideoPageClient({ id: initialId, initialVideo }: VideoPageClient
                   <span className="text-sm text-muted-foreground">标签:</span>
                   {displayVideo.tags.map(({ tag }) => (
                     <Badge key={tag.id} variant="outline">
-                      <Link href={`/tag/${tag.slug}`}>{tag.name}</Link>
+                      <Link href={`/video/tag/${tag.slug}`}>{tag.name}</Link>
                     </Badge>
                   ))}
                 </div>

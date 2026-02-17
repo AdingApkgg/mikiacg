@@ -2,38 +2,35 @@
 
 import { useState } from "react";
 import { trpc } from "@/lib/trpc";
-import { VideoGrid } from "@/components/video/video-grid";
+import { GameGrid } from "@/components/game/game-grid";
 import { Button } from "@/components/ui/button";
 import Link from "next/link";
-import { Tag } from "lucide-react";
+import { Gamepad2, Tag } from "lucide-react";
 import { Pagination } from "@/components/ui/pagination";
-import type { SerializedTag } from "./page";
+import type { SerializedGameTag } from "./page";
 
-interface TagPageClientProps {
+interface GameTagPageClientProps {
   slug: string;
-  initialTag: SerializedTag | null;
+  initialTag: SerializedGameTag | null;
 }
 
-export function TagPageClient({ slug, initialTag }: TagPageClientProps) {
+export function GameTagPageClient({
+  slug,
+  initialTag,
+}: GameTagPageClientProps) {
   const [page, setPage] = useState(1);
 
-  // 客户端获取标签数据（如果需要刷新）
   const { data: tag, isLoading: tagLoading } = trpc.tag.getBySlug.useQuery(
-    { slug },
+    { slug, type: "game" },
     {
-      // 如果有初始数据，延迟重新请求
       staleTime: initialTag ? 60000 : 0,
       refetchOnMount: !initialTag,
     }
   );
 
-  // 优先使用服务端数据，然后是客户端数据
   const displayTag = tag || initialTag;
 
-  const {
-    data,
-    isLoading,
-  } = trpc.video.list.useQuery(
+  const { data, isLoading } = trpc.game.list.useQuery(
     { limit: 20, page, tagId: displayTag?.id },
     {
       enabled: !!displayTag?.id,
@@ -41,17 +38,18 @@ export function TagPageClient({ slug, initialTag }: TagPageClientProps) {
     }
   );
 
-  const videos = data?.videos ?? [];
+  const games = data?.games ?? [];
   const totalPages = data?.totalPages ?? 1;
 
-  // 标签不存在
   if (!initialTag && !displayTag && !tagLoading) {
     return (
       <div className="container py-12 text-center">
         <h1 className="text-2xl font-bold">标签不存在</h1>
-        <p className="text-muted-foreground mt-2">找不到标签 &ldquo;{slug}&rdquo;</p>
+        <p className="text-muted-foreground mt-2">
+          找不到标签 &ldquo;{slug}&rdquo;
+        </p>
         <Button asChild className="mt-4">
-          <Link href="/tags">查看所有标签</Link>
+          <Link href="/game">浏览全部游戏</Link>
         </Button>
       </div>
     );
@@ -65,17 +63,23 @@ export function TagPageClient({ slug, initialTag }: TagPageClientProps) {
             <Tag className="h-6 w-6 text-primary" />
           </div>
           <div>
-            <h1 className="text-2xl font-bold">#{displayTag?.name || initialTag?.name}</h1>
+            <h1 className="text-2xl font-bold flex items-center gap-2">
+              #{displayTag?.name || initialTag?.name}
+              <Gamepad2 className="h-5 w-5 text-muted-foreground" />
+            </h1>
             <p className="text-sm text-muted-foreground">
-              共 {displayTag?._count?.videos ?? initialTag?._count?.videos ?? 0} 个视频
+              共 {displayTag?._count?.games ?? initialTag?._count?.games ?? 0}{" "}
+              个游戏
             </p>
           </div>
         </div>
       </div>
 
-      <VideoGrid videos={videos} isLoading={isLoading || (!initialTag && tagLoading)} />
+      <GameGrid
+        games={games}
+        isLoading={isLoading || (!initialTag && tagLoading)}
+      />
 
-      {/* 分页器 */}
       <Pagination
         currentPage={page}
         totalPages={totalPages}
@@ -83,11 +87,11 @@ export function TagPageClient({ slug, initialTag }: TagPageClientProps) {
         className="mt-8"
       />
 
-      {!isLoading && videos.length === 0 && displayTag && (
+      {!isLoading && games.length === 0 && displayTag && (
         <div className="text-center py-12">
-          <p className="text-muted-foreground">该标签下暂无视频</p>
+          <p className="text-muted-foreground">该标签下暂无游戏</p>
           <Button asChild variant="outline" className="mt-4">
-            <Link href="/">浏览全部视频</Link>
+            <Link href="/game">浏览全部游戏</Link>
           </Button>
         </div>
       )}

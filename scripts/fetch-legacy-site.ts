@@ -453,9 +453,25 @@ async function extractFromPage(
 
 // ─── 生成批量导入文本 ────────────────────────────────────
 
-function generateImportText(videos: VideoInfo[]): {
-  text: string;
-  count: number;
+interface ExportVideo {
+  title: string;
+  description?: string;
+  coverUrl?: string;
+  videoUrl: string;
+  tagNames?: string[];
+  extraInfo?: Record<string, unknown>;
+}
+
+interface ExportSeries {
+  seriesTitle: string;
+  description?: string;
+  coverUrl?: string;
+  videos: ExportVideo[];
+}
+
+function generateImportJson(videos: VideoInfo[]): {
+  data: { series: ExportSeries[] };
+  videoCount: number;
 } {
   const valid = videos.filter(
     (v) => v.title && !v.error && (v.videoUrl || v.episodes.length > 0),
@@ -469,70 +485,75 @@ function generateImportText(videos: VideoInfo[]): {
     grouped.get(author)!.push(v);
   }
 
-  const lines: string[] = [];
-  let count = 0;
+  const seriesList: ExportSeries[] = [];
+  let videoCount = 0;
 
   for (const [author, vids] of [...grouped.entries()].sort((a, b) =>
     a[0].localeCompare(b[0]),
   )) {
-    // ── 作者头部：共享字段只输出一次（作者即合集） ──
-    lines.push(`作者：${author}`);
-
-    // 取第一个视频的共享字段作为合集级数据
     const ref = vids[0];
-
-    if (ref.coverUrl) lines.push(`封面：${ref.coverUrl}`);
 
     // 合并 tags + keywords 去重
     const allTags = [...ref.tags];
     for (const kw of ref.keywords) {
       if (!allTags.includes(kw)) allTags.push(kw);
     }
-    if (allTags.length) lines.push(`标签：${allTags.join(",")}`);
 
-    // 描述：优先用作者介绍（更丰富），退而用摘要
-    const seriesDesc = ref.authorIntro || ref.description;
-    if (seriesDesc) lines.push(`描述：${seriesDesc}`);
+    const seriesDesc = ref.authorIntro || ref.description || undefined;
 
-    if (ref.downloads.length) {
-      const dlStr = ref.downloads
-        .map((d) => {
-          let s = `${d.name}|${d.url}`;
-          if (d.password) s += `|${d.password}`;
-          return s;
-        })
-        .join("; ");
-      lines.push(`下载：${dlStr}`);
-    }
+    const seriesVideos: ExportVideo[] = [];
 
-    lines.push(""); // 空行分隔头部与剧集
-
-    // ── 剧集：每集标题 + 封面 + 视频 ──
     for (const v of vids) {
-      const writeEpisode = (ep: Episode) => {
-        lines.push(`标题：${v.title} - ${ep.title}`);
-        if (ep.coverUrl) lines.push(`封面：${ep.coverUrl}`);
-        lines.push(`视频：${ep.videoUrl}`);
-        lines.push("");
-        count++;
+      const buildExtraInfo = (vi: VideoInfo): Record<string, unknown> | undefined => {
+        const info: Record<string, unknown> = {};
+        if (vi.authorIntro) info.authorIntro = vi.authorIntro;
+        if (vi.author && vi.author !== author) info.author = vi.author;
+        if (vi.keywords.length > 0) info.keywords = vi.keywords;
+        if (vi.downloads.length > 0) info.downloads = vi.downloads;
+        return Object.keys(info).length > 0 ? info : undefined;
+      };
+
+      const addEpisode = (ep: Episode) => {
+        seriesVideos.push({
+          title: `${v.title} - ${ep.title}`,
+          coverUrl: ep.coverUrl || undefined,
+          videoUrl: ep.videoUrl,
+          tagNames: allTags.length > 0 ? allTags : undefined,
+          extraInfo: buildExtraInfo(v),
+        });
+        videoCount++;
       };
 
       if (v.episodes.length > 1) {
         for (const ep of v.episodes.filter((e) => e.videoUrl)) {
-          writeEpisode(ep);
+          addEpisode(ep);
         }
       } else if (v.episodes.length === 1) {
-        writeEpisode(v.episodes[0]);
+        addEpisode(v.episodes[0]);
       } else if (v.videoUrl) {
-        lines.push(`标题：${v.title}`);
-        lines.push(`视频：${v.videoUrl}`);
-        lines.push("");
-        count++;
+        seriesVideos.push({
+          title: v.title,
+          description: v.description || undefined,
+          coverUrl: v.coverUrl || undefined,
+          videoUrl: v.videoUrl,
+          tagNames: allTags.length > 0 ? allTags : undefined,
+          extraInfo: buildExtraInfo(v),
+        });
+        videoCount++;
       }
+    }
+
+    if (seriesVideos.length > 0) {
+      seriesList.push({
+        seriesTitle: author,
+        description: seriesDesc,
+        coverUrl: ref.coverUrl || undefined,
+        videos: seriesVideos,
+      });
     }
   }
 
-  return { text: lines.join("\n"), count };
+  return { data: { series: seriesList }, videoCount };
 }
 
 // ─── 主流程 ──────────────────────────────────────────────
@@ -633,19 +654,17 @@ async function main() {
   console.log(`  无视频: ${noVideoCount}`);
   console.log(`  失败数: ${errorCount}`);
 
-  // 4) 生成导入文本并保存
-  const { text: importText, count: videoCount } = generateImportText(videos);
+  // 4) 生成导入 JSON 并保存
+  const { data: importData, videoCount } = generateImportJson(videos);
   const timestamp = new Date()
     .toISOString()
     .replace(/[T:]/g, "_")
     .slice(0, 19);
-  const outputFile = `legacy_import_${timestamp}.md`;
+  const outputFile = `legacy_videos_${timestamp}.json`;
 
-  const now = new Date().toLocaleString("zh-CN", { timeZone: "Asia/Shanghai" });
-  const header = `# 旧站视频导入数据\n\n抓取时间: ${now}\n文章数: ${validCount}, 导出视频条数: ${videoCount}\n\n---\n\n`;
-
-  writeFileSync(outputFile, header + importText, "utf-8");
+  writeFileSync(outputFile, JSON.stringify(importData, null, 2), "utf-8");
   console.log(`\n已保存到: ${outputFile}`);
+  console.log(`导出合集数: ${importData.series.length}`);
   console.log(`导出视频数: ${videoCount}`);
 }
 

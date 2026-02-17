@@ -7,26 +7,22 @@ export async function GET() {
   const baseUrl = process.env.NEXT_PUBLIC_APP_URL || "https://www.mikiacg.vip";
 
   try {
-    const users = await prisma.user.findMany({
-      where: {
-        OR: [
-          { videos: { some: { status: "PUBLISHED" } } },
-          { games: { some: { status: "PUBLISHED" } } },
-        ],
-      },
+    const games = await prisma.game.findMany({
+      where: { status: "PUBLISHED" },
       select: { id: true, updatedAt: true },
-      take: 1000,
+      orderBy: { updatedAt: "desc" },
+      take: 5000,
     });
 
     const xml = `<?xml version="1.0" encoding="UTF-8"?>
 <urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">
-${users
+${games
   .map(
-    (user) => `  <url>
-    <loc>${baseUrl}/user/${user.id}</loc>
-    <lastmod>${user.updatedAt.toISOString()}</lastmod>
+    (game) => `  <url>
+    <loc>${baseUrl}/game/${game.id}</loc>
+    <lastmod>${game.updatedAt.toISOString()}</lastmod>
     <changefreq>weekly</changefreq>
-    <priority>0.5</priority>
+    <priority>0.9</priority>
   </url>`
   )
   .join("\n")}
@@ -39,7 +35,7 @@ ${users
       },
     });
   } catch (error) {
-    console.error("Users sitemap error:", error);
+    console.error("Games sitemap error:", error);
     return new NextResponse(
       `<?xml version="1.0" encoding="UTF-8"?><urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9"></urlset>`,
       {

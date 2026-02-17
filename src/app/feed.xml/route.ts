@@ -1,7 +1,6 @@
 import { prisma } from "@/lib/prisma";
 import { getCoverFullUrl } from "@/lib/cover";
 
-// 强制动态渲染，避免构建时预渲染（此时数据库不可用）
 export const dynamic = "force-dynamic";
 
 export async function GET() {
@@ -16,7 +15,6 @@ export async function GET() {
       .replace(/"/g, "&quot;")
       .replace(/'/g, "&apos;");
 
-  // 格式化时长为 ISO 8601 格式
   const formatDuration = (seconds: number | null) => {
     if (!seconds) return "";
     const hours = Math.floor(seconds / 3600);
@@ -31,19 +29,30 @@ export async function GET() {
   let rssItems = "";
 
   try {
-    const videos = await prisma.video.findMany({
-      where: { status: "PUBLISHED" },
-      orderBy: { createdAt: "desc" },
-      take: 50,
-      include: {
-        uploader: { select: { username: true, nickname: true } },
-        tags: { include: { tag: { select: { name: true } } } },
-      },
-    });
+    const [videos, games] = await Promise.all([
+      prisma.video.findMany({
+        where: { status: "PUBLISHED" },
+        orderBy: { createdAt: "desc" },
+        take: 50,
+        include: {
+          uploader: { select: { username: true, nickname: true } },
+          tags: { include: { tag: { select: { name: true } } } },
+        },
+      }),
+      prisma.game.findMany({
+        where: { status: "PUBLISHED" },
+        orderBy: { createdAt: "desc" },
+        take: 30,
+        include: {
+          uploader: { select: { username: true, nickname: true } },
+          tags: { include: { tag: { select: { name: true } } } },
+        },
+      }),
+    ]);
 
-    rssItems = videos
-      .map(
-        (video) => `
+    // 视频 items
+    const videoItems = videos.map(
+      (video) => `
     <item>
       <title>${escapeXml(video.title)}</title>
       <link>${baseUrl}/video/${video.id}</link>
@@ -62,10 +71,43 @@ export async function GET() {
       </media:content>
       ${video.duration ? `<itunes:duration>${formatDuration(video.duration)}</itunes:duration>` : ""}
     </item>`
-      )
-      .join("");
+    );
+
+    // 游戏 items
+    const gameItems = games.map((game) => {
+      const typeLabel = game.gameType ? `[${game.gameType}] ` : "";
+      const freeLabel = game.isFree ? "" : " [付费]";
+      const coverUrl = game.coverUrl
+        ? escapeXml(game.coverUrl)
+        : `${baseUrl}/icon`;
+
+      return `
+    <item>
+      <title>${escapeXml(`${typeLabel}${game.title}${freeLabel}`)}</title>
+      <link>${baseUrl}/game/${game.id}</link>
+      <guid isPermaLink="true">${baseUrl}/game/${game.id}</guid>
+      <description><![CDATA[${game.description || game.title}]]></description>
+      <pubDate>${new Date(game.createdAt).toUTCString()}</pubDate>
+      <author>${escapeXml(game.uploader.nickname || game.uploader.username)}</author>
+      <category>游戏</category>
+      ${game.tags.map((t) => `<category>${escapeXml(t.tag.name)}</category>`).join("\n      ")}
+      <media:thumbnail url="${coverUrl}" />
+    </item>`;
+    });
+
+    // 按时间混合排序
+    interface FeedItem {
+      xml: string;
+      date: Date;
+    }
+    const allItems: FeedItem[] = [
+      ...videoItems.map((xml, i) => ({ xml, date: videos[i].createdAt })),
+      ...gameItems.map((xml, i) => ({ xml, date: games[i].createdAt })),
+    ];
+    allItems.sort((a, b) => b.date.getTime() - a.date.getTime());
+
+    rssItems = allItems.map((item) => item.xml).join("");
   } catch {
-    // 数据库不可用时返回空的 feed
     console.warn("Feed: Database unavailable, returning empty feed");
   }
 
@@ -78,7 +120,7 @@ export async function GET() {
   <channel>
     <title>${escapeXml(siteName)}</title>
     <link>${baseUrl}</link>
-    <description>Mikiacg 流式媒体内容分享平台，分享动画、漫画、游戏、轻小说相关视频内容</description>
+    <description>${siteName} - ACGN 流式媒体内容分享平台，分享动画、漫画、游戏、轻小说相关视频和游戏资源</description>
     <language>zh-CN</language>
     <lastBuildDate>${new Date().toUTCString()}</lastBuildDate>
     <atom:link href="${baseUrl}/feed.xml" rel="self" type="application/rss+xml" />
@@ -88,7 +130,7 @@ export async function GET() {
       <link>${baseUrl}</link>
     </image>
     <itunes:author>${escapeXml(siteName)}</itunes:author>
-    <itunes:summary>Mikiacg 流式媒体内容分享平台</itunes:summary>
+    <itunes:summary>${siteName} - ACGN 流式媒体内容分享平台</itunes:summary>
     <itunes:category text="Leisure">
       <itunes:category text="Animation &amp; Manga"/>
     </itunes:category>

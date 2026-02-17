@@ -53,6 +53,14 @@ model User {
   devices          UserDevice[]
   searchRecords    SearchRecord[]
 
+  // 游戏相关
+  games              Game[]
+  gameFavorites      GameFavorite[]
+  gameLikes          GameLike[]
+  gameDislikes       GameDislike[]
+  gameComments       GameComment[]    @relation("GameCommentAuthor")
+  gameCommentReplies GameComment[]    @relation("GameCommentReplyTo")
+
   @@index([email])
   @@index([username])
 }
@@ -270,6 +278,139 @@ enum VideoStatus {
   DELETED
 }
 
+// ==================== 游戏相关 ====================
+
+model Game {
+  id          String      @id // 随机 6 位数字 ID (000000-999999)
+  title       String      // 游戏标题
+  description String?     @db.Text // 游戏介绍
+  coverUrl    String?     // 封面图
+
+  // 游戏元信息
+  gameType    String?     // 游戏类型 (ADV, SLG, RPG, ACT, etc.)
+  isFree      Boolean     @default(true) // 是否免费
+  version     String?     // 版本号 (e.g., "Ver1.0.3")
+
+  // 扩展信息 (结构化 JSON)
+  extraInfo   Json?       // {
+                          //   originalName?: string,            // 原作名
+                          //   originalAuthor?: string,          // 原作者
+                          //   authorUrl?: string,               // 作者链接
+                          //   fileSize?: string,                // 文件大小 (e.g., "2.19 GB")
+                          //   platforms?: string[],             // 支持平台 ["PC", "Android"]
+                          //   screenshots?: string[],           // 游戏截图 URL 列表
+                          //   characterIntro?: string,          // 角色介绍
+                          //   downloads?: { name: string, url: string, password?: string }[],
+                          //   keywords?: string[],              // 搜索关键词
+                          //   notices?: { type: 'info'|'success'|'warning'|'error', content: string }[]
+                          // }
+
+  views       Int         @default(0)
+  status      VideoStatus @default(PENDING) // 复用审核状态枚举
+
+  tags        TagOnGame[]
+
+  uploaderId  String
+  uploader    User        @relation(fields: [uploaderId], references: [id], onDelete: Cascade)
+
+  createdAt   DateTime    @default(now())
+  updatedAt   DateTime    @updatedAt
+
+  favorites     GameFavorite[]
+  likes         GameLike[]
+  dislikes      GameDislike[]
+  comments      GameComment[]
+
+  @@index([uploaderId])
+  @@index([status])
+  @@index([createdAt])
+  @@index([gameType])
+}
+
+model GameFavorite {
+  id        String   @id @default(cuid())
+  userId    String
+  gameId    String
+  createdAt DateTime @default(now())
+
+  user  User  @relation(fields: [userId], references: [id], onDelete: Cascade)
+  game  Game  @relation(fields: [gameId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, gameId])
+  @@index([userId])
+  @@index([gameId])
+}
+
+model GameLike {
+  id        String   @id @default(cuid())
+  userId    String
+  gameId    String
+  createdAt DateTime @default(now())
+
+  user  User  @relation(fields: [userId], references: [id], onDelete: Cascade)
+  game  Game  @relation(fields: [gameId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, gameId])
+  @@index([userId])
+  @@index([gameId])
+}
+
+model GameDislike {
+  id        String   @id @default(cuid())
+  userId    String
+  gameId    String
+  createdAt DateTime @default(now())
+
+  user  User  @relation(fields: [userId], references: [id], onDelete: Cascade)
+  game  Game  @relation(fields: [gameId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, gameId])
+  @@index([userId])
+  @@index([gameId])
+}
+
+model GameComment {
+  id            String   @id @default(cuid())
+  content       String   @db.Text
+  userId        String?
+  gameId        String
+  parentId      String?
+  replyToUserId String?
+
+  guestName     String?
+  guestEmail    String?
+  guestWebsite  String?
+
+  ipv4Address   String?
+  ipv4Location  String?
+  ipv6Address   String?
+  ipv6Location  String?
+  deviceInfo    Json?
+  userAgent     String?
+
+  likes     Int      @default(0)
+  dislikes  Int      @default(0)
+
+  isEdited  Boolean  @default(false)
+  isPinned  Boolean  @default(false)
+  isDeleted Boolean  @default(false)
+  isHidden  Boolean  @default(false)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  user        User?          @relation("GameCommentAuthor", fields: [userId], references: [id], onDelete: Cascade)
+  game        Game           @relation(fields: [gameId], references: [id], onDelete: Cascade)
+  parent      GameComment?   @relation("GameCommentReplies", fields: [parentId], references: [id], onDelete: SetNull)
+  replies     GameComment[]  @relation("GameCommentReplies")
+  replyToUser User?          @relation("GameCommentReplyTo", fields: [replyToUserId], references: [id], onDelete: SetNull)
+
+  @@index([gameId, createdAt])
+  @@index([gameId, likes])
+  @@index([userId])
+  @@index([parentId])
+}
+
 
 model Tag {
   id        String       @id @default(cuid())
@@ -278,6 +419,7 @@ model Tag {
   createdAt DateTime     @default(now())
 
   videos TagOnVideo[]
+  games  TagOnGame[]
 
   @@index([slug])
 }
@@ -289,6 +431,16 @@ model TagOnVideo {
   tag     Tag    @relation(fields: [tagId], references: [id], onDelete: Cascade)
 
   @@id([videoId, tagId])
+  @@index([tagId])
+}
+
+model TagOnGame {
+  gameId String
+  tagId  String
+  game   Game   @relation(fields: [gameId], references: [id], onDelete: Cascade)
+  tag    Tag    @relation(fields: [tagId], references: [id], onDelete: Cascade)
+
+  @@id([gameId, tagId])
   @@index([tagId])
 }
 

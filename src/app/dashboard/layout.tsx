@@ -20,6 +20,7 @@ import {
 import {
   Users,
   Video,
+  Gamepad2,
   Tag,
   Settings,
   Shield,
@@ -34,6 +35,12 @@ const menuItems = [
     href: "/dashboard/videos",
     label: "视频管理",
     icon: Video,
+    scope: "video:moderate",
+  },
+  {
+    href: "/dashboard/games",
+    label: "游戏管理",
+    icon: Gamepad2,
     scope: "video:moderate",
   },
   {

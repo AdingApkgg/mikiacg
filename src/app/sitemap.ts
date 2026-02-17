@@ -4,7 +4,6 @@ import type { MetadataRoute } from "next";
 export default function sitemap(): MetadataRoute.Sitemap {
   const baseUrl = process.env.NEXT_PUBLIC_APP_URL || "https://www.mikiacg.vip";
 
-  // 返回 sitemap index 格式
   return [
     {
       url: `${baseUrl}/sitemap/static.xml`,
@@ -12,6 +11,10 @@ export default function sitemap(): MetadataRoute.Sitemap {
     },
     {
       url: `${baseUrl}/sitemap/videos.xml`,
+      lastModified: new Date(),
+    },
+    {
+      url: `${baseUrl}/sitemap/games.xml`,
       lastModified: new Date(),
     },
     {

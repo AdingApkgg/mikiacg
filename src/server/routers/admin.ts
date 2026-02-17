@@ -1505,4 +1505,311 @@ export const adminRouter = router({
         queuedCount,
       };
     }),
+
+  // ==================== 游戏管理 ====================
+
+  /** 游戏统计 */
+  getGameStats: adminProcedure.query(async ({ ctx }) => {
+    const canModerate = await hasScope(ctx.prisma, ctx.session.user.id, "video:moderate");
+    if (!canModerate) {
+      throw new TRPCError({ code: "FORBIDDEN", message: "无游戏管理权限" });
+    }
+
+    const [total, pending, published, rejected] = await Promise.all([
+      ctx.prisma.game.count(),
+      ctx.prisma.game.count({ where: { status: "PENDING" } }),
+      ctx.prisma.game.count({ where: { status: "PUBLISHED" } }),
+      ctx.prisma.game.count({ where: { status: "REJECTED" } }),
+    ]);
+
+    return { total, pending, published, rejected };
+  }),
+
+  /** 获取所有游戏列表（分页版） */
+  listAllGames: adminProcedure
+    .input(
+      z.object({
+        page: z.number().min(1).default(1),
+        limit: z.number().min(1).max(100).default(50),
+        status: z.enum(["ALL", "PENDING", "PUBLISHED", "REJECTED"]).default("ALL"),
+        search: z.string().optional(),
+        gameType: z.string().optional(),
+      })
+    )
+    .query(async ({ ctx, input }) => {
+      const canModerate = await hasScope(ctx.prisma, ctx.session.user.id, "video:moderate");
+      if (!canModerate) {
+        throw new TRPCError({ code: "FORBIDDEN", message: "无游戏管理权限" });
+      }
+
+      const { page, limit, status, search, gameType } = input;
+      const skip = (page - 1) * limit;
+
+      const where: Prisma.GameWhereInput = {};
+      if (status !== "ALL") {
+        where.status = status;
+      }
+      if (search) {
+        where.OR = [
+          { title: { contains: search, mode: "insensitive" } },
+          { description: { contains: search, mode: "insensitive" } },
+        ];
+      }
+      if (gameType) {
+        where.gameType = gameType;
+      }
+
+      const [games, totalCount] = await Promise.all([
+        ctx.prisma.game.findMany({
+          where,
+          skip,
+          take: limit,
+          orderBy: { createdAt: "desc" },
+          include: {
+            uploader: {
+              select: { id: true, username: true, nickname: true, avatar: true },
+            },
+            tags: {
+              include: { tag: { select: { id: true, name: true, slug: true } } },
+            },
+            _count: { select: { likes: true, dislikes: true, favorites: true, comments: true } },
+          },
+        }),
+        ctx.prisma.game.count({ where }),
+      ]);
+
+      return {
+        games,
+        totalCount,
+        totalPages: Math.ceil(totalCount / limit),
+        currentPage: page,
+      };
+    }),
+
+  /** 审核游戏 */
+  moderateGame: adminProcedure
+    .input(
+      z.object({
+        gameId: z.string(),
+        status: z.enum(["PUBLISHED", "REJECTED"]),
+      })
+    )
+    .mutation(async ({ ctx, input }) => {
+      const canModerate = await hasScope(ctx.prisma, ctx.session.user.id, "video:moderate");
+      if (!canModerate) {
+        throw new TRPCError({ code: "FORBIDDEN", message: "无游戏审核权限" });
+      }
+
+      await ctx.prisma.game.update({
+        where: { id: input.gameId },
+        data: { status: input.status },
+      });
+
+      return { success: true };
+    }),
+
+  /** 删除游戏 */
+  deleteGame: adminProcedure
+    .input(z.object({ gameId: z.string() }))
+    .mutation(async ({ ctx, input }) => {
+      const canManage = await hasScope(ctx.prisma, ctx.session.user.id, "video:manage");
+      if (!canManage) {
+        throw new TRPCError({ code: "FORBIDDEN", message: "无游戏管理权限" });
+      }
+
+      await ctx.prisma.game.delete({ where: { id: input.gameId } });
+      return { success: true };
+    }),
+
+  /** 创建游戏（管理员） */
+  createGame: adminProcedure
+    .input(
+      z.object({
+        title: z.string().min(1).max(200),
+        description: z.string().optional(),
+        coverUrl: z.string().optional(),
+        gameType: z.string().optional(),
+        isFree: z.boolean().default(true),
+        version: z.string().optional(),
+        extraInfo: z.any().optional(),
+        tagNames: z.array(z.string()).default([]),
+        status: z.enum(["PENDING", "PUBLISHED"]).default("PUBLISHED"),
+      })
+    )
+    .mutation(async ({ ctx, input }) => {
+      const canModerate = await hasScope(ctx.prisma, ctx.session.user.id, "video:moderate");
+      if (!canModerate) {
+        throw new TRPCError({ code: "FORBIDDEN", message: "无游戏管理权限" });
+      }
+
+      // 生成游戏 ID
+      const maxAttempts = 100;
+      let gameId = "";
+      for (let i = 0; i < maxAttempts; i++) {
+        const randomNum = Math.floor(Math.random() * 1000000);
+        const id = randomNum.toString().padStart(6, "0");
+        const existing = await ctx.prisma.game.findUnique({
+          where: { id },
+          select: { id: true },
+        });
+        if (!existing) {
+          gameId = id;
+          break;
+        }
+      }
+      if (!gameId) {
+        throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "无法生成唯一游戏 ID" });
+      }
+
+      // 处理标签
+      const tagConnections = [];
+      for (const tagName of input.tagNames) {
+        const slug = tagName.toLowerCase().replace(/\s+/g, "-");
+        const tag = await ctx.prisma.tag.upsert({
+          where: { slug },
+          update: {},
+          create: { name: tagName, slug },
+        });
+        tagConnections.push({ tagId: tag.id });
+      }
+
+      const game = await ctx.prisma.game.create({
+        data: {
+          id: gameId,
+          title: input.title,
+          description: input.description,
+          coverUrl: input.coverUrl,
+          gameType: input.gameType,
+          isFree: input.isFree,
+          version: input.version,
+          extraInfo: input.extraInfo || undefined,
+          status: input.status,
+          uploaderId: ctx.session.user.id,
+          tags: {
+            create: tagConnections,
+          },
+        },
+      });
+
+      return game;
+    }),
+
+  /** 更新游戏 */
+  updateGame: adminProcedure
+    .input(
+      z.object({
+        gameId: z.string(),
+        title: z.string().min(1).max(200).optional(),
+        description: z.string().optional(),
+        coverUrl: z.string().optional(),
+        gameType: z.string().optional(),
+        isFree: z.boolean().optional(),
+        version: z.string().optional(),
+        extraInfo: z.any().optional(),
+        tagNames: z.array(z.string()).optional(),
+      })
+    )
+    .mutation(async ({ ctx, input }) => {
+      const canModerate = await hasScope(ctx.prisma, ctx.session.user.id, "video:moderate");
+      if (!canModerate) {
+        throw new TRPCError({ code: "FORBIDDEN", message: "无游戏管理权限" });
+      }
+
+      const { gameId, tagNames, ...updateData } = input;
+
+      // 更新基本信息
+      await ctx.prisma.game.update({
+        where: { id: gameId },
+        data: updateData,
+      });
+
+      // 如果提供了标签，更新标签关联
+      if (tagNames) {
+        await ctx.prisma.tagOnGame.deleteMany({ where: { gameId } });
+
+        for (const tagName of tagNames) {
+          const slug = tagName.toLowerCase().replace(/\s+/g, "-");
+          const tag = await ctx.prisma.tag.upsert({
+            where: { slug },
+            update: {},
+            create: { name: tagName, slug },
+          });
+          await ctx.prisma.tagOnGame.create({
+            data: { gameId, tagId: tag.id },
+          });
+        }
+      }
+
+      return { success: true };
+    }),
+
+  /** 获取所有游戏 ID（用于全选） */
+  getAllGameIds: adminProcedure
+    .input(
+      z.object({
+        status: z.enum(["ALL", "PENDING", "PUBLISHED", "REJECTED"]).default("ALL"),
+        search: z.string().optional(),
+      })
+    )
+    .query(async ({ ctx, input }) => {
+      const canModerate = await hasScope(ctx.prisma, ctx.session.user.id, "video:moderate");
+      if (!canModerate) {
+        throw new TRPCError({ code: "FORBIDDEN", message: "无游戏管理权限" });
+      }
+
+      const { status, search } = input;
+      const where: Prisma.GameWhereInput = {};
+      if (status !== "ALL") where.status = status;
+      if (search) {
+        where.OR = [
+          { title: { contains: search, mode: "insensitive" as const } },
+          { description: { contains: search, mode: "insensitive" as const } },
+        ];
+      }
+
+      const games = await ctx.prisma.game.findMany({
+        where,
+        select: { id: true },
+        orderBy: { createdAt: "desc" },
+      });
+      return games.map((g) => g.id);
+    }),
+
+  /** 批量审核游戏 */
+  batchModerateGames: adminProcedure
+    .input(
+      z.object({
+        gameIds: z.array(z.string()).min(1).max(1000),
+        status: z.enum(["PUBLISHED", "REJECTED"]),
+      })
+    )
+    .mutation(async ({ ctx, input }) => {
+      const canModerate = await hasScope(ctx.prisma, ctx.session.user.id, "video:moderate");
+      if (!canModerate) {
+        throw new TRPCError({ code: "FORBIDDEN", message: "无游戏审核权限" });
+      }
+
+      const result = await ctx.prisma.game.updateMany({
+        where: { id: { in: input.gameIds } },
+        data: { status: input.status },
+      });
+
+      return { success: true, count: result.count };
+    }),
+
+  /** 批量删除游戏 */
+  batchDeleteGames: adminProcedure
+    .input(z.object({ gameIds: z.array(z.string()).min(1).max(1000) }))
+    .mutation(async ({ ctx, input }) => {
+      const canManage = await hasScope(ctx.prisma, ctx.session.user.id, "video:manage");
+      if (!canManage) {
+        throw new TRPCError({ code: "FORBIDDEN", message: "无游戏管理权限" });
+      }
+
+      const result = await ctx.prisma.game.deleteMany({
+        where: { id: { in: input.gameIds } },
+      });
+
+      return { success: true, count: result.count };
+    }),
 });

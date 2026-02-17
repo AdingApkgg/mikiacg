@@ -11,3 +11,8 @@ export const ADMIN_SCOPES = {
 } as const;
 
 export type AdminScope = keyof typeof ADMIN_SCOPES;
+
+/** 游戏类型常量 */
+export const GAME_TYPES = [
+  "ADV", "SLG", "RPG", "ACT", "STG", "PZL", "AVG", "FTG", "TAB", "OTHER",
+] as const;

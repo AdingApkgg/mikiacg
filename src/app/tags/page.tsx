@@ -8,49 +8,73 @@ const siteUrl = process.env.NEXT_PUBLIC_APP_URL || "https://acgn.app";
 
 export const metadata: Metadata = {
   title: "标签",
-  description: `浏览 ${siteName} 的所有视频标签，按分类查找 ACGN 相关视频内容`,
-  keywords: ["标签", "分类", "ACGN", "动漫", "视频"],
+  description: `浏览 ${siteName} 的所有标签，按分类查找 ACGN 相关内容`,
+  keywords: ["标签", "分类", "ACGN", "动漫", "视频", "游戏"],
 };
 
-// 获取服务端数据
 async function getTagsData() {
-  const [popularTags, allTags] = await Promise.all([
-    prisma.tag.findMany({
-      take: 20,
-      include: {
-        _count: { select: { videos: true } },
-      },
-      orderBy: {
-        videos: { _count: "desc" },
-      },
-    }),
-    prisma.tag.findMany({
-      take: 100,
-      include: {
-        _count: { select: { videos: true } },
-      },
-      orderBy: { name: "asc" },
-    }),
-  ]);
+  const [videoPopularTags, videoAllTags, gamePopularTags, gameAllTags] =
+    await Promise.all([
+      // 视频热门标签
+      prisma.tag.findMany({
+        take: 20,
+        where: { videos: { some: {} } },
+        include: { _count: { select: { videos: true } } },
+        orderBy: { videos: { _count: "desc" } },
+      }),
+      // 视频全部标签
+      prisma.tag.findMany({
+        take: 100,
+        where: { videos: { some: {} } },
+        include: { _count: { select: { videos: true } } },
+        orderBy: { name: "asc" },
+      }),
+      // 游戏热门标签
+      prisma.tag.findMany({
+        take: 20,
+        where: { games: { some: {} } },
+        include: { _count: { select: { games: true } } },
+        orderBy: { games: { _count: "desc" } },
+      }),
+      // 游戏全部标签
+      prisma.tag.findMany({
+        take: 100,
+        where: { games: { some: {} } },
+        include: { _count: { select: { games: true } } },
+        orderBy: { name: "asc" },
+      }),
+    ]);
 
-  return { popularTags, allTags };
+  return {
+    videoPopularTags,
+    videoAllTags,
+    gamePopularTags,
+    gameAllTags,
+  };
 }
 
 export default async function TagsPage() {
-  const { popularTags, allTags } = await getTagsData();
-  const totalTags = allTags.length;
+  const { videoPopularTags, videoAllTags, gamePopularTags, gameAllTags } =
+    await getTagsData();
+
+  const totalTags = new Set([
+    ...videoAllTags.map((t) => t.id),
+    ...gameAllTags.map((t) => t.id),
+  ]).size;
 
   return (
     <>
       <CollectionPageJsonLd
         name={`标签 - ${siteName}`}
-        description={`浏览 ${siteName} 的 ${totalTags} 个视频标签`}
+        description={`浏览 ${siteName} 的 ${totalTags} 个内容标签`}
         url={`${siteUrl}/tags`}
         numberOfItems={totalTags}
       />
       <TagsPageClient
-        initialPopularTags={popularTags}
-        initialAllTags={allTags}
+        videoPopularTags={videoPopularTags}
+        videoAllTags={videoAllTags}
+        gamePopularTags={gamePopularTags}
+        gameAllTags={gameAllTags}
       />
     </>
   );

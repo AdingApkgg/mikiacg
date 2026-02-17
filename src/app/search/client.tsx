@@ -2,9 +2,10 @@
 
 import { trpc } from "@/lib/trpc";
 import { VideoGrid } from "@/components/video/video-grid";
+import { GameGrid } from "@/components/game/game-grid";
 import { Button } from "@/components/ui/button";
 import { useState } from "react";
-import { Search, Clock, TrendingUp, X } from "lucide-react";
+import { Search, Clock, TrendingUp, X, Play, Gamepad2 } from "lucide-react";
 import { Pagination } from "@/components/ui/pagination";
 import { useRouter } from "next/navigation";
 import { useSearchHistoryStore } from "@/stores/app";
@@ -14,8 +15,14 @@ interface SearchContentProps {
   query: string;
 }
 
+type SearchTab = "video" | "game";
 type SortBy = "latest" | "views" | "likes";
 type TimeRange = "all" | "today" | "week" | "month";
+
+const TAB_OPTIONS: { value: SearchTab; label: string; icon: React.ElementType }[] = [
+  { value: "video", label: "视频", icon: Play },
+  { value: "game", label: "游戏", icon: Gamepad2 },
+];
 
 const SORT_OPTIONS: { value: SortBy; label: string }[] = [
   { value: "latest", label: "最新" },
@@ -142,8 +149,8 @@ function SearchExplore() {
       {searchHistory.length === 0 && (!hotSearches || hotSearches.length === 0) && (
         <div className="text-center py-16">
           <Search className="h-12 w-12 mx-auto text-muted-foreground/30" />
-          <h1 className="text-xl font-semibold mt-4">搜索视频</h1>
-          <p className="text-muted-foreground mt-2 text-sm">在顶部搜索框中输入关键词开始搜索</p>
+          <h1 className="text-xl font-semibold mt-4">搜索</h1>
+          <p className="text-muted-foreground mt-2 text-sm">在顶部搜索框中输入关键词开始搜索视频和游戏</p>
         </div>
       )}
     </div>
@@ -151,29 +158,59 @@ function SearchExplore() {
 }
 
 export function SearchContent({ query }: SearchContentProps) {
+  const [searchTab, setSearchTab] = useState<SearchTab>("video");
   const [sortBy, setSortBy] = useState<SortBy>("latest");
   const [timeRange, setTimeRange] = useState<TimeRange>("all");
-  const [page, setPage] = useState(1);
+  const [videoPage, setVideoPage] = useState(1);
+  const [gamePage, setGamePage] = useState(1);
 
+  const page = searchTab === "video" ? videoPage : gamePage;
+  const setPage = searchTab === "video" ? setVideoPage : setGamePage;
+
+  // 视频搜索查询
   const {
-    data,
-    isLoading,
+    data: videoData,
+    isLoading: videoLoading,
   } = trpc.video.list.useQuery(
-    { limit: 20, page, search: query, sortBy, timeRange },
+    { limit: 20, page: videoPage, search: query, sortBy, timeRange },
     {
-      enabled: !!query,
+      enabled: !!query && searchTab === "video",
       placeholderData: (prev) => prev,
     }
   );
 
-  const videos = data?.videos ?? [];
-  const totalCount = data?.totalCount ?? 0;
-  const totalPages = data?.totalPages ?? 1;
+  // 游戏搜索查询
+  const {
+    data: gameData,
+    isLoading: gameLoading,
+  } = trpc.game.list.useQuery(
+    { limit: 20, page: gamePage, search: query, sortBy, timeRange },
+    {
+      enabled: !!query && searchTab === "game",
+      placeholderData: (prev) => prev,
+    }
+  );
+
+  const videos = videoData?.videos ?? [];
+  const videoTotalCount = videoData?.totalCount ?? 0;
+  const videoTotalPages = videoData?.totalPages ?? 1;
+
+  const games = gameData?.games ?? [];
+  const gameTotalCount = gameData?.totalCount ?? 0;
+  const gameTotalPages = gameData?.totalPages ?? 1;
+
+  const isLoading = searchTab === "video" ? videoLoading : gameLoading;
+  const totalCount = searchTab === "video" ? videoTotalCount : gameTotalCount;
+  const totalPages = searchTab === "video" ? videoTotalPages : gameTotalPages;
 
   // 无搜索词时展示探索页
   if (!query) {
     return <SearchExplore />;
   }
+
+  const handleTabChange = (tab: SearchTab) => {
+    setSearchTab(tab);
+  };
 
   return (
     <div className="px-4 md:px-6 py-6">
@@ -182,9 +219,34 @@ export function SearchContent({ query }: SearchContentProps) {
         <p className="text-muted-foreground text-sm">
           搜索 &quot;{query}&quot;
           {!isLoading && (
-            <span className="ml-1">- 共 {totalCount} 个结果</span>
+            <span className="ml-1">
+              - 共 {totalCount} 个{searchTab === "video" ? "视频" : "游戏"}
+            </span>
           )}
         </p>
+      </div>
+
+      {/* 视频 / 游戏 标签页切换 */}
+      <div className="flex gap-1 mb-4">
+        {TAB_OPTIONS.map((tab) => {
+          const Icon = tab.icon;
+          const isActive = searchTab === tab.value;
+          return (
+            <button
+              key={tab.value}
+              onClick={() => handleTabChange(tab.value)}
+              className={cn(
+                "flex items-center gap-1.5 px-4 py-2 rounded-lg text-sm font-medium transition-colors",
+                isActive
+                  ? "bg-primary text-primary-foreground"
+                  : "bg-muted hover:bg-muted/80 text-foreground"
+              )}
+            >
+              <Icon className="h-4 w-4" />
+              {tab.label}
+            </button>
+          );
+        })}
       </div>
 
       {/* YouTube 风格的 chip 筛选栏 */}
@@ -213,32 +275,65 @@ export function SearchContent({ query }: SearchContentProps) {
         ))}
       </div>
 
-      <VideoGrid videos={videos} isLoading={isLoading} />
+      {/* 内容区域 */}
+      {searchTab === "video" ? (
+        <>
+          <VideoGrid videos={videos} isLoading={isLoading} />
 
-      {/* 分页器 */}
-      {totalPages > 1 && (
-        <Pagination
-          currentPage={page}
-          totalPages={totalPages}
-          onPageChange={setPage}
-          className="mt-8"
-        />
-      )}
-
-      {!isLoading && videos.length === 0 && (
-        <div className="text-center py-16">
-          <Search className="h-10 w-10 mx-auto text-muted-foreground/30 mb-3" />
-          <p className="text-muted-foreground">没有找到相关视频</p>
-          {(sortBy !== "latest" || timeRange !== "all") && (
-            <Button
-              variant="link"
-              onClick={() => { setSortBy("latest"); setTimeRange("all"); }}
-              className="mt-2"
-            >
-              清除筛选条件重试
-            </Button>
+          {totalPages > 1 && (
+            <Pagination
+              currentPage={page}
+              totalPages={totalPages}
+              onPageChange={setPage}
+              className="mt-8"
+            />
           )}
-        </div>
+
+          {!isLoading && videos.length === 0 && (
+            <div className="text-center py-16">
+              <Search className="h-10 w-10 mx-auto text-muted-foreground/30 mb-3" />
+              <p className="text-muted-foreground">没有找到相关视频</p>
+              {(sortBy !== "latest" || timeRange !== "all") && (
+                <Button
+                  variant="link"
+                  onClick={() => { setSortBy("latest"); setTimeRange("all"); }}
+                  className="mt-2"
+                >
+                  清除筛选条件重试
+                </Button>
+              )}
+            </div>
+          )}
+        </>
+      ) : (
+        <>
+          <GameGrid games={games} isLoading={isLoading} columns={4} />
+
+          {totalPages > 1 && (
+            <Pagination
+              currentPage={page}
+              totalPages={totalPages}
+              onPageChange={setPage}
+              className="mt-8"
+            />
+          )}
+
+          {!isLoading && games.length === 0 && (
+            <div className="text-center py-16">
+              <Gamepad2 className="h-10 w-10 mx-auto text-muted-foreground/30 mb-3" />
+              <p className="text-muted-foreground">没有找到相关游戏</p>
+              {(sortBy !== "latest" || timeRange !== "all") && (
+                <Button
+                  variant="link"
+                  onClick={() => { setSortBy("latest"); setTimeRange("all"); }}
+                  className="mt-2"
+                >
+                  清除筛选条件重试
+                </Button>
+              )}
+            </div>
+          )}
+        </>
       )}
     </div>
   );

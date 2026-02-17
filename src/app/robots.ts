@@ -4,7 +4,7 @@ export default function robots(): MetadataRoute.Robots {
   const baseUrl = process.env.NEXT_PUBLIC_APP_URL || "https://www.mikiacg.vip";
 
   // AI 爬虫允许访问的路径
-  const aiAllowPaths = ["/", "/video/", "/tag/", "/user/", "/tags", "/search", "/llms.txt", "/llms-full.txt", "/feed.xml"];
+  const aiAllowPaths = ["/", "/video/", "/video/tag/", "/game/", "/game/tag/", "/user/", "/tags", "/search", "/llms.txt", "/llms-full.txt", "/feed.xml"];
   const aiDisallowPaths = ["/api/", "/settings", "/profile", "/upload", "/my-videos", "/favorites", "/history", "/comments", "/video/edit/", "/dashboard/"];
 
   return {

@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { usePathname } from "next/navigation";
+import { usePathname, useRouter } from "next/navigation";
 import { cn } from "@/lib/utils";
 import {
   Home,
@@ -65,7 +65,7 @@ const userNavItems: NavItem[] = [
 ];
 
 const moreNavItems: NavItem[] = [
-  { href: "/upload", icon: Upload, label: "上传视频", auth: true, requireUpload: true },
+  { href: "/upload", icon: Upload, label: "上传", auth: true, requireUpload: true },
 ];
 
 function NavLink({
@@ -144,22 +144,40 @@ function NavGroup({
           {title}
         </h3>
       )}
-      {filteredItems.map((item) => (
-        <NavLink
-          key={item.href}
-          item={item}
-          collapsed={collapsed}
-          isActive={pathname === item.href || (item.href !== "/" && pathname.startsWith(item.href))}
-        />
-      ))}
+      {filteredItems.map((item) => {
+        const isActive = item.href === "/"
+          ? pathname === "/" || pathname === "/video" || pathname === "/game"
+          : pathname === item.href || pathname.startsWith(item.href);
+        return (
+          <NavLink
+            key={item.href}
+            item={item}
+            collapsed={collapsed}
+            isActive={isActive}
+          />
+        );
+      })}
     </div>
   );
 }
 
+/** 内容模式对应的路由路径 */
+const CONTENT_MODE_ROUTES: Record<ContentMode, string> = {
+  video: "/video",
+  image: "/video",
+  game: "/game",
+};
+
 /** 内容模式切换条（视频 / 图片 / 游戏），显示在「首页」上方 */
 function ContentModeSwitcher({ collapsed }: { collapsed: boolean }) {
   const contentMode = useUIStore((s) => s.contentMode);
-  const setContentMode = useUIStore((s) => s.setContentMode);
+  const chooseContentMode = useUIStore((s) => s.chooseContentMode);
+  const router = useRouter();
+
+  const handleModeChange = (mode: ContentMode) => {
+    chooseContentMode(mode);
+    router.push(CONTENT_MODE_ROUTES[mode]);
+  };
 
   if (collapsed) {
     // 折叠态：纵向图标 + 小文字（YouTube mini 风格）
@@ -172,7 +190,7 @@ function ContentModeSwitcher({ collapsed }: { collapsed: boolean }) {
             <button
               key={opt.id}
               type="button"
-              onClick={() => setContentMode(opt.id)}
+              onClick={() => handleModeChange(opt.id)}
               className={cn(
                 "flex flex-col items-center justify-center gap-0.5 rounded-xl px-1 py-2 w-full transition-colors",
                 isSelected
@@ -199,7 +217,7 @@ function ContentModeSwitcher({ collapsed }: { collapsed: boolean }) {
           <button
             key={opt.id}
             type="button"
-            onClick={() => setContentMode(opt.id)}
+            onClick={() => handleModeChange(opt.id)}
             className={cn(
               "flex flex-1 items-center justify-center gap-1 rounded-lg px-1.5 py-1.5 text-xs whitespace-nowrap transition-colors",
               isSelected
@@ -400,7 +418,9 @@ function NavGroupMobile({
         </h3>
       )}
       {filteredItems.map((item) => {
-        const isActive = pathname === item.href || (item.href !== "/" && pathname.startsWith(item.href));
+        const isActive = item.href === "/"
+          ? pathname === "/" || pathname === "/video" || pathname === "/game"
+          : pathname === item.href || pathname.startsWith(item.href);
         return (
           <Link
             key={item.href}

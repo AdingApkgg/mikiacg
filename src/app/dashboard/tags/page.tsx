@@ -352,7 +352,7 @@ export default function AdminTagsPage() {
                         <div className="flex items-start justify-between gap-2">
                           <div className="min-w-0">
                             <Link
-                              href={`/tag/${tag.slug}`}
+                              href={`/video/tag/${tag.slug}`}
                               className="font-medium hover:underline block truncate"
                             >
                               {tag.name}
@@ -368,7 +368,7 @@ export default function AdminTagsPage() {
                               className="h-7 w-7"
                               asChild
                             >
-                              <Link href={`/tag/${tag.slug}`} target="_blank">
+                              <Link href={`/video/tag/${tag.slug}`} target="_blank">
                                 <ExternalLink className="h-3 w-3" />
                               </Link>
                             </Button>

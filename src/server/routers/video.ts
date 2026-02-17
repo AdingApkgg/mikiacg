@@ -75,8 +75,8 @@ export const videoRouter = router({
         const sevenDaysAgo = new Date();
         sevenDaysAgo.setDate(sevenDaysAgo.getDate() - 7);
 
-        // 1. 基于实际搜索记录的热度（时间衰减）+ 2. 热门视频标签（并行查询）
-        const [searchRecords, hotVideos] = await Promise.all([
+        // 1. 搜索记录 + 2. 热门视频标签 + 3. 热门游戏标签（并行查询）
+        const [searchRecords, hotVideos, hotGames] = await Promise.all([
           ctx.prisma.searchRecord.groupBy({
             by: ["keyword"],
             where: {
@@ -101,6 +101,21 @@ export const videoRouter = router({
             orderBy: { views: "desc" },
             take: 30,
           }),
+          ctx.prisma.game.findMany({
+            where: {
+              status: "PUBLISHED",
+              createdAt: { gte: sevenDaysAgo },
+            },
+            select: {
+              views: true,
+              tags: {
+                include: { tag: { select: { name: true } } },
+                take: 3,
+              },
+            },
+            orderBy: { views: "desc" },
+            take: 20,
+          }),
         ]);
 
         // 3. 合并计算热度分数
@@ -122,6 +137,19 @@ export const videoRouter = router({
           video.tags.forEach((t) => {
             const tagName = t.tag.name.toLowerCase();
             const tagScore = Math.log10(video.views + 1) * 5; // 播放量对数权重
+            const existing = scoreMap.get(tagName) || { score: 0, searchCount: 0 };
+            scoreMap.set(tagName, {
+              score: existing.score + tagScore,
+              searchCount: existing.searchCount,
+            });
+          });
+        });
+
+        // 热门游戏标签权重（权重略低于视频）
+        hotGames.forEach((game) => {
+          game.tags.forEach((t) => {
+            const tagName = t.tag.name.toLowerCase();
+            const tagScore = Math.log10(game.views + 1) * 3;
             const existing = scoreMap.get(tagName) || { score: 0, searchCount: 0 };
             scoreMap.set(tagName, {
               score: existing.score + tagScore,
@@ -178,8 +206,8 @@ export const videoRouter = router({
       const cacheKey = `search:suggestions:${query.toLowerCase()}`;
 
       return getOrSet(cacheKey, async () => {
-        // 并行搜索视频标题和标签
-        const [videos, tags] = await Promise.all([
+        // 并行搜索视频标题、标签和游戏标题
+        const [videos, tags, games] = await Promise.all([
           ctx.prisma.video.findMany({
             where: {
               status: "PUBLISHED",
@@ -197,9 +225,18 @@ export const videoRouter = router({
             take: 5,
             orderBy: { videos: { _count: "desc" } },
           }),
+          ctx.prisma.game.findMany({
+            where: {
+              status: "PUBLISHED",
+              title: { contains: query, mode: "insensitive" },
+            },
+            select: { id: true, title: true },
+            take: limit,
+            orderBy: { views: "desc" },
+          }),
         ]);
 
-        return { videos, tags };
+        return { videos, tags, games };
       }, SEARCH_SUGGESTIONS_CACHE_TTL);
     }),
 

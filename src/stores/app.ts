@@ -51,7 +51,11 @@ interface UIState {
   sidebarOpen: boolean;
   // 首页内容模式（导航「首页」右侧切换）
   contentMode: ContentMode;
+  /** 用户是否已在首页做过内容选择（用于首次访问展示选择页） */
+  isContentModeChosen: boolean;
   setContentMode: (mode: ContentMode) => void;
+  /** 首页选择：同时设置 contentMode 和 isContentModeChosen */
+  chooseContentMode: (mode: ContentMode) => void;
   // 播放器状态
   playerFullscreen: boolean;
   playerPiP: boolean;
@@ -72,7 +76,9 @@ export const useUIStore = create<UIState>()(
       sidebarCollapsed: false,
       sidebarOpen: false,
       contentMode: "video",
+      isContentModeChosen: false,
       setContentMode: (mode) => set({ contentMode: mode }),
+      chooseContentMode: (mode) => set({ contentMode: mode, isContentModeChosen: true }),
       playerFullscreen: false,
       playerPiP: false,
       reducedMotion: false,
@@ -91,6 +97,7 @@ export const useUIStore = create<UIState>()(
         sidebarCollapsed: state.sidebarCollapsed,
         reducedMotion: state.reducedMotion,
         contentMode: state.contentMode,
+        isContentModeChosen: state.isContentModeChosen,
       }),
     }
   )

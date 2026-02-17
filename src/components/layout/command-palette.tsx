@@ -98,7 +98,7 @@ export function CommandPalette({ open, onOpenChange }: CommandPaletteProps) {
       description="快速导航和操作"
     >
       <CommandInput
-        placeholder="搜索视频、页面或命令..."
+        placeholder="搜索视频、游戏或命令..."
         value={searchValue}
         onValueChange={setSearchValue}
         onKeyDown={(e) => {
@@ -167,7 +167,7 @@ export function CommandPalette({ open, onOpenChange }: CommandPaletteProps) {
             {session.user?.canUpload && (
               <CommandItem onSelect={() => runCommand(() => router.push("/upload"))}>
                 <Upload className="mr-2 h-4 w-4" />
-                上传视频
+                上传
                 <CommandShortcut>⌘U</CommandShortcut>
               </CommandItem>
             )}

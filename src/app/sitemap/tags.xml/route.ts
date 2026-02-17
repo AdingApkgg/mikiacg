@@ -8,23 +8,40 @@ export async function GET() {
   const now = new Date().toISOString();
 
   try {
-    const tags = await prisma.tag.findMany({
-      select: { slug: true },
-      take: 1000,
-    });
+    const [videoTags, gameTags] = await Promise.all([
+      prisma.tag.findMany({
+        where: { videos: { some: {} } },
+        select: { slug: true },
+        take: 1000,
+      }),
+      prisma.tag.findMany({
+        where: { games: { some: {} } },
+        select: { slug: true },
+        take: 1000,
+      }),
+    ]);
 
-    const xml = `<?xml version="1.0" encoding="UTF-8"?>
-<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">
-${tags
-  .map(
-    (tag) => `  <url>
-    <loc>${baseUrl}/tag/${tag.slug}</loc>
+    const videoTagUrls = videoTags.map(
+      (tag) => `  <url>
+    <loc>${baseUrl}/video/tag/${tag.slug}</loc>
     <lastmod>${now}</lastmod>
     <changefreq>weekly</changefreq>
     <priority>0.6</priority>
   </url>`
-  )
-  .join("\n")}
+    );
+
+    const gameTagUrls = gameTags.map(
+      (tag) => `  <url>
+    <loc>${baseUrl}/game/tag/${tag.slug}</loc>
+    <lastmod>${now}</lastmod>
+    <changefreq>weekly</changefreq>
+    <priority>0.6</priority>
+  </url>`
+    );
+
+    const xml = `<?xml version="1.0" encoding="UTF-8"?>
+<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">
+${[...videoTagUrls, ...gameTagUrls].join("\n")}
 </urlset>`;
 
     return new NextResponse(xml, {
