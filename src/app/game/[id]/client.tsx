@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useCallback, useEffect } from "react";
+import { useState, useCallback, useSyncExternalStore } from "react";
 import Image from "next/image";
 import Link from "next/link";
 import { trpc } from "@/lib/trpc";
@@ -72,8 +72,7 @@ export function GamePageClient({ id, initialGame }: GamePageClientProps) {
   const { play } = useSound();
   const { data: session } = useSession();
 
-  const [hasMounted, setHasMounted] = useState(false);
-  useEffect(() => setHasMounted(true), []);
+  const hasMounted = useSyncExternalStore(() => () => {}, () => true, () => false);
   const isOwner = hasMounted && session?.user?.id === initialGame.uploader.id;
 
   const extra: GameExtraInfo = (initialGame.extraInfo && typeof initialGame.extraInfo === "object")

@@ -326,12 +326,12 @@ export default function DashboardGamesPage() {
   );
 
   const moderateMutation = trpc.admin.moderateGame.useMutation({
-    onSuccess: (_, variables) => {
+    onSuccess: (_: { success: boolean }, variables: { gameId: string; status: "PUBLISHED" | "REJECTED" }) => {
       toast.success(variables.status === "PUBLISHED" ? "游戏已通过审核" : "游戏已拒绝");
       utils.admin.listAllGames.invalidate();
       utils.admin.getGameStats.invalidate();
     },
-    onError: (error: { message: string }) => toast.error(error.message || "操作失败"),
+    onError: (error: Error) => toast.error(error.message || "操作失败"),
   });
 
   const deleteMutation = trpc.admin.deleteGame.useMutation({
@@ -341,32 +341,32 @@ export default function DashboardGamesPage() {
       utils.admin.getGameStats.invalidate();
       setDeletingId(null);
     },
-    onError: (error: { message: string }) => toast.error(error.message || "删除失败"),
+    onError: (error: Error) => toast.error(error.message || "删除失败"),
   });
 
   const batchModerateMutation = trpc.admin.batchModerateGames.useMutation({
-    onSuccess: (result: { count: number }) => {
+    onSuccess: (result: { success: boolean; count: number }) => {
       toast.success(`已处理 ${result.count} 个游戏`);
       utils.admin.listAllGames.invalidate();
       utils.admin.getGameStats.invalidate();
       setSelectedIds(new Set());
     },
-    onError: (error: { message: string }) => toast.error(error.message || "批量操作失败"),
+    onError: (error: Error) => toast.error(error.message || "批量操作失败"),
   });
 
   const batchDeleteMutation = trpc.admin.batchDeleteGames.useMutation({
-    onSuccess: (result: { count: number }) => {
+    onSuccess: (result: { success: boolean; count: number }) => {
       toast.success(`已删除 ${result.count} 个游戏`);
       utils.admin.listAllGames.invalidate();
       utils.admin.getGameStats.invalidate();
       setSelectedIds(new Set());
       setBatchAction(null);
     },
-    onError: (error: { message: string }) => toast.error(error.message || "批量删除失败"),
+    onError: (error: Error) => toast.error(error.message || "批量删除失败"),
   });
 
   const batchRegexUpdateMutation = trpc.admin.batchGameRegexUpdate.useMutation({
-    onSuccess: (result) => {
+    onSuccess: (result: { success: boolean; count: number }) => {
       toast.success(`已更新 ${result.count} 个游戏`);
       utils.admin.listAllGames.invalidate();
       setRegexOpen(false);
@@ -375,7 +375,7 @@ export default function DashboardGamesPage() {
       setRegexPattern("");
       setRegexReplacement("");
     },
-    onError: (error: { message: string }) => toast.error(error.message || "批量编辑失败"),
+    onError: (error: Error) => toast.error(error.message || "批量编辑失败"),
   });
 
   const games = useMemo(
