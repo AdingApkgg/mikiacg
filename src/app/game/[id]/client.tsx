@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useCallback } from "react";
+import { useState, useCallback, useEffect } from "react";
 import Image from "next/image";
 import Link from "next/link";
 import { trpc } from "@/lib/trpc";
@@ -19,13 +19,14 @@ import {
   Gamepad2, ThumbsUp, ThumbsDown, Heart, Eye, Download,
   Calendar, User, ExternalLink, Copy, Check, Info, Image as ImageIcon,
   Users, ChevronLeft, ChevronRight, Lock, Monitor, Smartphone, Play,
-  Share2, X, MessageSquare, Tag,
+  Share2, X, MessageSquare, Tag, Edit,
 } from "lucide-react";
 import { GameVideoPlayer } from "@/components/game/game-video-player";
 import { formatViews, formatDate } from "@/lib/format";
 import { cn } from "@/lib/utils";
 import { Markdown } from "@/components/ui/markdown";
 import { GameCommentSection } from "@/components/comment/game-comment-section";
+import { useSession } from "@/lib/auth-client";
 import { useSound } from "@/hooks/use-sound";
 import { toast } from "@/lib/toast-with-sound";
 import type { SerializedGame } from "./page";
@@ -69,6 +70,11 @@ export function GamePageClient({ id, initialGame }: GamePageClientProps) {
   const [lightboxOpen, setLightboxOpen] = useState(false);
   const [lightboxIndex, setLightboxIndex] = useState(0);
   const { play } = useSound();
+  const { data: session } = useSession();
+
+  const [hasMounted, setHasMounted] = useState(false);
+  useEffect(() => setHasMounted(true), []);
+  const isOwner = hasMounted && session?.user?.id === initialGame.uploader.id;
 
   const extra: GameExtraInfo = (initialGame.extraInfo && typeof initialGame.extraInfo === "object")
     ? initialGame.extraInfo as GameExtraInfo
@@ -236,10 +242,19 @@ export function GamePageClient({ id, initialGame }: GamePageClientProps) {
           {/* 标题 + 统计 + 标签 + 操作 */}
           <FadeIn delay={0.15}>
             <div className="max-w-3xl mx-auto mt-5 space-y-3">
-              {/* 标题 */}
-              <h1 className="text-xl sm:text-2xl lg:text-3xl font-bold leading-tight">
-                {initialGame.title}
-              </h1>
+              {/* 标题 + 编辑 */}
+              <div className="flex items-start justify-between gap-2">
+                <h1 className="text-xl sm:text-2xl lg:text-3xl font-bold leading-tight">
+                  {initialGame.title}
+                </h1>
+                {isOwner && (
+                  <Button variant="ghost" size="icon" className="h-8 w-8 shrink-0" asChild>
+                    <Link href={`/game/edit/${id}`} aria-label="编辑游戏">
+                      <Edit className="h-4 w-4" />
+                    </Link>
+                  </Button>
+                )}
+              </div>
 
               {/* 内联统计 + 元信息 */}
               <div className="flex flex-wrap items-center gap-x-3 gap-y-1.5 text-sm text-muted-foreground">

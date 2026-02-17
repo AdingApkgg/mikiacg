@@ -278,12 +278,12 @@ export default function AdminVideosPage() {
   );
 
   const moderateMutation = trpc.admin.moderateVideo.useMutation({
-    onSuccess: (_, variables) => {
+    onSuccess: (_: unknown, variables: { id: string; status: string }) => {
       toast.success(variables.status === "PUBLISHED" ? "视频已通过审核" : "视频已拒绝");
       utils.admin.listAllVideos.invalidate();
       utils.admin.getVideoStats.invalidate();
     },
-    onError: (error) => toast.error(error.message || "操作失败"),
+    onError: (error: { message?: string }) => toast.error(error.message || "操作失败"),
   });
 
   const deleteMutation = trpc.admin.deleteVideo.useMutation({
@@ -293,32 +293,32 @@ export default function AdminVideosPage() {
       utils.admin.getVideoStats.invalidate();
       setDeletingId(null);
     },
-    onError: (error) => toast.error(error.message || "删除失败"),
+    onError: (error: { message?: string }) => toast.error(error.message || "删除失败"),
   });
 
   const batchModerateMutation = trpc.admin.batchModerateVideos.useMutation({
-    onSuccess: (result) => {
+    onSuccess: (result: { count: number }) => {
       toast.success(`已处理 ${result.count} 个视频`);
       utils.admin.listAllVideos.invalidate();
       utils.admin.getVideoStats.invalidate();
       setSelectedIds(new Set());
     },
-    onError: (error) => toast.error(error.message || "批量操作失败"),
+    onError: (error: { message?: string }) => toast.error(error.message || "批量操作失败"),
   });
 
   const batchDeleteMutation = trpc.admin.batchDeleteVideos.useMutation({
-    onSuccess: (result) => {
+    onSuccess: (result: { count: number }) => {
       toast.success(`已删除 ${result.count} 个视频`);
       utils.admin.listAllVideos.invalidate();
       utils.admin.getVideoStats.invalidate();
       setSelectedIds(new Set());
       setBatchAction(null);
     },
-    onError: (error) => toast.error(error.message || "批量删除失败"),
+    onError: (error: { message?: string }) => toast.error(error.message || "批量删除失败"),
   });
 
   const batchRegexUpdateMutation = trpc.admin.batchRegexUpdate.useMutation({
-    onSuccess: (result) => {
+    onSuccess: (result: { count: number }) => {
       toast.success(`已更新 ${result.count} 个视频`);
       utils.admin.listAllVideos.invalidate();
       setRegexOpen(false);
@@ -327,7 +327,7 @@ export default function AdminVideosPage() {
       setRegexPattern("");
       setRegexReplacement("");
     },
-    onError: (error) => toast.error(error.message || "批量编辑失败"),
+    onError: (error: { message?: string }) => toast.error(error.message || "批量编辑失败"),
   });
 
   const videos = useMemo(
@@ -650,9 +650,10 @@ export default function AdminVideosPage() {
       ) : (
         <>
           <div className="space-y-3">
-            {videos.map((video) => {
+            {videos.map((video, index) => {
               const isSelected = selectedIds.has(video.id);
               const isExpanded = expandedIds.has(video.id);
+              const itemNumber = totalCount - ((currentPage - 1) * limit + index);
 
               return (
                 <Card
@@ -672,6 +673,9 @@ export default function AdminVideosPage() {
 
                       {/* 封面 */}
                       <div className="relative w-40 h-24 rounded-lg bg-muted overflow-hidden shrink-0">
+                        <div className="absolute top-1 left-1 z-10 bg-black/70 text-white text-[10px] font-mono px-1.5 py-0.5 rounded">
+                          #{itemNumber}
+                        </div>
                         <Image
                           src={getCoverUrl(video.id, video.coverUrl)}
                           alt={video.title}

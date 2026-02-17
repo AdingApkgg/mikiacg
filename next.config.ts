@@ -43,23 +43,13 @@ const nextConfig: NextConfig = {
   },
   async redirects() {
     return [
+      // 所有非 www.mikiacg.vip 的域名/IP 访问统一 301 到主域名
       {
         source: "/:path*",
         has: [
           {
             type: "host",
-            value: "mikiacg.vip",
-          },
-        ],
-        destination: "https://www.mikiacg.vip/:path*",
-        permanent: true,
-      },
-      {
-        source: "/:path*",
-        has: [
-          {
-            type: "host",
-            value: "tv.mikiacg.vip",
+            value: "(?!^www\\.mikiacg\\.vip$).*",
           },
         ],
         destination: "https://www.mikiacg.vip/:path*",

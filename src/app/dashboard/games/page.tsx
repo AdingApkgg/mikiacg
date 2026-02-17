@@ -671,9 +671,10 @@ export default function DashboardGamesPage() {
       ) : (
         <>
           <div className="space-y-3">
-            {games.map((game) => {
+            {games.map((game, index) => {
               const isSelected = selectedIds.has(game.id);
               const isExpanded = expandedIds.has(game.id);
+              const itemNumber = totalCount - ((currentPage - 1) * limit + index);
 
               return (
                 <Card
@@ -693,6 +694,9 @@ export default function DashboardGamesPage() {
 
                       {/* 封面 */}
                       <div className="relative w-20 h-[104px] rounded-lg bg-muted overflow-hidden shrink-0">
+                        <div className="absolute top-1 left-1 z-10 bg-black/70 text-white text-[10px] font-mono px-1.5 py-0.5 rounded">
+                          #{itemNumber}
+                        </div>
                         {game.coverUrl ? (
                           // eslint-disable-next-line @next/next/no-img-element
                           <img
