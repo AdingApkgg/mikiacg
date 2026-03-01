@@ -206,56 +206,64 @@ export const adminRouter = router({
     }),
 
   // 增长趋势数据（每日统计）
-  getGrowthTrend: protectedProcedure
+  getGrowthTrend: publicProcedure
     .input(z.object({ days: z.number().min(7).max(90).default(30) }))
     .query(async ({ ctx, input }) => {
-      // 使用本地日期避免时区问题
       const now = new Date();
       const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
       const since = new Date(today);
-      since.setDate(since.getDate() - input.days + 1); // +1 确保包含今天
+      since.setDate(since.getDate() - input.days + 1);
 
-      // 获取每日用户注册数
-      const users = await ctx.prisma.user.findMany({
-        where: { createdAt: { gte: since } },
-        select: { createdAt: true },
-      });
+      const [users, videos, images, games, videoViews, gameViews, imageViews, videoLikes, gameLikes, imageLikes, videoFavs, gameFavs, imageFavs, videoComments, gameComments, imageComments] = await Promise.all([
+        ctx.prisma.user.findMany({ where: { createdAt: { gte: since } }, select: { createdAt: true } }),
+        ctx.prisma.video.findMany({ where: { createdAt: { gte: since }, status: "PUBLISHED" }, select: { createdAt: true } }),
+        ctx.prisma.imagePost.findMany({ where: { createdAt: { gte: since }, status: "PUBLISHED" }, select: { createdAt: true } }),
+        ctx.prisma.game.findMany({ where: { createdAt: { gte: since }, status: "PUBLISHED" }, select: { createdAt: true } }),
+        ctx.prisma.watchHistory.findMany({ where: { createdAt: { gte: since } }, select: { createdAt: true } }),
+        ctx.prisma.gameViewHistory.findMany({ where: { createdAt: { gte: since } }, select: { createdAt: true } }),
+        ctx.prisma.imagePostViewHistory.findMany({ where: { createdAt: { gte: since } }, select: { createdAt: true } }),
+        ctx.prisma.like.findMany({ where: { createdAt: { gte: since } }, select: { createdAt: true } }),
+        ctx.prisma.gameLike.findMany({ where: { createdAt: { gte: since } }, select: { createdAt: true } }),
+        ctx.prisma.imagePostLike.findMany({ where: { createdAt: { gte: since } }, select: { createdAt: true } }),
+        ctx.prisma.favorite.findMany({ where: { createdAt: { gte: since } }, select: { createdAt: true } }),
+        ctx.prisma.gameFavorite.findMany({ where: { createdAt: { gte: since } }, select: { createdAt: true } }),
+        ctx.prisma.imagePostFavorite.findMany({ where: { createdAt: { gte: since } }, select: { createdAt: true } }),
+        ctx.prisma.comment.findMany({ where: { createdAt: { gte: since }, isDeleted: false }, select: { createdAt: true } }),
+        ctx.prisma.gameComment.findMany({ where: { createdAt: { gte: since }, isDeleted: false }, select: { createdAt: true } }),
+        ctx.prisma.imagePostComment.findMany({ where: { createdAt: { gte: since }, isDeleted: false }, select: { createdAt: true } }),
+      ]);
 
-      // 获取每日视频发布数
-      const videos = await ctx.prisma.video.findMany({
-        where: { createdAt: { gte: since }, status: "PUBLISHED" },
-        select: { createdAt: true },
-      });
+      type DayData = { users: number; videos: number; images: number; games: number; views: number; likes: number; favorites: number; comments: number };
+      const trend: Record<string, DayData> = {};
 
-      // 按日期分组（使用本地日期格式）
-      const trend: Record<string, { users: number; videos: number }> = {};
+      const toKey = (d: Date) => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+      const empty = (): DayData => ({ users: 0, videos: 0, images: 0, games: 0, views: 0, likes: 0, favorites: 0, comments: 0 });
 
       for (let i = 0; i < input.days; i++) {
         const date = new Date(since);
         date.setDate(date.getDate() + i);
-        // 使用本地日期格式 YYYY-MM-DD
-        const key = `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, "0")}-${String(date.getDate()).padStart(2, "0")}`;
-        trend[key] = { users: 0, videos: 0 };
+        trend[toKey(date)] = empty();
       }
 
-      users.forEach((u) => {
-        const d = new Date(u.createdAt);
-        const key = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
-        if (trend[key]) trend[key].users++;
-      });
+      const inc = (rows: { createdAt: Date }[], field: keyof DayData) => {
+        for (const r of rows) {
+          const k = toKey(new Date(r.createdAt));
+          if (trend[k]) trend[k][field]++;
+        }
+      };
 
-      videos.forEach((v) => {
-        const d = new Date(v.createdAt);
-        const key = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
-        if (trend[key]) trend[key].videos++;
-      });
+      inc(users, "users");
+      inc(videos, "videos");
+      inc(images, "images");
+      inc(games, "games");
+      inc([...videoViews, ...gameViews, ...imageViews], "views");
+      inc([...videoLikes, ...gameLikes, ...imageLikes], "likes");
+      inc([...videoFavs, ...gameFavs, ...imageFavs], "favorites");
+      inc([...videoComments, ...gameComments, ...imageComments], "comments");
 
       return Object.entries(trend)
         .sort(([a], [b]) => a.localeCompare(b))
-        .map(([date, data]) => ({
-          date,
-          ...data,
-        }));
+        .map(([date, data]) => ({ date, ...data }));
     }),
 
   // ========== 用户管理（站长专用）==========

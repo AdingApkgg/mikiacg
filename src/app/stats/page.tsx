@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useMemo } from "react";
 import { trpc } from "@/lib/trpc";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Badge } from "@/components/ui/badge";
@@ -24,10 +24,36 @@ import {
 } from "lucide-react";
 import { FadeIn, CountUp } from "@/components/motion";
 import { cn } from "@/lib/utils";
+import {
+  ChartContainer,
+  ChartTooltip,
+  ChartTooltipContent,
+  ChartLegend,
+  ChartLegendContent,
+  type ChartConfig,
+} from "@/components/ui/chart";
+import {
+  Area,
+  AreaChart,
+  Bar,
+  BarChart,
+  CartesianGrid,
+  Cell,
+  Pie,
+  PieChart,
+  XAxis,
+  YAxis,
+} from "recharts";
 
 const RANGE_OPTIONS = [
   { value: 1, label: "24h" },
   { value: 7, label: "7天" },
+  { value: 30, label: "30天" },
+] as const;
+
+const TREND_RANGE_OPTIONS = [
+  { value: 7, label: "7天" },
+  { value: 14, label: "14天" },
   { value: 30, label: "30天" },
 ] as const;
 
@@ -111,48 +137,268 @@ function EngagementRow({
   );
 }
 
-// ==================== 分区明细卡片 ====================
+// ==================== 内容分布饼图 ====================
 
-function ZoneBreakdown({
-  icon: Icon,
-  title,
-  color,
-  stats: s,
-  views,
+const contentPieConfig = {
+  count: { label: "数量" },
+  videos: { label: "视频", color: "hsl(142, 71%, 45%)" },
+  images: { label: "图片", color: "hsl(263, 70%, 50%)" },
+  games: { label: "游戏", color: "hsl(38, 92%, 50%)" },
+} satisfies ChartConfig;
+
+function ContentDistributionChart({
+  videoCount,
+  imagePostCount,
+  gameCount,
   isLoading,
 }: {
-  icon: LucideIcon;
-  title: string;
-  color: string;
-  stats: { likes: number; dislikes: number; favorites: number; comments: number } | undefined;
-  views: number;
+  videoCount: number;
+  imagePostCount: number;
+  gameCount: number;
   isLoading: boolean;
 }) {
-  const items = [
-    { label: "浏览", value: views },
-    { label: "点赞", value: s?.likes ?? 0 },
-    { label: "收藏", value: s?.favorites ?? 0 },
-    { label: "评论", value: s?.comments ?? 0 },
-  ];
+  const data = useMemo(
+    () => [
+      { name: "videos", value: videoCount, fill: "var(--color-videos)" },
+      { name: "images", value: imagePostCount, fill: "var(--color-images)" },
+      { name: "games", value: gameCount, fill: "var(--color-games)" },
+    ],
+    [videoCount, imagePostCount, gameCount]
+  );
+
+  const total = videoCount + imagePostCount + gameCount;
+
+  if (isLoading) {
+    return (
+      <div className="rounded-xl border bg-card p-5">
+        <Skeleton className="h-5 w-24 mb-4" />
+        <Skeleton className="h-[200px] w-full" />
+      </div>
+    );
+  }
 
   return (
-    <div className="rounded-xl border bg-card overflow-hidden">
-      <div className="flex items-center gap-2 px-4 py-3 border-b bg-muted/30">
-        <Icon className={cn("h-4 w-4", color)} />
-        <span className="text-sm font-medium">{title}</span>
+    <div className="rounded-xl border bg-card p-5">
+      <h3 className="text-sm font-semibold text-muted-foreground mb-4">内容分布</h3>
+      <ChartContainer config={contentPieConfig} className="mx-auto aspect-square max-h-[220px]">
+        <PieChart>
+          <ChartTooltip content={<ChartTooltipContent nameKey="name" hideLabel />} />
+          <Pie data={data} dataKey="value" nameKey="name" innerRadius={55} outerRadius={85} strokeWidth={2} stroke="hsl(var(--background))">
+            {data.map((entry) => (
+              <Cell key={entry.name} fill={entry.fill} />
+            ))}
+          </Pie>
+          <text x="50%" y="48%" textAnchor="middle" dominantBaseline="central" className="fill-foreground text-2xl font-bold">
+            {formatCompact(total)}
+          </text>
+          <text x="50%" y="60%" textAnchor="middle" dominantBaseline="central" className="fill-muted-foreground text-xs">
+            总内容
+          </text>
+          <ChartLegend content={<ChartLegendContent nameKey="name" />} />
+        </PieChart>
+      </ChartContainer>
+    </div>
+  );
+}
+
+// ==================== 分区互动柱状图 ====================
+
+const zoneBarConfig = {
+  views: { label: "浏览", color: "hsl(25, 95%, 53%)" },
+  likes: { label: "点赞", color: "hsl(0, 84%, 60%)" },
+  favorites: { label: "收藏", color: "hsl(48, 96%, 53%)" },
+  comments: { label: "评论", color: "hsl(187, 85%, 53%)" },
+} satisfies ChartConfig;
+
+function ZoneEngagementChart({
+  stats,
+  isLoading,
+}: {
+  stats:
+    | {
+        video: { likes: number; dislikes: number; favorites: number; comments: number };
+        game: { likes: number; dislikes: number; favorites: number; comments: number };
+        image: { likes: number; dislikes: number; favorites: number; comments: number };
+        videoViews: number;
+        gameViews: number;
+        imageViews: number;
+      }
+    | undefined;
+  isLoading: boolean;
+}) {
+  const data = useMemo(() => {
+    if (!stats) return [];
+    return [
+      {
+        zone: "视频",
+        views: stats.videoViews,
+        likes: stats.video.likes,
+        favorites: stats.video.favorites,
+        comments: stats.video.comments,
+      },
+      {
+        zone: "图片",
+        views: stats.imageViews,
+        likes: stats.image.likes,
+        favorites: stats.image.favorites,
+        comments: stats.image.comments,
+      },
+      {
+        zone: "游戏",
+        views: stats.gameViews,
+        likes: stats.game.likes,
+        favorites: stats.game.favorites,
+        comments: stats.game.comments,
+      },
+    ];
+  }, [stats]);
+
+  if (isLoading) {
+    return (
+      <div className="rounded-xl border bg-card p-5">
+        <Skeleton className="h-5 w-24 mb-4" />
+        <Skeleton className="h-[220px] w-full" />
       </div>
-      <div className="grid grid-cols-4 divide-x">
-        {items.map((item) => (
-          <div key={item.label} className="px-3 py-3 text-center">
-            {isLoading ? (
-              <Skeleton className="h-5 w-10 mx-auto mb-1" />
-            ) : (
-              <p className="text-base font-bold tabular-nums">{formatCompact(item.value)}</p>
-            )}
-            <p className="text-[11px] text-muted-foreground">{item.label}</p>
-          </div>
-        ))}
+    );
+  }
+
+  return (
+    <div className="rounded-xl border bg-card p-5">
+      <h3 className="text-sm font-semibold text-muted-foreground mb-4">分区互动对比</h3>
+      <ChartContainer config={zoneBarConfig} className="h-[220px] w-full">
+        <BarChart data={data} barGap={2}>
+          <CartesianGrid vertical={false} strokeDasharray="3 3" />
+          <XAxis dataKey="zone" tickLine={false} axisLine={false} />
+          <YAxis tickLine={false} axisLine={false} tickFormatter={(v) => formatCompact(v)} width={45} />
+          <ChartTooltip content={<ChartTooltipContent />} />
+          <ChartLegend content={<ChartLegendContent />} />
+          <Bar dataKey="views" fill="var(--color-views)" radius={[4, 4, 0, 0]} />
+          <Bar dataKey="likes" fill="var(--color-likes)" radius={[4, 4, 0, 0]} />
+          <Bar dataKey="favorites" fill="var(--color-favorites)" radius={[4, 4, 0, 0]} />
+          <Bar dataKey="comments" fill="var(--color-comments)" radius={[4, 4, 0, 0]} />
+        </BarChart>
+      </ChartContainer>
+    </div>
+  );
+}
+
+// ==================== 增长趋势面积图 ====================
+
+const TREND_METRICS = [
+  { key: "content", label: "内容", fields: ["users", "videos", "images", "games"] },
+  { key: "engagement", label: "互动", fields: ["views", "likes", "favorites", "comments"] },
+] as const;
+
+const trendConfig = {
+  users: { label: "用户", color: "hsl(217, 91%, 60%)" },
+  videos: { label: "视频", color: "hsl(142, 71%, 45%)" },
+  images: { label: "图片", color: "hsl(263, 70%, 50%)" },
+  games: { label: "游戏", color: "hsl(38, 92%, 50%)" },
+  views: { label: "浏览", color: "hsl(25, 95%, 53%)" },
+  likes: { label: "点赞", color: "hsl(0, 84%, 60%)" },
+  favorites: { label: "收藏", color: "hsl(48, 96%, 53%)" },
+  comments: { label: "评论", color: "hsl(187, 85%, 53%)" },
+} satisfies ChartConfig;
+
+function GrowthTrendChart({
+  days,
+  onDaysChange,
+}: {
+  days: number;
+  onDaysChange: (days: number) => void;
+}) {
+  const { play } = useSound();
+  const [metricGroup, setMetricGroup] = useState<"content" | "engagement">("content");
+  const { data: trend, isLoading } = trpc.admin.getGrowthTrend.useQuery({ days });
+
+  const activeFields = TREND_METRICS.find((m) => m.key === metricGroup)!.fields;
+
+  const chartData = useMemo(() => {
+    if (!trend) return [];
+    return trend.map((d) => ({
+      ...d,
+      label: d.date.slice(5),
+    }));
+  }, [trend]);
+
+  if (isLoading) {
+    return (
+      <div className="rounded-xl border bg-card p-5 space-y-4">
+        <Skeleton className="h-5 w-32" />
+        <Skeleton className="h-[280px] w-full" />
       </div>
+    );
+  }
+
+  return (
+    <div className="rounded-xl border bg-card p-5 space-y-4">
+      <div className="flex items-center justify-between gap-3 flex-wrap">
+        <h3 className="text-sm font-semibold flex items-center gap-2">
+          <TrendingUp className="h-4 w-4 text-muted-foreground" />
+          每日增长趋势
+        </h3>
+        <div className="flex items-center gap-2">
+          <Tabs
+            value={metricGroup}
+            onValueChange={(v) => {
+              setMetricGroup(v as "content" | "engagement");
+              play("navigate");
+            }}
+          >
+            <TabsList className="h-8">
+              {TREND_METRICS.map((m) => (
+                <TabsTrigger key={m.key} value={m.key} className="text-xs px-3 h-6">
+                  {m.label}
+                </TabsTrigger>
+              ))}
+            </TabsList>
+          </Tabs>
+          <Tabs
+            value={days.toString()}
+            onValueChange={(v) => {
+              onDaysChange(Number(v));
+              play("navigate");
+            }}
+          >
+            <TabsList className="h-8">
+              {TREND_RANGE_OPTIONS.map((opt) => (
+                <TabsTrigger key={opt.value} value={opt.value.toString()} className="text-xs px-3 h-6">
+                  {opt.label}
+                </TabsTrigger>
+              ))}
+            </TabsList>
+          </Tabs>
+        </div>
+      </div>
+      <ChartContainer config={trendConfig} className="h-[280px] w-full">
+        <AreaChart data={chartData}>
+          <defs>
+            {activeFields.map((field) => (
+              <linearGradient key={field} id={`fill-${field}`} x1="0" y1="0" x2="0" y2="1">
+                <stop offset="5%" stopColor={`var(--color-${field})`} stopOpacity={0.3} />
+                <stop offset="95%" stopColor={`var(--color-${field})`} stopOpacity={0.02} />
+              </linearGradient>
+            ))}
+          </defs>
+          <CartesianGrid vertical={false} strokeDasharray="3 3" />
+          <XAxis dataKey="label" tickLine={false} axisLine={false} interval="preserveStartEnd" />
+          <YAxis tickLine={false} axisLine={false} tickFormatter={(v) => formatCompact(v)} width={45} />
+          <ChartTooltip content={<ChartTooltipContent />} />
+          <ChartLegend content={<ChartLegendContent />} />
+          {activeFields.map((field) => (
+            <Area
+              key={field}
+              type="monotone"
+              dataKey={field}
+              stroke={`var(--color-${field})`}
+              fill={`url(#fill-${field})`}
+              strokeWidth={2}
+              dot={false}
+              activeDot={{ r: 4 }}
+            />
+          ))}
+        </AreaChart>
+      </ChartContainer>
     </div>
   );
 }
@@ -205,6 +451,7 @@ function GrowthItem({
 
 export default function StatsPage() {
   const [rangeDays, setRangeDays] = useState<1 | 7 | 30>(30);
+  const [trendDays, setTrendDays] = useState(30);
   const { play } = useSound();
 
   const { data: stats, isLoading: statsLoading } = trpc.admin.getPublicStats.useQuery();
@@ -246,41 +493,40 @@ export default function StatsPage() {
         </div>
       </FadeIn>
 
-      {/* 分区明细 */}
+      {/* 内容分布 + 分区互动对比 */}
       <FadeIn delay={0.15}>
-        <div className="space-y-3">
-          <h2 className="text-base font-semibold text-muted-foreground">分区明细</h2>
-          <div className="grid gap-4 md:grid-cols-3">
-            <ZoneBreakdown
-              icon={Video}
-              title="视频区"
-              color="text-green-500"
-              stats={stats?.video}
-              views={stats?.videoViews ?? 0}
-              isLoading={statsLoading}
-            />
-            <ZoneBreakdown
-              icon={Images}
-              title="图片区"
-              color="text-violet-500"
-              stats={stats?.image}
-              views={stats?.imageViews ?? 0}
-              isLoading={statsLoading}
-            />
-            <ZoneBreakdown
-              icon={Gamepad2}
-              title="游戏区"
-              color="text-amber-500"
-              stats={stats?.game}
-              views={stats?.gameViews ?? 0}
-              isLoading={statsLoading}
-            />
-          </div>
+        <div className="grid gap-4 md:grid-cols-2">
+          <ContentDistributionChart
+            videoCount={stats?.videoCount ?? 0}
+            imagePostCount={stats?.imagePostCount ?? 0}
+            gameCount={stats?.gameCount ?? 0}
+            isLoading={statsLoading}
+          />
+          <ZoneEngagementChart
+            stats={
+              stats
+                ? {
+                    video: stats.video,
+                    game: stats.game,
+                    image: stats.image,
+                    videoViews: stats.videoViews,
+                    gameViews: stats.gameViews,
+                    imageViews: stats.imageViews,
+                  }
+                : undefined
+            }
+            isLoading={statsLoading}
+          />
         </div>
       </FadeIn>
 
-      {/* 其他累计数据 */}
+      {/* 每日增长趋势图 */}
       <FadeIn delay={0.2}>
+        <GrowthTrendChart days={trendDays} onDaysChange={setTrendDays} />
+      </FadeIn>
+
+      {/* 其他累计数据 */}
+      <FadeIn delay={0.25}>
         <div className="space-y-3">
           <h2 className="text-base font-semibold text-muted-foreground">其他数据</h2>
           <div className="grid grid-cols-3 gap-3">
@@ -310,7 +556,7 @@ export default function StatsPage() {
       </FadeIn>
 
       {/* 增长趋势 */}
-      <FadeIn delay={0.25}>
+      <FadeIn delay={0.3}>
         <div className="space-y-3">
           <div className="flex items-center justify-between">
             <h2 className="text-base font-semibold flex items-center gap-2">
