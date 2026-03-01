@@ -53,7 +53,7 @@ export function BottomNav() {
         {visibleItems.map((item) => {
           const href = item.auth && !effectiveSession ? (item.loginHref || "/login") : item.href;
           const isActive = item.href === "/"
-            ? pathname === "/" || pathname === "/video" || pathname === "/game"
+            ? pathname === "/" || pathname === "/video" || pathname === "/image" || pathname === "/game"
             : pathname === item.href || pathname.startsWith(item.href);
           
           return (

@@ -1,4 +1,4 @@
-import type { ParsedBatchData, ParsedSeries, ParsedVideo, ParsedGame, ParsedGameBatchData } from "./types";
+import type { ParsedBatchData, ParsedSeries, ParsedVideo, ParsedGame, ParsedGameBatchData, ParsedImagePost, ParsedImageBatchData } from "./types";
 
 /**
  * 解析视频批量导入 JSON
@@ -103,6 +103,28 @@ export function buildGameExtraInfo(g: ParsedGame): Record<string, unknown> | und
   return Object.keys(info).length > 0 ? info : undefined;
 }
 
+/**
+ * 解析图片批量导入 JSON
+ *
+ * 格式：数组或 { posts: [...] }
+ */
+export function parseImageBatchJson(data: unknown): ParsedImageBatchData {
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const raw = data as any;
+  const arr = Array.isArray(raw) ? raw : raw?.posts ?? [];
+
+  const posts: ParsedImagePost[] = arr.map(
+    (p: Record<string, unknown>) => ({
+      title: (p.title as string) || "",
+      description: (p.description as string) || "",
+      images: (p.images as string[]) || [],
+      tags: (p.tagNames as string[]) || (p.tags as string[]) || [],
+    }),
+  );
+
+  return { posts };
+}
+
 // ==================== JSON 模板 ====================
 
 export const VIDEO_BATCH_TEMPLATE = JSON.stringify({
@@ -136,6 +158,16 @@ export const GAME_BATCH_TEMPLATE = JSON.stringify([{
     screenshots: ["https://example.com/ss1.jpg"],
     downloads: [{ name: "夸克网盘", url: "https://...", password: "1234" }],
   },
+}], null, 2);
+
+export const IMAGE_BATCH_TEMPLATE = JSON.stringify([{
+  title: "图片标题",
+  description: "图片描述（可选）",
+  images: [
+    "https://example.com/img1.jpg",
+    "https://example.com/img2.jpg",
+  ],
+  tagNames: ["标签1", "标签2"],
 }], null, 2);
 
 export function downloadTemplate(content: string, filename: string) {

@@ -1,5 +1,6 @@
 "use client";
 
+import { useState, useEffect } from "react";
 import { useRandomAds } from "@/hooks/use-ads";
 import { AdCard } from "./ad-card";
 import { cn } from "@/lib/utils";
@@ -21,10 +22,13 @@ export interface AdSlotProps {
  * 仅当「系统设置中启用广告」且「用户未被关闭广告」时渲染。
  */
 export function AdSlot({ slotId = "default", minHeight, compact, className, children }: AdSlotProps) {
+  const [mounted, setMounted] = useState(false);
   const { ads, showAds } = useRandomAds(1, slotId);
   const ad = ads[0];
 
-  if (!showAds) return null;
+  useEffect(() => setMounted(true), []);
+
+  if (!mounted || !showAds) return null;
   if (children) {
     return (
       <div

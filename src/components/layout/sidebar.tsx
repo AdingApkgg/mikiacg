@@ -147,7 +147,7 @@ function NavGroup({
       )}
       {filteredItems.map((item) => {
         const isActive = item.href === "/"
-          ? pathname === "/" || pathname === "/video" || pathname === "/game"
+          ? pathname === "/" || pathname === "/video" || pathname === "/image" || pathname === "/game"
           : pathname === item.href || pathname.startsWith(item.href);
         return (
           <NavLink
@@ -165,7 +165,7 @@ function NavGroup({
 /** 内容模式对应的路由路径 */
 const CONTENT_MODE_ROUTES: Record<ContentMode, string> = {
   video: "/video",
-  image: "/video",
+  image: "/image",
   game: "/game",
 };
 
@@ -420,7 +420,7 @@ function NavGroupMobile({
       )}
       {filteredItems.map((item) => {
         const isActive = item.href === "/"
-          ? pathname === "/" || pathname === "/video" || pathname === "/game"
+          ? pathname === "/" || pathname === "/video" || pathname === "/image" || pathname === "/game"
           : pathname === item.href || pathname.startsWith(item.href);
         return (
           <Link

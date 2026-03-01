@@ -21,6 +21,7 @@ import {
   Users,
   Video,
   Gamepad2,
+  Images,
   Layers,
   Tag,
   Settings,
@@ -44,6 +45,12 @@ const menuItems = [
     href: "/dashboard/games",
     label: "游戏管理",
     icon: Gamepad2,
+    scope: "video:moderate",
+  },
+  {
+    href: "/dashboard/images",
+    label: "图片管理",
+    icon: Images,
     scope: "video:moderate",
   },
   {

@@ -43,11 +43,9 @@ import {
 } from "@/components/ui/collapsible";
 import { toast } from "@/lib/toast-with-sound";
 import {
-  Gamepad2,
+  Images,
   Search,
   Eye,
-  ThumbsUp,
-  Heart,
   CheckCircle,
   XCircle,
   Trash2,
@@ -72,48 +70,59 @@ import {
 import { cn } from "@/lib/utils";
 import { formatRelativeTime, formatViews } from "@/lib/format";
 
-type GameStatus = "PENDING" | "PUBLISHED" | "REJECTED";
-type StatusFilter = "ALL" | GameStatus;
+type ImageStatus = "PENDING" | "PUBLISHED" | "REJECTED";
+type StatusFilter = "ALL" | ImageStatus;
 
-type GameRegexField =
-  | "title" | "description" | "coverUrl" | "gameType" | "version"
-  | "extraInfo.downloads.url" | "extraInfo.downloads.name" | "extraInfo.downloads.password"
-  | "extraInfo.screenshots" | "extraInfo.videos"
-  | "extraInfo.originalName" | "extraInfo.authorUrl" | "extraInfo.characterIntro";
+type ImageRegexField = "title" | "description" | "images";
 
 interface RegexTemplate {
   name: string;
   description: string;
-  field: GameRegexField;
+  field: ImageRegexField;
   pattern: string;
   replacement: string;
   flags: string;
 }
 
 const REGEX_TEMPLATES: RegexTemplate[] = [
-  // 标题
+  {
+    name: "图片链接 HTTP→HTTPS",
+    description: "将图片 URL 中的 http:// 替换为 https://",
+    field: "images",
+    pattern: "^http://",
+    replacement: "https://",
+    flags: "",
+  },
+  {
+    name: "替换图片 CDN 域名",
+    description: "替换图片链接中的 CDN 域名（请修改域名）",
+    field: "images",
+    pattern: "https://old-cdn\\.example\\.com",
+    replacement: "https://cdn.example.com",
+    flags: "g",
+  },
+  {
+    name: "去除图片链接查询参数",
+    description: "移除图片链接中 ? 后的所有查询参数",
+    field: "images",
+    pattern: "\\?.*$",
+    replacement: "",
+    flags: "",
+  },
+  {
+    name: "图片 URL 补全协议",
+    description: "为以 // 开头的图片 URL 补全 https: 协议",
+    field: "images",
+    pattern: "^\\/\\/",
+    replacement: "https://",
+    flags: "",
+  },
   {
     name: "去除标题方括号标记",
-    description: "去除标题中的 [汉化]、[中文] 等方括号标记",
+    description: "去除标题中的 [写真]、[合集] 等方括号标记",
     field: "title",
     pattern: "\\s*\\[.*?\\]\\s*",
     replacement: " ",
-    flags: "g",
-  },
-  {
-    name: "去除标题圆括号标记",
-    description: "去除标题中的 (汉化)、(完结) 等圆括号标记",
-    field: "title",
-    pattern: "\\s*\\(.*?\\)\\s*",
-    replacement: " ",
-    flags: "g",
-  },
-  {
-    name: "去除标题首尾空白",
-    description: "去除标题首尾的空格、制表符等空白字符",
-    field: "title",
-    pattern: "^\\s+|\\s+$",
-    replacement: "",
     flags: "g",
   },
   {
@@ -124,57 +133,6 @@ const REGEX_TEMPLATES: RegexTemplate[] = [
     replacement: " ",
     flags: "g",
   },
-  // 封面
-  {
-    name: "封面 HTTP→HTTPS",
-    description: "将封面 URL 中的 http:// 替换为 https://",
-    field: "coverUrl",
-    pattern: "^http://",
-    replacement: "https://",
-    flags: "",
-  },
-  {
-    name: "封面 URL 补全协议",
-    description: "为以 // 开头的封面 URL 补全 https: 协议",
-    field: "coverUrl",
-    pattern: "^\\/\\/",
-    replacement: "https://",
-    flags: "",
-  },
-  {
-    name: "去除封面 URL 查询参数",
-    description: "移除封面 URL 中 ? 后的所有查询参数",
-    field: "coverUrl",
-    pattern: "\\?.*$",
-    replacement: "",
-    flags: "",
-  },
-  // 游戏类型 & 版本
-  {
-    name: "统一游戏类型为大写",
-    description: "将小写类型名（如 slg）替换为大写（请修改具体类型）",
-    field: "gameType",
-    pattern: "^slg$",
-    replacement: "SLG",
-    flags: "i",
-  },
-  {
-    name: "规范版本号前缀",
-    description: "为缺少 Ver/v 前缀的纯数字版本号添加 v 前缀",
-    field: "version",
-    pattern: "^(\\d)",
-    replacement: "v$1",
-    flags: "",
-  },
-  {
-    name: "统一版本号前缀为 v",
-    description: "将 Ver1.0、V1.0 统一为 v1.0",
-    field: "version",
-    pattern: "^[Vv]er\\.?|^V",
-    replacement: "v",
-    flags: "",
-  },
-  // 描述
   {
     name: "清空描述中 HTML 标签",
     description: "移除描述中所有 HTML 标签，只保留文本内容",
@@ -183,92 +141,18 @@ const REGEX_TEMPLATES: RegexTemplate[] = [
     replacement: "",
     flags: "g",
   },
-  // 下载链接
-  {
-    name: "下载链接 HTTP→HTTPS",
-    description: "将下载链接中的 http:// 替换为 https://",
-    field: "extraInfo.downloads.url",
-    pattern: "^http://",
-    replacement: "https://",
-    flags: "",
-  },
-  {
-    name: "替换下载链接域名",
-    description: "替换下载链接中的域名（请修改域名）",
-    field: "extraInfo.downloads.url",
-    pattern: "https://old\\.example\\.com",
-    replacement: "https://new.example.com",
-    flags: "g",
-  },
-  {
-    name: "去除下载链接查询参数",
-    description: "移除下载链接中 ? 后的所有查询参数",
-    field: "extraInfo.downloads.url",
-    pattern: "\\?.*$",
-    replacement: "",
-    flags: "",
-  },
-  // 截图链接
-  {
-    name: "截图链接 HTTP→HTTPS",
-    description: "将截图链接中的 http:// 替换为 https://",
-    field: "extraInfo.screenshots",
-    pattern: "^http://",
-    replacement: "https://",
-    flags: "",
-  },
-  {
-    name: "替换截图 CDN 域名",
-    description: "替换截图链接中的 CDN 域名（请修改域名）",
-    field: "extraInfo.screenshots",
-    pattern: "https://old-cdn\\.example\\.com",
-    replacement: "https://cdn.example.com",
-    flags: "g",
-  },
-  {
-    name: "去除截图链接查询参数",
-    description: "移除截图链接中 ? 后的查询参数",
-    field: "extraInfo.screenshots",
-    pattern: "\\?.*$",
-    replacement: "",
-    flags: "",
-  },
-  // 视频链接
-  {
-    name: "视频链接 HTTP→HTTPS",
-    description: "将视频链接中的 http:// 替换为 https://",
-    field: "extraInfo.videos",
-    pattern: "^http://",
-    replacement: "https://",
-    flags: "",
-  },
-  {
-    name: "替换视频 CDN 域名",
-    description: "替换视频链接中的 CDN 域名（请修改域名）",
-    field: "extraInfo.videos",
-    pattern: "https://old-cdn\\.example\\.com",
-    replacement: "https://cdn.example.com",
-    flags: "g",
-  },
-  // 作者链接
-  {
-    name: "作者链接 HTTP→HTTPS",
-    description: "将作者链接中的 http:// 替换为 https://",
-    field: "extraInfo.authorUrl",
-    pattern: "^http://",
-    replacement: "https://",
-    flags: "",
-  },
 ];
 
-interface GameItem {
+function getImageProxyUrl(url: string): string {
+  if (url.startsWith("/uploads/")) return url;
+  return `/api/cover/${encodeURIComponent(url)}`;
+}
+
+interface ImageItem {
   id: string;
   title: string;
   description: string | null;
-  coverUrl: string | null;
-  gameType: string | null;
-  isFree: boolean;
-  version: string | null;
+  images: string[];
   views: number;
   status: string;
   createdAt: Date;
@@ -279,13 +163,9 @@ interface GameItem {
     avatar: string | null;
   };
   tags: { tag: { id: string; name: string } }[];
-  _count: {
-    likes: number;
-    favorites: number;
-  };
 }
 
-export default function DashboardGamesPage() {
+export default function DashboardImagesPage() {
   const router = useRouter();
   const searchParams = useSearchParams();
 
@@ -304,9 +184,8 @@ export default function DashboardGamesPage() {
   const [selectAllLoading, setSelectAllLoading] = useState(false);
   const [exporting, setExporting] = useState(false);
 
-  // 正则批量编辑状态
   const [regexOpen, setRegexOpen] = useState(false);
-  const [regexField, setRegexField] = useState<GameRegexField>("title");
+  const [regexField, setRegexField] = useState<ImageRegexField>("images");
   const [regexPattern, setRegexPattern] = useState("");
   const [regexReplacement, setRegexReplacement] = useState("");
   const [regexFlags, setRegexFlags] = useState("g");
@@ -318,59 +197,59 @@ export default function DashboardGamesPage() {
   const utils = trpc.useUtils();
 
   const { data: permissions } = trpc.admin.getMyPermissions.useQuery();
-  const { data: stats } = trpc.admin.getGameStats.useQuery(undefined, {
+  const { data: stats } = trpc.admin.getImageStats.useQuery(undefined, {
     enabled: permissions?.scopes.includes("video:moderate"),
   });
 
-  const { data, isLoading, isFetching } = trpc.admin.listAllGames.useQuery(
+  const { data, isLoading, isFetching } = trpc.admin.listAllImages.useQuery(
     { page, limit, search: search || undefined, status: statusFilter },
     { enabled: permissions?.scopes.includes("video:moderate") }
   );
 
-  const moderateMutation = trpc.admin.moderateGame.useMutation({
-    onSuccess: (_: { success: boolean }, variables: { gameId: string; status: "PUBLISHED" | "REJECTED" }) => {
-      toast.success(variables.status === "PUBLISHED" ? "游戏已通过审核" : "游戏已拒绝");
-      utils.admin.listAllGames.invalidate();
-      utils.admin.getGameStats.invalidate();
+  const moderateMutation = trpc.admin.moderateImage.useMutation({
+    onSuccess: (_: { success: boolean }, variables: { imageId: string; status: "PUBLISHED" | "REJECTED" }) => {
+      toast.success(variables.status === "PUBLISHED" ? "图片已通过审核" : "图片已拒绝");
+      utils.admin.listAllImages.invalidate();
+      utils.admin.getImageStats.invalidate();
     },
     onError: (error: { message: string }) => toast.error(error.message || "操作失败"),
   });
 
-  const deleteMutation = trpc.admin.deleteGame.useMutation({
+  const deleteMutation = trpc.admin.deleteImage.useMutation({
     onSuccess: () => {
-      toast.success("游戏已删除");
-      utils.admin.listAllGames.invalidate();
-      utils.admin.getGameStats.invalidate();
+      toast.success("图片已删除");
+      utils.admin.listAllImages.invalidate();
+      utils.admin.getImageStats.invalidate();
       setDeletingId(null);
     },
     onError: (error: { message: string }) => toast.error(error.message || "删除失败"),
   });
 
-  const batchModerateMutation = trpc.admin.batchModerateGames.useMutation({
+  const batchModerateMutation = trpc.admin.batchModerateImages.useMutation({
     onSuccess: (result: { success: boolean; count: number }) => {
-      toast.success(`已处理 ${result.count} 个游戏`);
-      utils.admin.listAllGames.invalidate();
-      utils.admin.getGameStats.invalidate();
+      toast.success(`已处理 ${result.count} 个图片帖`);
+      utils.admin.listAllImages.invalidate();
+      utils.admin.getImageStats.invalidate();
       setSelectedIds(new Set());
     },
     onError: (error: { message: string }) => toast.error(error.message || "批量操作失败"),
   });
 
-  const batchDeleteMutation = trpc.admin.batchDeleteGames.useMutation({
+  const batchDeleteMutation = trpc.admin.batchDeleteImages.useMutation({
     onSuccess: (result: { success: boolean; count: number }) => {
-      toast.success(`已删除 ${result.count} 个游戏`);
-      utils.admin.listAllGames.invalidate();
-      utils.admin.getGameStats.invalidate();
+      toast.success(`已删除 ${result.count} 个图片帖`);
+      utils.admin.listAllImages.invalidate();
+      utils.admin.getImageStats.invalidate();
       setSelectedIds(new Set());
       setBatchAction(null);
     },
     onError: (error: { message: string }) => toast.error(error.message || "批量删除失败"),
   });
 
-  const batchRegexUpdateMutation = trpc.admin.batchGameRegexUpdate.useMutation({
+  const batchRegexUpdateMutation = trpc.admin.batchImageRegexUpdate.useMutation({
     onSuccess: (result: { success: boolean; count: number }) => {
-      toast.success(`已更新 ${result.count} 个游戏`);
-      utils.admin.listAllGames.invalidate();
+      toast.success(`已更新 ${result.count} 个图片帖`);
+      utils.admin.listAllImages.invalidate();
       setRegexOpen(false);
       setRegexPreviews([]);
       setRegexPreviewStats(null);
@@ -380,9 +259,9 @@ export default function DashboardGamesPage() {
     onError: (error: { message: string }) => toast.error(error.message || "批量编辑失败"),
   });
 
-  const games = useMemo(
-    () => (data?.games || []) as unknown as GameItem[],
-    [data?.games]
+  const images = useMemo(
+    () => (data?.images || []) as unknown as ImageItem[],
+    [data?.images]
   );
 
   const totalCount = data?.totalCount ?? 0;
@@ -411,8 +290,8 @@ export default function DashboardGamesPage() {
   }, []);
 
   const togglePageSelect = useCallback(() => {
-    const pageIds = new Set(games.map((g) => g.id));
-    const allPageSelected = games.every((g) => selectedIds.has(g.id));
+    const pageIds = new Set(images.map((i) => i.id));
+    const allPageSelected = images.every((i) => selectedIds.has(i.id));
 
     if (allPageSelected) {
       const newSet = new Set(selectedIds);
@@ -423,19 +302,19 @@ export default function DashboardGamesPage() {
       pageIds.forEach((id) => newSet.add(id));
       setSelectedIds(newSet);
     }
-  }, [games, selectedIds]);
+  }, [images, selectedIds]);
 
   const selectAll = async () => {
     setSelectAllLoading(true);
     try {
-      const result = await utils.admin.getAllGameIds.fetch({
+      const result = await utils.admin.getAllImageIds.fetch({
         status: statusFilter,
         search: search || undefined,
       });
       setSelectedIds(new Set(result));
-      toast.success(`已选择全部 ${result.length} 个游戏`);
+      toast.success(`已选择全部 ${result.length} 个图片帖`);
     } catch {
-      toast.error("获取游戏列表失败");
+      toast.error("获取图片列表失败");
     } finally {
       setSelectAllLoading(false);
     }
@@ -447,16 +326,16 @@ export default function DashboardGamesPage() {
     if (selectedIds.size === 0) return;
     setExporting(true);
     try {
-      const data = await utils.client.admin.exportGames.query({
-        gameIds: Array.from(selectedIds),
+      const data = await utils.client.admin.exportImages.query({
+        imageIds: Array.from(selectedIds),
       });
       const blob = new Blob([JSON.stringify(data, null, 2)], { type: "application/json" });
       const a = document.createElement("a");
       a.href = URL.createObjectURL(blob);
-      a.download = `games_export_${data.length}.json`;
+      a.download = `images_export_${data.length}.json`;
       a.click();
       URL.revokeObjectURL(a.href);
-      toast.success(`已导出 ${data.length} 个游戏`);
+      toast.success(`已导出 ${data.length} 个图片帖`);
     } catch (err) {
       toast.error(err instanceof Error ? err.message : "导出失败");
     } finally {
@@ -485,7 +364,7 @@ export default function DashboardGamesPage() {
     updateUrl({ page: 1, status: value, q: search });
   };
 
-  const getStatusBadge = (status: GameStatus) => {
+  const getStatusBadge = (status: ImageStatus) => {
     switch (status) {
       case "PUBLISHED":
         return <Badge className="bg-green-500">已发布</Badge>;
@@ -500,12 +379,12 @@ export default function DashboardGamesPage() {
 
   const canModerate = permissions?.scopes.includes("video:moderate");
   const canManage = permissions?.scopes.includes("video:manage");
-  const isPageAllSelected = games.length > 0 && games.every((g) => selectedIds.has(g.id));
+  const isPageAllSelected = images.length > 0 && images.every((i) => selectedIds.has(i.id));
 
   if (!canModerate) {
     return (
       <div className="flex items-center justify-center h-[400px] text-muted-foreground">
-        您没有游戏管理权限
+        您没有图片管理权限
       </div>
     );
   }
@@ -515,8 +394,8 @@ export default function DashboardGamesPage() {
       {/* 标题和统计 */}
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
         <div className="flex items-center gap-2">
-          <Gamepad2 className="h-5 w-5" />
-          <h1 className="text-xl font-semibold">游戏管理</h1>
+          <Images className="h-5 w-5" />
+          <h1 className="text-xl font-semibold">图片管理</h1>
           <Badge variant="outline" className="ml-2">{totalCount} 个</Badge>
         </div>
 
@@ -547,7 +426,7 @@ export default function DashboardGamesPage() {
         <div className="relative flex-1 sm:max-w-md">
           <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
           <Input
-            placeholder="搜索游戏标题或描述..."
+            placeholder="搜索图片标题或描述..."
             value={searchInput}
             onChange={(e) => {
               setSearchInput(e.target.value);
@@ -596,7 +475,7 @@ export default function DashboardGamesPage() {
             onClick={selectAll}
             disabled={selectAllLoading}
             className="gap-1"
-            title={`选择所有 ${totalCount} 个游戏`}
+            title={`选择所有 ${totalCount} 个图片帖`}
           >
             {selectAllLoading ? (
               <Loader2 className="h-4 w-4 animate-spin" />
@@ -624,7 +503,7 @@ export default function DashboardGamesPage() {
                 className="text-green-600"
                 onClick={() =>
                   batchModerateMutation.mutate({
-                    gameIds: Array.from(selectedIds),
+                    imageIds: Array.from(selectedIds),
                     status: "PUBLISHED",
                   })
                 }
@@ -639,7 +518,7 @@ export default function DashboardGamesPage() {
                 className="text-orange-600"
                 onClick={() =>
                   batchModerateMutation.mutate({
-                    gameIds: Array.from(selectedIds),
+                    imageIds: Array.from(selectedIds),
                     status: "REJECTED",
                   })
                 }
@@ -687,28 +566,31 @@ export default function DashboardGamesPage() {
         )}
       </div>
 
-      {/* 游戏列表 */}
+      {/* 图片列表 */}
       {isLoading ? (
         <div className="space-y-3">
           {Array.from({ length: 10 }).map((_, i) => (
             <Skeleton key={i} className="h-28 w-full" />
           ))}
         </div>
-      ) : games.length === 0 ? (
+      ) : images.length === 0 ? (
         <Card>
           <CardContent className="py-12 text-center text-muted-foreground">
-            没有找到游戏
+            没有找到图片帖
           </CardContent>
         </Card>
       ) : (
         <>
           <div className="space-y-3">
-            {games.map((game) => {
-              const isSelected = selectedIds.has(game.id);
-              const isExpanded = expandedIds.has(game.id);
+            {images.map((post) => {
+              const isSelected = selectedIds.has(post.id);
+              const isExpanded = expandedIds.has(post.id);
+              const imageUrls = (post.images ?? []) as string[];
+              const previewImages = imageUrls.slice(0, 4);
+
               return (
                 <Card
-                  key={game.id}
+                  key={post.id}
                   className={cn(
                     "transition-colors",
                     isSelected && "ring-2 ring-primary"
@@ -718,29 +600,39 @@ export default function DashboardGamesPage() {
                     <div className="flex gap-4">
                       <Checkbox
                         checked={isSelected}
-                        onCheckedChange={() => toggleSelect(game.id)}
+                        onCheckedChange={() => toggleSelect(post.id)}
                         className="mt-1"
                       />
 
-                      {/* 封面 */}
-                      <div className="relative w-20 h-[104px] rounded-lg bg-muted overflow-hidden shrink-0">
-                        {game.coverUrl ? (
+                      {/* 缩略图 - 2x2 网格 */}
+                      <div className="relative w-24 h-24 rounded-lg bg-muted overflow-hidden shrink-0">
+                        {previewImages.length >= 4 ? (
+                          <div className="grid grid-cols-2 grid-rows-2 h-full gap-px">
+                            {previewImages.map((url, i) => (
+                              // eslint-disable-next-line @next/next/no-img-element
+                              <img
+                                key={i}
+                                src={getImageProxyUrl(url)}
+                                alt=""
+                                className="w-full h-full object-cover"
+                              />
+                            ))}
+                          </div>
+                        ) : previewImages.length > 0 ? (
                           // eslint-disable-next-line @next/next/no-img-element
                           <img
-                            src={game.coverUrl.startsWith("/uploads/") ? game.coverUrl : `/api/cover/${encodeURIComponent(game.coverUrl)}`}
-                            alt={game.title}
+                            src={getImageProxyUrl(previewImages[0])}
+                            alt={post.title}
                             className="w-full h-full object-cover"
                           />
                         ) : (
                           <div className="w-full h-full flex items-center justify-center">
-                            <Gamepad2 className="h-6 w-6 text-muted-foreground/40" />
+                            <Images className="h-6 w-6 text-muted-foreground/40" />
                           </div>
                         )}
-                        {game.gameType && (
-                          <div className="absolute top-1 left-1 bg-black/70 text-white text-[10px] px-1 py-0.5 rounded">
-                            {game.gameType}
-                          </div>
-                        )}
+                        <div className="absolute bottom-0.5 right-0.5 bg-black/70 text-white text-[10px] px-1 py-0.5 rounded">
+                          {imageUrls.length} 张
+                        </div>
                       </div>
 
                       {/* 信息 */}
@@ -748,74 +640,60 @@ export default function DashboardGamesPage() {
                         <div className="flex items-start justify-between gap-2">
                           <div className="flex-1 min-w-0">
                             <Link
-                              href={`/game/${game.id}`}
+                              href={`/image/${post.id}`}
                               className="font-medium hover:underline line-clamp-1"
                             >
-                              {game.title}
+                              {post.title}
                             </Link>
                             <div className="flex items-center gap-2 text-sm text-muted-foreground mt-1">
                               <Avatar className="h-5 w-5">
-                                <AvatarImage src={game.uploader.avatar || undefined} />
+                                <AvatarImage src={post.uploader.avatar || undefined} />
                                 <AvatarFallback className="text-xs">
-                                  {(game.uploader.nickname || game.uploader.username).charAt(0).toUpperCase()}
+                                  {(post.uploader.nickname || post.uploader.username).charAt(0).toUpperCase()}
                                 </AvatarFallback>
                               </Avatar>
-                              <Link href={`/user/${game.uploader.id}`} className="hover:underline">
-                                {game.uploader.nickname || game.uploader.username}
+                              <Link href={`/user/${post.uploader.id}`} className="hover:underline">
+                                {post.uploader.nickname || post.uploader.username}
                               </Link>
                               <span>·</span>
-                              <span>{formatRelativeTime(game.createdAt)}</span>
+                              <span>{formatRelativeTime(post.createdAt)}</span>
                             </div>
                             <div className="flex items-center gap-3 text-xs text-muted-foreground mt-2">
                               <span className="flex items-center gap-1">
                                 <Eye className="h-3 w-3" />
-                                {formatViews(game.views)}
+                                {formatViews(post.views)}
                               </span>
                               <span className="flex items-center gap-1">
-                                <ThumbsUp className="h-3 w-3" />
-                                {game._count.likes}
+                                <Images className="h-3 w-3" />
+                                {imageUrls.length} 张
                               </span>
-                              <span className="flex items-center gap-1">
-                                <Heart className="h-3 w-3" />
-                                {game._count.favorites}
-                              </span>
-                              {game.version && (
-                                <span className="text-muted-foreground/70">
-                                  {game.version}
-                                </span>
-                              )}
-                              {!game.isFree && (
-                                <Badge variant="outline" className="text-[10px] px-1 py-0 text-amber-600 border-amber-400">
-                                  付费
-                                </Badge>
-                              )}
                             </div>
                           </div>
-                          {getStatusBadge(game.status as GameStatus)}
+                          {getStatusBadge(post.status as ImageStatus)}
                         </div>
 
                         {/* 操作按钮 */}
                         <div className="flex items-center gap-1 mt-2">
                           <Button variant="ghost" size="sm" asChild>
-                            <Link href={`/game/${game.id}`} target="_blank">
+                            <Link href={`/image/${post.id}`} target="_blank">
                               <ExternalLink className="h-3 w-3 mr-1" />
                               查看
                             </Link>
                           </Button>
                           <Button variant="ghost" size="sm" asChild>
-                            <Link href={`/game/edit/${game.id}`}>
+                            <Link href={`/image/edit/${post.id}`}>
                               <Edit2 className="h-3 w-3 mr-1" />
                               编辑
                             </Link>
                           </Button>
-                          {game.status !== "PUBLISHED" && (
+                          {post.status !== "PUBLISHED" && (
                             <Button
                               variant="ghost"
                               size="sm"
                               className="text-green-600"
                               onClick={() =>
                                 moderateMutation.mutate({
-                                  gameId: game.id,
+                                  imageId: post.id,
                                   status: "PUBLISHED",
                                 })
                               }
@@ -825,14 +703,14 @@ export default function DashboardGamesPage() {
                               通过
                             </Button>
                           )}
-                          {game.status !== "REJECTED" && (
+                          {post.status !== "REJECTED" && (
                             <Button
                               variant="ghost"
                               size="sm"
                               className="text-orange-600"
                               onClick={() =>
                                 moderateMutation.mutate({
-                                  gameId: game.id,
+                                  imageId: post.id,
                                   status: "REJECTED",
                                 })
                               }
@@ -847,7 +725,7 @@ export default function DashboardGamesPage() {
                               variant="ghost"
                               size="sm"
                               className="text-destructive"
-                              onClick={() => setDeletingId(game.id)}
+                              onClick={() => setDeletingId(post.id)}
                             >
                               <Trash2 className="h-3 w-3 mr-1" />
                               删除
@@ -857,7 +735,7 @@ export default function DashboardGamesPage() {
                             variant="ghost"
                             size="icon"
                             className="h-8 w-8 ml-auto"
-                            onClick={() => toggleExpand(game.id)}
+                            onClick={() => toggleExpand(post.id)}
                           >
                             {isExpanded ? (
                               <ChevronUp className="h-4 w-4" />
@@ -865,20 +743,6 @@ export default function DashboardGamesPage() {
                               <ChevronDown className="h-4 w-4" />
                             )}
                           </Button>
-                        </div>
-
-                        {/* 封面链接 */}
-                        <div className="flex flex-col gap-0.5 mt-1.5 text-[11px] text-muted-foreground font-mono">
-                          <div className="flex items-center gap-1 min-w-0">
-                            <span className="shrink-0 text-muted-foreground/60">封面</span>
-                            {game.coverUrl ? (
-                              <a href={game.coverUrl} target="_blank" rel="noopener noreferrer" className="truncate hover:underline hover:text-foreground" title={game.coverUrl}>
-                                {game.coverUrl}
-                              </a>
-                            ) : (
-                              <span className="text-muted-foreground/40">未设置</span>
-                            )}
-                          </div>
                         </div>
                       </div>
                     </div>
@@ -889,45 +753,76 @@ export default function DashboardGamesPage() {
                         <div className="mt-4 pt-4 border-t text-xs text-muted-foreground space-y-3">
                           <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
                             <div>
-                              <div className="font-medium text-foreground mb-1">游戏 ID</div>
-                              <code className="text-xs bg-muted px-1 py-0.5 rounded">{game.id}</code>
+                              <div className="font-medium text-foreground mb-1">图片帖 ID</div>
+                              <code className="text-xs bg-muted px-1 py-0.5 rounded">{post.id}</code>
                             </div>
                             <div>
                               <div className="font-medium text-foreground mb-1 flex items-center gap-1">
                                 <Calendar className="h-3 w-3" />
                                 创建时间
                               </div>
-                              {new Date(game.createdAt).toLocaleString("zh-CN")}
+                              {new Date(post.createdAt).toLocaleString("zh-CN")}
                             </div>
                             <div>
-                              <div className="font-medium text-foreground mb-1">类型</div>
-                              {game.gameType || "-"}
+                              <div className="font-medium text-foreground mb-1">图片数量</div>
+                              {imageUrls.length} 张
                             </div>
                             <div>
-                              <div className="font-medium text-foreground mb-1">版本</div>
-                              {game.version || "-"}
+                              <div className="font-medium text-foreground mb-1">浏览量</div>
+                              {formatViews(post.views)}
                             </div>
                           </div>
 
-                          {game.description && (
+                          {post.description && (
                             <div>
                               <div className="font-medium text-foreground mb-1">描述</div>
-                              <p className="text-sm whitespace-pre-wrap line-clamp-5">{game.description}</p>
+                              <p className="text-sm whitespace-pre-wrap line-clamp-5">{post.description}</p>
                             </div>
                           )}
 
-                          {game.tags && game.tags.length > 0 && (
+                          {post.tags && post.tags.length > 0 && (
                             <div>
                               <div className="font-medium text-foreground mb-1 flex items-center gap-1">
                                 <Tag className="h-3 w-3" />
                                 标签
                               </div>
                               <div className="flex flex-wrap gap-1">
-                                {game.tags.map((t) => (
+                                {post.tags.map((t) => (
                                   <Badge key={t.tag.id} variant="outline" className="text-xs">
                                     {t.tag.name}
                                   </Badge>
                                 ))}
+                              </div>
+                            </div>
+                          )}
+
+                          {/* 图片预览网格 */}
+                          {imageUrls.length > 0 && (
+                            <div>
+                              <div className="font-medium text-foreground mb-1">图片预览</div>
+                              <div className="grid grid-cols-6 md:grid-cols-8 gap-1">
+                                {imageUrls.slice(0, 16).map((url, i) => (
+                                  <a
+                                    key={i}
+                                    href={url}
+                                    target="_blank"
+                                    rel="noopener noreferrer"
+                                    className="aspect-square rounded overflow-hidden bg-muted hover:opacity-80 transition-opacity"
+                                  >
+                                    {/* eslint-disable-next-line @next/next/no-img-element */}
+                                    <img
+                                      src={getImageProxyUrl(url)}
+                                      alt={`${post.title} - ${i + 1}`}
+                                      className="w-full h-full object-cover"
+                                      loading="lazy"
+                                    />
+                                  </a>
+                                ))}
+                                {imageUrls.length > 16 && (
+                                  <div className="aspect-square rounded bg-muted flex items-center justify-center text-xs text-muted-foreground">
+                                    +{imageUrls.length - 16}
+                                  </div>
+                                )}
                               </div>
                             </div>
                           )}
@@ -944,7 +839,7 @@ export default function DashboardGamesPage() {
           {totalPages > 1 && (
             <div className="flex items-center justify-between mt-6 pt-6 border-t">
               <div className="text-sm text-muted-foreground">
-                第 {currentPage} 页，共 {totalPages} 页（{totalCount} 个游戏）
+                第 {currentPage} 页，共 {totalPages} 页（{totalCount} 个图片帖）
               </div>
               <div className="flex items-center gap-1">
                 <Button
@@ -1015,7 +910,6 @@ export default function DashboardGamesPage() {
             </div>
           )}
 
-          {/* 加载中遮罩 */}
           {isFetching && !isLoading && (
             <div className="fixed inset-0 bg-background/50 flex items-center justify-center z-50">
               <Loader2 className="h-8 w-8 animate-spin text-primary" />
@@ -1028,16 +922,16 @@ export default function DashboardGamesPage() {
       <AlertDialog open={!!deletingId} onOpenChange={() => setDeletingId(null)}>
         <AlertDialogContent>
           <AlertDialogHeader>
-            <AlertDialogTitle>确定要删除这个游戏吗？</AlertDialogTitle>
+            <AlertDialogTitle>确定要删除这个图片帖吗？</AlertDialogTitle>
             <AlertDialogDescription>
-              此操作不可撤销，游戏及其所有关联数据将被永久删除。
+              此操作不可撤销，图片帖及其所有关联数据将被永久删除。
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
             <AlertDialogCancel>取消</AlertDialogCancel>
             <AlertDialogAction
               className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
-              onClick={() => deletingId && deleteMutation.mutate({ gameId: deletingId })}
+              onClick={() => deletingId && deleteMutation.mutate({ imageId: deletingId })}
             >
               {deleteMutation.isPending && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
               确认删除
@@ -1052,14 +946,14 @@ export default function DashboardGamesPage() {
           <AlertDialogHeader>
             <AlertDialogTitle>确定批量删除吗？</AlertDialogTitle>
             <AlertDialogDescription className="text-destructive">
-              将永久删除 {selectedIds.size} 个游戏及其所有关联数据，此操作不可恢复！
+              将永久删除 {selectedIds.size} 个图片帖及其所有关联数据，此操作不可恢复！
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
             <AlertDialogCancel>取消</AlertDialogCancel>
             <AlertDialogAction
               className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
-              onClick={() => batchDeleteMutation.mutate({ gameIds: Array.from(selectedIds) })}
+              onClick={() => batchDeleteMutation.mutate({ imageIds: Array.from(selectedIds) })}
             >
               永久删除
             </AlertDialogAction>
@@ -1079,7 +973,7 @@ export default function DashboardGamesPage() {
           <DialogHeader>
             <DialogTitle>正则批量编辑</DialogTitle>
             <DialogDescription>
-              对已选 {selectedIds.size} 个游戏使用正则表达式批量替换字段内容
+              对已选 {selectedIds.size} 个图片帖使用正则表达式批量替换字段内容
             </DialogDescription>
           </DialogHeader>
 
@@ -1095,19 +989,9 @@ export default function DashboardGamesPage() {
                   <SelectValue />
                 </SelectTrigger>
                 <SelectContent>
+                  <SelectItem value="images">图片链接 (images)</SelectItem>
                   <SelectItem value="title">标题 (title)</SelectItem>
                   <SelectItem value="description">描述 (description)</SelectItem>
-                  <SelectItem value="coverUrl">封面链接 (coverUrl)</SelectItem>
-                  <SelectItem value="gameType">游戏类型 (gameType)</SelectItem>
-                  <SelectItem value="version">版本号 (version)</SelectItem>
-                  <SelectItem value="extraInfo.downloads.url">下载链接 (downloads.url)</SelectItem>
-                  <SelectItem value="extraInfo.downloads.name">下载名称 (downloads.name)</SelectItem>
-                  <SelectItem value="extraInfo.downloads.password">下载密码 (downloads.password)</SelectItem>
-                  <SelectItem value="extraInfo.screenshots">截图链接 (screenshots)</SelectItem>
-                  <SelectItem value="extraInfo.videos">视频链接 (videos)</SelectItem>
-                  <SelectItem value="extraInfo.originalName">原作名 (originalName)</SelectItem>
-                  <SelectItem value="extraInfo.authorUrl">作者链接 (authorUrl)</SelectItem>
-                  <SelectItem value="extraInfo.characterIntro">角色介绍 (characterIntro)</SelectItem>
                 </SelectContent>
               </Select>
             </div>
@@ -1149,7 +1033,7 @@ export default function DashboardGamesPage() {
               <Label>匹配正则</Label>
               <div className="flex gap-2">
                 <Input
-                  placeholder="例: \[汉化\]"
+                  placeholder="例: https://old-cdn\.com"
                   value={regexPattern}
                   onChange={(e) => {
                     setRegexPattern(e.target.value);
@@ -1205,8 +1089,8 @@ export default function DashboardGamesPage() {
                   return;
                 }
                 try {
-                  const result = await utils.client.admin.batchGameRegexPreview.query({
-                    gameIds: Array.from(selectedIds),
+                  const result = await utils.client.admin.batchImageRegexPreview.query({
+                    imageIds: Array.from(selectedIds),
                     field: regexField,
                     pattern: regexPattern,
                     replacement: regexReplacement,
@@ -1233,7 +1117,7 @@ export default function DashboardGamesPage() {
               <div className="space-y-3">
                 <div className="flex items-center gap-2 text-sm">
                   <Badge variant={regexPreviewStats.totalMatched > 0 ? "default" : "secondary"}>
-                    {regexPreviewStats.totalMatched} / {regexPreviewStats.totalSelected} 个游戏将被修改
+                    {regexPreviewStats.totalMatched} / {regexPreviewStats.totalSelected} 个图片帖将被修改
                   </Badge>
                 </div>
 
@@ -1242,7 +1126,7 @@ export default function DashboardGamesPage() {
                     <table className="w-full text-sm">
                       <thead className="bg-muted/50 sticky top-0">
                         <tr>
-                          <th className="text-left p-2 font-medium">游戏</th>
+                          <th className="text-left p-2 font-medium">图片帖</th>
                           <th className="text-left p-2 font-medium text-red-600">替换前</th>
                           <th className="text-left p-2 font-medium text-green-600">替换后</th>
                         </tr>
@@ -1273,7 +1157,7 @@ export default function DashboardGamesPage() {
 
                 {regexPreviews.length === 0 && (
                   <p className="text-sm text-muted-foreground text-center py-4">
-                    没有游戏匹配该正则表达式
+                    没有图片帖匹配该正则表达式
                   </p>
                 )}
               </div>
@@ -1293,7 +1177,7 @@ export default function DashboardGamesPage() {
               }
               onClick={() => {
                 batchRegexUpdateMutation.mutate({
-                  gameIds: Array.from(selectedIds),
+                  imageIds: Array.from(selectedIds),
                   field: regexField,
                   pattern: regexPattern,
                   replacement: regexReplacement,

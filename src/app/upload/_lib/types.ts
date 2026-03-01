@@ -64,6 +64,26 @@ export interface GameBatchResult {
   updated?: boolean;
 }
 
+// ==================== 图片批量 ====================
+
+export interface ParsedImagePost {
+  title: string;
+  description: string;
+  images: string[];
+  tags: string[];
+}
+
+export interface ParsedImageBatchData {
+  posts: ParsedImagePost[];
+}
+
+export interface ImageBatchResult {
+  title: string;
+  id?: string;
+  error?: string;
+  updated?: boolean;
+}
+
 // ==================== 共享 ====================
 
 export interface TagItem {

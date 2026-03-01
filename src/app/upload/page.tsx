@@ -3,11 +3,10 @@
 import { useState } from "react";
 import { useSession } from "@/lib/auth-client";
 import { Button } from "@/components/ui/button";
-import { Badge } from "@/components/ui/badge";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { useSound } from "@/hooks/use-sound";
 import { cn } from "@/lib/utils";
-import { AlertCircle, Construction, FileVideo, FolderOpen, Gamepad2, Image as ImageIcon, Layers, Loader2, Upload } from "lucide-react";
+import { AlertCircle, FileVideo, FolderOpen, Gamepad2, Image as ImageIcon, Layers, Loader2, Upload } from "lucide-react";
 import Link from "next/link";
 import type { UploadContentType } from "./_lib/types";
 import { VideoSingleUpload } from "./_components/video-single";
@@ -16,6 +15,9 @@ import { VideoBatchUpload } from "./_components/video-batch";
 import { GameSingleUpload } from "./_components/game-single";
 import { GameQuickBatch } from "./_components/game-quick-batch";
 import { GameBatchUpload } from "./_components/game-batch";
+import { ImageSingleUpload } from "./_components/image-single";
+import { ImageQuickBatch } from "./_components/image-quick-batch";
+import { ImageBatchUpload } from "./_components/image-batch";
 
 export default function UploadPage() {
   const { data: session, status } = useSession();
@@ -23,6 +25,7 @@ export default function UploadPage() {
   const [contentType, setContentType] = useState<UploadContentType>("video");
   const [videoMode, setVideoMode] = useState<"single" | "quick-batch" | "json-import">("single");
   const [gameMode, setGameMode] = useState<"single" | "quick-batch" | "json-import">("single");
+  const [imageMode, setImageMode] = useState<"single" | "quick-batch" | "json-import">("single");
 
   if (status === "loading") {
     return (
@@ -67,7 +70,7 @@ export default function UploadPage() {
   const contentTypeOptions = [
     { id: "video" as const, label: "视频", icon: FileVideo, description: "上传视频作品" },
     { id: "game" as const, label: "游戏", icon: Gamepad2, description: "上传游戏资源" },
-    { id: "image" as const, label: "图片", icon: ImageIcon, description: "上传图片（即将开放）" },
+    { id: "image" as const, label: "图片", icon: ImageIcon, description: "上传图片作品" },
   ];
 
   return (
@@ -85,29 +88,20 @@ export default function UploadPage() {
         {contentTypeOptions.map((opt) => {
           const Icon = opt.icon;
           const isActive = contentType === opt.id;
-          const isDisabled = opt.id === "image";
           return (
             <button
               key={opt.id}
               type="button"
-              disabled={isDisabled}
               onClick={() => setContentType(opt.id)}
               className={cn(
                 "relative flex flex-col items-center gap-2 rounded-lg border-2 p-4 transition-all",
                 isActive
                   ? "border-primary bg-primary/5 text-primary"
                   : "border-muted hover:border-muted-foreground/30 hover:bg-muted/50",
-                isDisabled && "opacity-50 cursor-not-allowed hover:border-muted hover:bg-transparent",
               )}
             >
               <Icon className="h-6 w-6" />
               <span className="font-medium text-sm">{opt.label}</span>
-              {isDisabled && (
-                <Badge variant="secondary" className="absolute top-1.5 right-1.5 text-[10px] px-1.5 py-0">
-                  <Construction className="h-3 w-3 mr-0.5" />
-                  敬请期待
-                </Badge>
-              )}
             </button>
           );
         })}
@@ -141,17 +135,18 @@ export default function UploadPage() {
         </Tabs>
       )}
 
-      {/* ==================== 图片（预留） ==================== */}
+      {/* ==================== 图片 ==================== */}
       {contentType === "image" && (
-        <div className="min-h-[40vh] flex flex-col items-center justify-center gap-4">
-          <div className="p-6 rounded-full bg-muted">
-            <Construction className="h-16 w-16 text-muted-foreground" />
-          </div>
-          <h2 className="text-xl font-semibold">图片上传即将开放</h2>
-          <p className="text-muted-foreground text-center max-w-md">
-            图片上传功能正在开发中，敬请期待
-          </p>
-        </div>
+        <Tabs value={imageMode} onValueChange={(v) => { setImageMode(v as typeof imageMode); play("navigate"); }} className="mb-6">
+          <TabsList className="grid w-full max-w-lg grid-cols-3">
+            <TabsTrigger value="single" className="gap-2"><ImageIcon className="h-4 w-4" />单个发布</TabsTrigger>
+            <TabsTrigger value="quick-batch" className="gap-2"><Layers className="h-4 w-4" />快速批量</TabsTrigger>
+            <TabsTrigger value="json-import" className="gap-2"><FolderOpen className="h-4 w-4" />JSON 导入</TabsTrigger>
+          </TabsList>
+          <TabsContent value="single" className="mt-6"><ImageSingleUpload /></TabsContent>
+          <TabsContent value="quick-batch" className="mt-6"><ImageQuickBatch /></TabsContent>
+          <TabsContent value="json-import" className="mt-6"><ImageBatchUpload /></TabsContent>
+        </Tabs>
       )}
     </div>
   );

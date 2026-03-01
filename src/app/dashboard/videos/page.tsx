@@ -70,6 +70,7 @@ import {
   Replace,
   BookTemplate,
   Zap,
+  Download,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { formatRelativeTime, formatDuration } from "@/lib/format";
@@ -254,6 +255,7 @@ export default function AdminVideosPage() {
   const [deletingId, setDeletingId] = useState<string | null>(null);
   const [batchAction, setBatchAction] = useState<"delete" | null>(null);
   const [selectAllLoading, setSelectAllLoading] = useState(false);
+  const [exporting, setExporting] = useState(false);
 
   // 正则批量编辑状态
   const [regexOpen, setRegexOpen] = useState(false);
@@ -413,6 +415,27 @@ export default function AdminVideosPage() {
   // 取消全选
   const deselectAll = () => {
     setSelectedIds(new Set());
+  };
+
+  const handleExport = async () => {
+    if (selectedIds.size === 0) return;
+    setExporting(true);
+    try {
+      const data = await utils.client.admin.exportVideos.query({
+        videoIds: Array.from(selectedIds),
+      });
+      const blob = new Blob([JSON.stringify(data, null, 2)], { type: "application/json" });
+      const a = document.createElement("a");
+      a.href = URL.createObjectURL(blob);
+      a.download = `videos_export_${data.length}.json`;
+      a.click();
+      URL.revokeObjectURL(a.href);
+      toast.success(`已导出 ${data.length} 个视频`);
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "导出失败");
+    } finally {
+      setExporting(false);
+    }
   };
 
   const toggleExpand = useCallback((id: string) => {
@@ -604,6 +627,15 @@ export default function AdminVideosPage() {
               >
                 <XCircle className="h-4 w-4 mr-1" />
                 批量拒绝
+              </Button>
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={handleExport}
+                disabled={exporting}
+              >
+                {exporting ? <Loader2 className="h-4 w-4 mr-1 animate-spin" /> : <Download className="h-4 w-4 mr-1" />}
+                导出 JSON
               </Button>
               {canManage && (
                 <>

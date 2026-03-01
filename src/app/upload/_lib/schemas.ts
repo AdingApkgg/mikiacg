@@ -24,3 +24,10 @@ export const gameUploadSchema = z.object({
 });
 
 export type GameUploadForm = z.infer<typeof gameUploadSchema>;
+
+export const imageUploadSchema = z.object({
+  title: z.string().min(1, "请输入标题").max(200, "标题最多200个字符"),
+  description: z.string().max(5000, "简介最多5000个字符").optional().or(z.literal("")),
+});
+
+export type ImageUploadForm = z.infer<typeof imageUploadSchema>;

@@ -170,6 +170,69 @@ export function GameBatchResults({ results, importing, onRetry }: GameBatchResul
   );
 }
 
+// ==================== 图片结果 ====================
+
+interface ImageResult {
+  title: string;
+  id?: string;
+  error?: string;
+  updated?: boolean;
+}
+
+interface ImageBatchResultsProps {
+  results: ImageResult[];
+  importing: boolean;
+  onRetry?: () => void;
+}
+
+export function ImageBatchResults({ results, importing, onRetry }: ImageBatchResultsProps) {
+  if (results.length === 0) return null;
+
+  const newCount = results.filter(r => r.id && !r.updated).length;
+  const updatedCount = results.filter(r => r.updated).length;
+  const failCount = results.filter(r => r.error).length;
+
+  return (
+    <Card>
+      <CardHeader>
+        <div className="flex items-center justify-between">
+          <div>
+            <CardTitle className="text-lg">导入结果</CardTitle>
+            <CardDescription>新建 {newCount}，更新 {updatedCount}，失败 {failCount}</CardDescription>
+          </div>
+          {failCount > 0 && !importing && onRetry && (
+            <Button type="button" variant="outline" size="sm" onClick={onRetry}>
+              <RefreshCw className="h-4 w-4 mr-1" />
+              重试失败 ({failCount})
+            </Button>
+          )}
+        </div>
+      </CardHeader>
+      <CardContent>
+        <ResultTabs
+          results={results}
+          renderItem={(r, i) => (
+            <div key={i} className="flex items-center justify-between p-2 rounded-lg bg-muted/50">
+              <div className="flex items-center gap-2 min-w-0">
+                {r.id ? <CheckCircle className="h-4 w-4 text-green-500 shrink-0" /> : <XCircle className="h-4 w-4 text-red-500 shrink-0" />}
+                <span className="truncate text-sm">{r.title}</span>
+              </div>
+              {r.id ? (
+                <div className="flex items-center gap-1.5 shrink-0">
+                  {r.updated && <Badge variant="outline" className="text-xs text-yellow-600 border-yellow-400">已更新</Badge>}
+                  <Link href={`/image/${r.id}`}><Badge variant="secondary" className="text-xs">{r.id}</Badge></Link>
+                </div>
+              ) : (
+                <Badge variant="destructive" className="text-xs max-w-[200px] truncate">{r.error}</Badge>
+              )}
+            </div>
+          )}
+        />
+      </CardContent>
+    </Card>
+  );
+}
+
 // ==================== 通用结果标签页 ====================
 
 interface ResultTabsProps<T extends { id?: string; error?: string }> {

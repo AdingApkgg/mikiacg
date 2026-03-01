@@ -53,6 +53,9 @@ model User {
   devices          UserDevice[]
   searchRecords    SearchRecord[]
 
+  // 图片帖子
+  imagePosts         ImagePost[]
+
   // 游戏相关
   games              Game[]
   gameFavorites      GameFavorite[]
@@ -448,9 +451,10 @@ model Tag {
   categoryId String?
   createdAt  DateTime     @default(now())
 
-  category TagCategory? @relation(fields: [categoryId], references: [id], onDelete: SetNull)
-  videos   TagOnVideo[]
-  games    TagOnGame[]
+  category   TagCategory?    @relation(fields: [categoryId], references: [id], onDelete: SetNull)
+  videos     TagOnVideo[]
+  games      TagOnGame[]
+  imagePosts TagOnImagePost[]
 
   @@index([slug])
   @@index([categoryId])
@@ -473,6 +477,39 @@ model TagOnGame {
   tag    Tag    @relation(fields: [tagId], references: [id], onDelete: Cascade)
 
   @@id([gameId, tagId])
+  @@index([tagId])
+}
+
+// ==================== 图片帖子 ====================
+
+model ImagePost {
+  id          String      @id // 随机 6 位数字 ID (000000-999999)
+  title       String
+  description String?     @db.Text
+  images      Json        // string[] — 图片 URL 列表
+  views       Int         @default(0)
+  status      VideoStatus @default(PENDING)
+
+  tags        TagOnImagePost[]
+
+  uploaderId  String
+  uploader    User        @relation(fields: [uploaderId], references: [id], onDelete: Cascade)
+
+  createdAt   DateTime    @default(now())
+  updatedAt   DateTime    @updatedAt
+
+  @@index([uploaderId])
+  @@index([status])
+  @@index([createdAt])
+}
+
+model TagOnImagePost {
+  imagePostId String
+  tagId       String
+  imagePost   ImagePost @relation(fields: [imagePostId], references: [id], onDelete: Cascade)
+  tag         Tag       @relation(fields: [tagId], references: [id], onDelete: Cascade)
+
+  @@id([imagePostId, tagId])
   @@index([tagId])
 }
 
@@ -708,8 +745,9 @@ model SiteConfig {
   // 功能开关
   allowRegistration   Boolean @default(true)   // 允许注册
   allowUpload         Boolean @default(true)   // 允许上传
-  allowComment        Boolean @default(true)   // 允许评论
-  requireEmailVerify  Boolean @default(false)  // 注册需要邮箱验证
+  allowComment           Boolean @default(true)   // 允许评论
+  requireLoginToComment  Boolean @default(false)  // 评论需要登录
+  requireEmailVerify     Boolean @default(false)  // 注册需要邮箱验证
   
   // 内容设置
   videosPerPage       Int     @default(20)     // 每页视频数

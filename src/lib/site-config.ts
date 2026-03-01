@@ -19,6 +19,7 @@ export interface PublicSiteConfig {
   allowRegistration: boolean;
   allowUpload: boolean;
   allowComment: boolean;
+  requireLoginToComment: boolean;
   contactEmail: string | null;
   socialLinks: Record<string, string> | null;
   footerText: string | null;
@@ -54,6 +55,7 @@ const selectFields = {
   allowRegistration: true,
   allowUpload: true,
   allowComment: true,
+  requireLoginToComment: true,
   contactEmail: true,
   socialLinks: true,
   footerText: true,
@@ -89,6 +91,7 @@ const defaultConfig: PublicSiteConfig = {
   allowRegistration: true,
   allowUpload: true,
   allowComment: true,
+  requireLoginToComment: false,
   contactEmail: null,
   socialLinks: null,
   footerText: null,

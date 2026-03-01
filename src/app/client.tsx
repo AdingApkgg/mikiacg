@@ -3,7 +3,7 @@
 import { Component, useEffect, useRef, useState, useSyncExternalStore, lazy, Suspense, type ReactNode, type ErrorInfo } from "react";
 import { useRouter } from "next/navigation";
 import { useUIStore } from "@/stores/app";
-import { Play, Gamepad2, Loader2, Sparkles, Zap } from "lucide-react";
+import { Play, Gamepad2, ImageIcon, Loader2, Sparkles, Zap, Palette } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useSound } from "@/hooks/use-sound";
 
@@ -34,13 +34,13 @@ export default function LandingClient() {
 
   const mounted = useSyncExternalStore(subscribe, getSnapshot, getServerSnapshot);
 
-  const [hoveredMode, setHoveredMode] = useState<"video" | "game" | null>(null);
+  const [hoveredMode, setHoveredMode] = useState<"video" | "image" | "game" | null>(null);
   const mouseRef = useRef({ x: 0, y: 0 });
 
   useEffect(() => {
     if (!mounted) return;
     if (isContentModeChosen) {
-      const target = contentMode === "game" ? "/game" : "/video";
+      const target = contentMode === "game" ? "/game" : contentMode === "image" ? "/image" : "/video";
       router.replace(target);
     }
   }, [mounted, isContentModeChosen, contentMode, router]);
@@ -62,10 +62,10 @@ export default function LandingClient() {
     );
   }
 
-  const handleChoose = (mode: "video" | "game") => {
+  const handleChoose = (mode: "video" | "image" | "game") => {
     play("navigate");
     chooseContentMode(mode);
-    router.replace(mode === "game" ? "/game" : "/video");
+    router.replace(mode === "game" ? "/game" : mode === "image" ? "/image" : "/video");
   };
 
   return (
@@ -78,7 +78,7 @@ export default function LandingClient() {
       </SceneErrorBoundary>
 
       {/* Glass cards */}
-      <div className="relative z-10 w-full max-w-2xl space-y-8 text-center">
+      <div className="relative z-10 w-full max-w-4xl space-y-8 text-center">
         <div className="space-y-3">
           <h1 className="text-3xl font-bold tracking-tight sm:text-4xl md:text-5xl">
             <span className="text-gradient-acgn">你想看什么？</span>
@@ -88,7 +88,7 @@ export default function LandingClient() {
           </p>
         </div>
 
-        <div className="grid grid-cols-1 gap-5 sm:grid-cols-2">
+        <div className="grid grid-cols-1 gap-5 sm:grid-cols-3">
           {/* Video card */}
           <button
             onClick={() => handleChoose("video")}
@@ -124,6 +124,43 @@ export default function LandingClient() {
               </p>
             </div>
             <div className="absolute inset-0 rounded-2xl bg-gradient-to-br from-purple-500/5 via-transparent to-blue-500/5 opacity-0 transition-opacity duration-500 group-hover:opacity-100" />
+          </button>
+
+          {/* Image card */}
+          <button
+            onClick={() => handleChoose("image")}
+            onMouseEnter={() => setHoveredMode("image")}
+            onMouseLeave={() => setHoveredMode(null)}
+            className={cn(
+              "group relative flex flex-col items-center gap-5 rounded-2xl p-8 sm:p-10",
+              "glass-card",
+              "border border-pink-500/20 dark:border-pink-400/15",
+              "hover:border-pink-500/50 dark:hover:border-pink-400/40",
+              "hover:shadow-[0_0_40px_-8px] hover:shadow-pink-500/25",
+              "transition-all duration-500 ease-out",
+              "hover:-translate-y-2 hover:scale-[1.02]",
+              "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-pink-500 focus-visible:ring-offset-2"
+            )}
+          >
+            <div className={cn(
+              "relative flex h-20 w-20 items-center justify-center rounded-2xl",
+              "bg-gradient-to-br from-rose-500/20 via-pink-500/15 to-fuchsia-500/20",
+              "text-pink-500 dark:text-pink-400",
+              "transition-all duration-500 group-hover:scale-110",
+              "group-hover:shadow-[0_0_30px_-5px] group-hover:shadow-pink-500/30"
+            )}>
+              <ImageIcon className="h-10 w-10 transition-transform duration-300 group-hover:scale-110" />
+              <Palette className="absolute -top-2 -right-2 h-4 w-4 text-pink-400 opacity-0 transition-all duration-300 group-hover:opacity-100 group-hover:-translate-y-1" />
+            </div>
+            <div className="space-y-1.5">
+              <h2 className="text-xl font-semibold transition-colors group-hover:text-pink-500 dark:group-hover:text-pink-400">
+                看图片
+              </h2>
+              <p className="text-sm text-muted-foreground">
+                鉴赏精选插画与同人图
+              </p>
+            </div>
+            <div className="absolute inset-0 rounded-2xl bg-gradient-to-br from-pink-500/5 via-transparent to-rose-500/5 opacity-0 transition-opacity duration-500 group-hover:opacity-100" />
           </button>
 
           {/* Game card */}

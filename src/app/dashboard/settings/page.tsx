@@ -86,6 +86,7 @@ const configFormSchema = z.object({
   allowRegistration: z.boolean(),
   allowUpload: z.boolean(),
   allowComment: z.boolean(),
+  requireLoginToComment: z.boolean(),
   requireEmailVerify: z.boolean(),
   
   // 内容设置
@@ -393,6 +394,7 @@ export default function AdminSettingsPage() {
       allowRegistration: true,
       allowUpload: true,
       allowComment: true,
+      requireLoginToComment: false,
       requireEmailVerify: false,
       videosPerPage: 20,
       commentsPerPage: 20,
@@ -447,6 +449,7 @@ export default function AdminSettingsPage() {
         allowRegistration: config.allowRegistration,
         allowUpload: config.allowUpload,
         allowComment: config.allowComment,
+        requireLoginToComment: (config as { requireLoginToComment?: boolean }).requireLoginToComment ?? false,
         requireEmailVerify: config.requireEmailVerify,
         videosPerPage: config.videosPerPage,
         commentsPerPage: config.commentsPerPage,
@@ -870,6 +873,22 @@ export default function AdminSettingsPage() {
                         <div className="space-y-0.5">
                           <FormLabel>允许评论</FormLabel>
                           <FormDescription>关闭后用户将无法发表评论</FormDescription>
+                        </div>
+                        <FormControl>
+                          <Switch checked={field.value} onCheckedChange={field.onChange} />
+                        </FormControl>
+                      </FormItem>
+                    )}
+                  />
+
+                  <FormField
+                    control={form.control}
+                    name="requireLoginToComment"
+                    render={({ field }) => (
+                      <FormItem className="flex items-center justify-between rounded-lg border p-3">
+                        <div className="space-y-0.5">
+                          <FormLabel>评论需要登录</FormLabel>
+                          <FormDescription>开启后只有登录用户才能发表评论，关闭则允许匿名评论</FormDescription>
                         </div>
                         <FormControl>
                           <Switch checked={field.value} onCheckedChange={field.onChange} />

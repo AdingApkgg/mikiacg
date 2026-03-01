@@ -1747,6 +1747,7 @@ export const adminRouter = router({
       allowRegistration: z.boolean().optional(),
       allowUpload: z.boolean().optional(),
       allowComment: z.boolean().optional(),
+      requireLoginToComment: z.boolean().optional(),
       requireEmailVerify: z.boolean().optional(),
       
       // 内容设置
@@ -1826,7 +1827,7 @@ export const adminRouter = router({
         "siteName", "siteUrl", "siteDescription", "siteLogo", "siteFavicon", "siteKeywords",
         "googleVerification", "githubUrl", "securityEmail",
         "announcement", "announcementEnabled", "allowRegistration", "allowUpload",
-        "allowComment", "requireEmailVerify", "videosPerPage", "commentsPerPage",
+        "allowComment", "requireLoginToComment", "requireEmailVerify", "videosPerPage", "commentsPerPage",
         "maxUploadSize", "allowedVideoFormats", "contactEmail", "socialLinks",
         "footerText", "footerLinks", "icpBeian", "publicSecurityBeian",
         "adsEnabled", "adGateEnabled", "adGateViewsRequired", "adGateHours", "sponsorAds",
@@ -1928,7 +1929,7 @@ export const adminRouter = router({
         "siteName", "siteUrl", "siteDescription", "siteLogo", "siteFavicon", "siteKeywords",
         "googleVerification", "githubUrl", "securityEmail",
         "announcement", "announcementEnabled", "allowRegistration", "allowUpload",
-        "allowComment", "requireEmailVerify", "videosPerPage", "commentsPerPage",
+        "allowComment", "requireLoginToComment", "requireEmailVerify", "videosPerPage", "commentsPerPage",
         "maxUploadSize", "allowedVideoFormats", "contactEmail", "socialLinks",
         "footerText", "footerLinks", "icpBeian", "publicSecurityBeian",
         "adsEnabled", "adGateEnabled", "adGateViewsRequired", "adGateHours", "sponsorAds",
@@ -2407,6 +2408,374 @@ export const adminRouter = router({
       });
 
       return { success: true, count: result.count };
+    }),
+
+  // ========== 图片管理 ==========
+
+  getImageStats: adminProcedure.query(async ({ ctx }) => {
+    const canModerate = await hasScope(ctx.prisma, ctx.session.user.id, "video:moderate");
+    if (!canModerate) {
+      throw new TRPCError({ code: "FORBIDDEN", message: "无图片管理权限" });
+    }
+
+    const [total, pending, published, rejected] = await Promise.all([
+      ctx.prisma.imagePost.count(),
+      ctx.prisma.imagePost.count({ where: { status: "PENDING" } }),
+      ctx.prisma.imagePost.count({ where: { status: "PUBLISHED" } }),
+      ctx.prisma.imagePost.count({ where: { status: "REJECTED" } }),
+    ]);
+
+    return { total, pending, published, rejected };
+  }),
+
+  listAllImages: adminProcedure
+    .input(
+      z.object({
+        page: z.number().min(1).default(1),
+        limit: z.number().min(1).max(100).default(50),
+        status: z.enum(["ALL", "PENDING", "PUBLISHED", "REJECTED"]).default("ALL"),
+        search: z.string().optional(),
+      })
+    )
+    .query(async ({ ctx, input }) => {
+      const canModerate = await hasScope(ctx.prisma, ctx.session.user.id, "video:moderate");
+      if (!canModerate) {
+        throw new TRPCError({ code: "FORBIDDEN", message: "无图片管理权限" });
+      }
+
+      const { page, limit, status, search } = input;
+      const skip = (page - 1) * limit;
+
+      const where: Prisma.ImagePostWhereInput = {};
+      if (status !== "ALL") {
+        where.status = status;
+      }
+      if (search) {
+        where.OR = [
+          { title: { contains: search, mode: "insensitive" } },
+          { description: { contains: search, mode: "insensitive" } },
+        ];
+      }
+
+      const [images, totalCount] = await Promise.all([
+        ctx.prisma.imagePost.findMany({
+          where,
+          skip,
+          take: limit,
+          orderBy: { createdAt: "desc" },
+          include: {
+            uploader: {
+              select: { id: true, username: true, nickname: true, avatar: true },
+            },
+            tags: {
+              include: { tag: { select: { id: true, name: true, slug: true } } },
+            },
+          },
+        }),
+        ctx.prisma.imagePost.count({ where }),
+      ]);
+
+      return {
+        images,
+        totalCount,
+        totalPages: Math.ceil(totalCount / limit),
+        currentPage: page,
+      };
+    }),
+
+  moderateImage: adminProcedure
+    .input(
+      z.object({
+        imageId: z.string(),
+        status: z.enum(["PUBLISHED", "REJECTED"]),
+      })
+    )
+    .mutation(async ({ ctx, input }) => {
+      const canModerate = await hasScope(ctx.prisma, ctx.session.user.id, "video:moderate");
+      if (!canModerate) {
+        throw new TRPCError({ code: "FORBIDDEN", message: "无图片审核权限" });
+      }
+
+      await ctx.prisma.imagePost.update({
+        where: { id: input.imageId },
+        data: { status: input.status },
+      });
+
+      return { success: true };
+    }),
+
+  deleteImage: adminProcedure
+    .input(z.object({ imageId: z.string() }))
+    .mutation(async ({ ctx, input }) => {
+      const canManage = await hasScope(ctx.prisma, ctx.session.user.id, "video:manage");
+      if (!canManage) {
+        throw new TRPCError({ code: "FORBIDDEN", message: "无图片管理权限" });
+      }
+
+      await ctx.prisma.imagePost.delete({ where: { id: input.imageId } });
+      return { success: true };
+    }),
+
+  getAllImageIds: adminProcedure
+    .input(
+      z.object({
+        status: z.enum(["ALL", "PENDING", "PUBLISHED", "REJECTED"]).default("ALL"),
+        search: z.string().optional(),
+      })
+    )
+    .query(async ({ ctx, input }) => {
+      const canModerate = await hasScope(ctx.prisma, ctx.session.user.id, "video:moderate");
+      if (!canModerate) {
+        throw new TRPCError({ code: "FORBIDDEN", message: "无图片管理权限" });
+      }
+
+      const { status, search } = input;
+      const where: Prisma.ImagePostWhereInput = {};
+      if (status !== "ALL") where.status = status;
+      if (search) {
+        where.OR = [
+          { title: { contains: search, mode: "insensitive" as const } },
+          { description: { contains: search, mode: "insensitive" as const } },
+        ];
+      }
+
+      const images = await ctx.prisma.imagePost.findMany({
+        where,
+        select: { id: true },
+        orderBy: { createdAt: "desc" },
+      });
+      return images.map((i) => i.id);
+    }),
+
+  batchModerateImages: adminProcedure
+    .input(
+      z.object({
+        imageIds: z.array(z.string()).min(1).max(1000),
+        status: z.enum(["PUBLISHED", "REJECTED"]),
+      })
+    )
+    .mutation(async ({ ctx, input }) => {
+      const canModerate = await hasScope(ctx.prisma, ctx.session.user.id, "video:moderate");
+      if (!canModerate) {
+        throw new TRPCError({ code: "FORBIDDEN", message: "无图片审核权限" });
+      }
+
+      const result = await ctx.prisma.imagePost.updateMany({
+        where: { id: { in: input.imageIds } },
+        data: { status: input.status },
+      });
+
+      return { success: true, count: result.count };
+    }),
+
+  batchDeleteImages: adminProcedure
+    .input(z.object({ imageIds: z.array(z.string()).min(1).max(1000) }))
+    .mutation(async ({ ctx, input }) => {
+      const canManage = await hasScope(ctx.prisma, ctx.session.user.id, "video:manage");
+      if (!canManage) {
+        throw new TRPCError({ code: "FORBIDDEN", message: "无图片管理权限" });
+      }
+
+      const result = await ctx.prisma.imagePost.deleteMany({
+        where: { id: { in: input.imageIds } },
+      });
+
+      return { success: true, count: result.count };
+    }),
+
+  batchImageRegexPreview: adminProcedure
+    .input(
+      z.object({
+        imageIds: z.array(z.string()).min(1).max(500),
+        field: z.enum(["title", "description", "images"]),
+        pattern: z.string().min(1),
+        replacement: z.string(),
+        flags: z.string().default("g"),
+      })
+    )
+    .query(async ({ ctx, input }) => {
+      const canModerate = await hasScope(ctx.prisma, ctx.session.user.id, "video:moderate");
+      if (!canModerate) {
+        throw new TRPCError({ code: "FORBIDDEN", message: "无图片管理权限" });
+      }
+
+      let regex: RegExp;
+      try {
+        regex = new RegExp(input.pattern, input.flags);
+      } catch {
+        throw new TRPCError({ code: "BAD_REQUEST", message: "无效的正则表达式" });
+      }
+
+      const posts = await ctx.prisma.imagePost.findMany({
+        where: { id: { in: input.imageIds } },
+        select: { id: true, title: true, description: true, images: true },
+      });
+
+      const previews: { id: string; title: string; before: string; after: string }[] = [];
+
+      for (const post of posts) {
+        if (input.field === "images") {
+          const urls = (post.images ?? []) as string[];
+          const originals = urls.map((s) => s ?? "");
+          const replaced = originals.map((o) => o.replace(regex, input.replacement));
+          const beforeLines: string[] = [];
+          const afterLines: string[] = [];
+          for (let i = 0; i < originals.length; i++) {
+            if (originals[i] !== replaced[i]) {
+              beforeLines.push(originals[i]);
+              afterLines.push(replaced[i]);
+            }
+          }
+          if (beforeLines.length > 0) {
+            previews.push({ id: post.id, title: post.title, before: beforeLines.join("\n"), after: afterLines.join("\n") });
+          }
+        } else {
+          const original = ((post as Record<string, unknown>)[input.field] ?? "") as string;
+          const replaced = original.replace(regex, input.replacement);
+          if (original !== replaced) {
+            previews.push({ id: post.id, title: post.title, before: original, after: replaced });
+          }
+        }
+      }
+
+      return { previews, totalMatched: previews.length, totalSelected: posts.length };
+    }),
+
+  batchImageRegexUpdate: adminProcedure
+    .input(
+      z.object({
+        imageIds: z.array(z.string()).min(1).max(500),
+        field: z.enum(["title", "description", "images"]),
+        pattern: z.string().min(1),
+        replacement: z.string(),
+        flags: z.string().default("g"),
+      })
+    )
+    .mutation(async ({ ctx, input }) => {
+      const canModerate = await hasScope(ctx.prisma, ctx.session.user.id, "video:moderate");
+      if (!canModerate) {
+        throw new TRPCError({ code: "FORBIDDEN", message: "无图片管理权限" });
+      }
+
+      let regex: RegExp;
+      try {
+        regex = new RegExp(input.pattern, input.flags);
+      } catch {
+        throw new TRPCError({ code: "BAD_REQUEST", message: "无效的正则表达式" });
+      }
+
+      const posts = await ctx.prisma.imagePost.findMany({
+        where: { id: { in: input.imageIds } },
+        select: { id: true, title: true, description: true, images: true },
+      });
+
+      let updatedCount = 0;
+
+      for (const post of posts) {
+        if (input.field === "images") {
+          const urls = (post.images ?? []) as string[];
+          const replaced = urls.map((u) => u.replace(regex, input.replacement));
+          const changed = urls.some((u, i) => u !== replaced[i]);
+          if (changed) {
+            await ctx.prisma.imagePost.update({
+              where: { id: post.id },
+              data: { images: replaced },
+            });
+            updatedCount++;
+          }
+        } else {
+          const original = ((post as Record<string, unknown>)[input.field] ?? "") as string;
+          const replaced = original.replace(regex, input.replacement);
+          if (original !== replaced) {
+            await ctx.prisma.imagePost.update({
+              where: { id: post.id },
+              data: { [input.field]: replaced || null },
+            });
+            updatedCount++;
+          }
+        }
+      }
+
+      return { success: true, count: updatedCount };
+    }),
+
+  // ========== 导出功能 ==========
+
+  exportVideos: adminProcedure
+    .input(z.object({ videoIds: z.array(z.string()).min(1).max(5000) }))
+    .query(async ({ ctx, input }) => {
+      const canModerate = await hasScope(ctx.prisma, ctx.session.user.id, "video:moderate");
+      if (!canModerate) {
+        throw new TRPCError({ code: "FORBIDDEN", message: "无视频管理权限" });
+      }
+
+      const videos = await ctx.prisma.video.findMany({
+        where: { id: { in: input.videoIds } },
+        include: {
+          tags: { include: { tag: { select: { name: true } } } },
+          seriesEpisodes: { select: { series: { select: { title: true } } } },
+        },
+      });
+
+      return videos.map((v) => ({
+        title: v.title,
+        description: v.description || undefined,
+        coverUrl: v.coverUrl || undefined,
+        videoUrl: v.videoUrl,
+        tagNames: v.tags.map((t) => t.tag.name),
+        extraInfo: v.extraInfo || undefined,
+        seriesTitle: v.seriesEpisodes[0]?.series?.title || undefined,
+      }));
+    }),
+
+  exportGames: adminProcedure
+    .input(z.object({ gameIds: z.array(z.string()).min(1).max(5000) }))
+    .query(async ({ ctx, input }) => {
+      const canModerate = await hasScope(ctx.prisma, ctx.session.user.id, "video:moderate");
+      if (!canModerate) {
+        throw new TRPCError({ code: "FORBIDDEN", message: "无游戏管理权限" });
+      }
+
+      const games = await ctx.prisma.game.findMany({
+        where: { id: { in: input.gameIds } },
+        include: {
+          tags: { include: { tag: { select: { name: true } } } },
+        },
+      });
+
+      return games.map((g) => ({
+        title: g.title,
+        description: g.description || undefined,
+        coverUrl: g.coverUrl || undefined,
+        gameType: g.gameType || undefined,
+        isFree: g.isFree,
+        version: g.version || undefined,
+        tagNames: g.tags.map((t) => t.tag.name),
+        extraInfo: g.extraInfo || undefined,
+      }));
+    }),
+
+  exportImages: adminProcedure
+    .input(z.object({ imageIds: z.array(z.string()).min(1).max(5000) }))
+    .query(async ({ ctx, input }) => {
+      const canModerate = await hasScope(ctx.prisma, ctx.session.user.id, "video:moderate");
+      if (!canModerate) {
+        throw new TRPCError({ code: "FORBIDDEN", message: "无图片管理权限" });
+      }
+
+      const posts = await ctx.prisma.imagePost.findMany({
+        where: { id: { in: input.imageIds } },
+        include: {
+          tags: { include: { tag: { select: { name: true } } } },
+        },
+      });
+
+      return posts.map((p) => ({
+        title: p.title,
+        description: p.description || undefined,
+        images: p.images as string[],
+        tagNames: p.tags.map((t) => t.tag.name),
+      }));
     }),
 
   // ========== 友情链接管理 ==========
