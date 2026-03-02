@@ -74,7 +74,7 @@ export function VideoBatchUpload() {
             coverUrl: v.coverUrl || "",
             videoUrl: v.videoUrl,
             tagNames: v.tags,
-            ...(v.extraInfo ? { extraInfo: v.extraInfo } : {}),
+            ...(v.extraInfo ? { extraInfo: v.extraInfo as Record<string, unknown> } : {}),
           })),
         });
         allResults.push(...res.results.map((r) => ({

@@ -668,7 +668,7 @@ export const videoRouter = router({
               type: z.enum(['info', 'success', 'warning', 'error']),
               content: z.string(),
             })).optional(),
-          }).passthrough().optional(),
+          }).optional(),
         })).min(1).max(200),
       })
     )
