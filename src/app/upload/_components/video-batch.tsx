@@ -16,6 +16,25 @@ import { parseVideoBatchJson, downloadTemplate, VIDEO_BATCH_TEMPLATE } from "../
 import type { ParsedBatchData, ParsedSeries, VideoBatchResult, BatchProgress } from "../_lib/types";
 
 const CONCURRENCY = 3;
+const CHUNK_SIZE = 200;
+
+function chunkSeries(seriesList: ParsedSeries[]): ParsedSeries[] {
+  const result: ParsedSeries[] = [];
+  for (const s of seriesList) {
+    if (s.videos.length <= CHUNK_SIZE) {
+      result.push(s);
+    } else {
+      for (let i = 0; i < s.videos.length; i += CHUNK_SIZE) {
+        result.push({
+          ...s,
+          seriesTitle: i === 0 ? s.seriesTitle : "",
+          videos: s.videos.slice(i, i + CHUNK_SIZE),
+        });
+      }
+    }
+  }
+  return result;
+}
 
 export function VideoBatchUpload() {
   const [parsed, setParsed] = useState<ParsedBatchData | null>(null);
@@ -104,10 +123,11 @@ export function VideoBatchUpload() {
     if (!parsed || parsed.totalVideos === 0) return;
     setImporting(true);
     setResults([]);
-    setProgress({ current: 0, total: parsed.series.length });
+    const chunks = chunkSeries(parsed.series);
+    setProgress({ current: 0, total: chunks.length });
 
     try {
-      const all = await importSeries(parsed.series);
+      const all = await importSeries(chunks);
       const success = all.filter(r => r.id).length;
       const merged = all.filter(r => r.merged).length;
       const fail = all.filter(r => r.error).length;
@@ -131,12 +151,13 @@ export function VideoBatchUpload() {
       .filter(s => s.videos.length > 0);
     if (failedSeries.length === 0) return;
 
+    const chunks = chunkSeries(failedSeries);
     const prevOk = results.filter(r => r.id);
     setImporting(true);
-    setProgress({ current: 0, total: failedSeries.length });
+    setProgress({ current: 0, total: chunks.length });
 
     try {
-      const retried = await importSeries(failedSeries);
+      const retried = await importSeries(chunks);
       const all = [...prevOk, ...retried];
       const newOk = retried.filter(r => r.id).length;
       const newFail = retried.filter(r => r.error).length;

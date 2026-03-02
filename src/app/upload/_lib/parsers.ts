@@ -50,8 +50,23 @@ function mapRawVideo(v: any): ParsedVideo {
     coverUrl: (v.coverUrl as string) || "",
     videoUrl: (v.videoUrl as string) || "",
     tags: (v.tagNames as string[]) || (v.tags as string[]) || [],
-    extraInfo: v.extraInfo || undefined,
+    extraInfo: v.extraInfo ? stripNulls(v.extraInfo) : undefined,
   };
+}
+
+/** 递归将 JSON 中的 null 转为 undefined，避免 Zod .optional() 校验失败 */
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+function stripNulls(obj: any): any {
+  if (obj === null || obj === undefined) return undefined;
+  if (Array.isArray(obj)) return obj.map(stripNulls);
+  if (typeof obj === "object") {
+    const cleaned: Record<string, unknown> = {};
+    for (const [k, val] of Object.entries(obj)) {
+      if (val !== null) cleaned[k] = typeof val === "object" ? stripNulls(val) : val;
+    }
+    return cleaned;
+  }
+  return obj;
 }
 
 /**

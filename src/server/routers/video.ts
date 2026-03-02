@@ -669,7 +669,7 @@ export const videoRouter = router({
               content: z.string(),
             })).optional(),
           }).optional(),
-        })).min(1).max(200),
+        })).min(1).max(1000),
       })
     )
     .mutation(async ({ ctx, input }) => {
