@@ -424,13 +424,14 @@ export default function AdminVideosPage() {
       const data = await utils.client.admin.exportVideos.query({
         videoIds: Array.from(selectedIds),
       });
+      const totalVideos = data.series.reduce((sum, s) => sum + s.videos.length, 0);
       const blob = new Blob([JSON.stringify(data, null, 2)], { type: "application/json" });
       const a = document.createElement("a");
       a.href = URL.createObjectURL(blob);
-      a.download = `videos_export_${data.length}.json`;
+      a.download = `videos_export_${totalVideos}.json`;
       a.click();
       URL.revokeObjectURL(a.href);
-      toast.success(`已导出 ${data.length} 个视频`);
+      toast.success(`已导出 ${totalVideos} 个视频（${data.series.length} 个合集）`);
     } catch (err) {
       toast.error(err instanceof Error ? err.message : "导出失败");
     } finally {

@@ -2851,19 +2851,76 @@ export const adminRouter = router({
         where: { id: { in: input.videoIds } },
         include: {
           tags: { include: { tag: { select: { name: true } } } },
-          seriesEpisodes: { select: { series: { select: { title: true } } } },
+          seriesEpisodes: {
+            include: {
+              series: { select: { id: true, title: true, description: true, coverUrl: true, downloadUrl: true, downloadNote: true } },
+            },
+          },
         },
       });
 
-      return videos.map((v) => ({
+      const mapVideo = (v: typeof videos[number]) => ({
         title: v.title,
         description: v.description || undefined,
         coverUrl: v.coverUrl || undefined,
         videoUrl: v.videoUrl,
         tagNames: v.tags.map((t) => t.tag.name),
         extraInfo: v.extraInfo || undefined,
-        seriesTitle: v.seriesEpisodes[0]?.series?.title || undefined,
+      });
+
+      const seriesMap = new Map<string, {
+        title: string;
+        description?: string;
+        coverUrl?: string;
+        downloadUrl?: string;
+        downloadNote?: string;
+        videosWithOrder: { video: typeof videos[number]; episodeNum: number }[];
+      }>();
+      const standalone: (typeof videos[number])[] = [];
+
+      for (const v of videos) {
+        if (v.seriesEpisodes.length > 0) {
+          const ep = v.seriesEpisodes[0];
+          const s = ep.series;
+          if (!seriesMap.has(s.id)) {
+            seriesMap.set(s.id, {
+              title: s.title,
+              description: s.description || undefined,
+              coverUrl: s.coverUrl || undefined,
+              downloadUrl: s.downloadUrl || undefined,
+              downloadNote: s.downloadNote || undefined,
+              videosWithOrder: [],
+            });
+          }
+          seriesMap.get(s.id)!.videosWithOrder.push({ video: v, episodeNum: ep.episodeNum });
+        } else {
+          standalone.push(v);
+        }
+      }
+
+      const series = [...seriesMap.values()].map((s) => ({
+        seriesTitle: s.title,
+        description: s.description,
+        coverUrl: s.coverUrl,
+        downloadUrl: s.downloadUrl,
+        downloadNote: s.downloadNote,
+        videos: s.videosWithOrder
+          .sort((a, b) => a.episodeNum - b.episodeNum)
+          .map((item) => mapVideo(item.video)),
       }));
+
+      if (standalone.length > 0) {
+        series.push({
+          seriesTitle: "",
+          description: undefined,
+          coverUrl: undefined,
+          downloadUrl: undefined,
+          downloadNote: undefined,
+          videos: standalone.map(mapVideo),
+        });
+      }
+
+      return { series };
     }),
 
   exportGames: adminProcedure
