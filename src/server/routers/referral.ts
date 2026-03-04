@@ -3,6 +3,7 @@ import { router, protectedProcedure, adminProcedure } from "../trpc";
 import { TRPCError } from "@trpc/server";
 import { nanoid } from "nanoid";
 import { awardDailyLogin } from "@/lib/points";
+import { redis } from "@/lib/redis";
 
 async function generateUniqueCode(
   prisma: typeof import("@/lib/prisma").prisma
@@ -21,7 +22,10 @@ export const referralRouter = router({
   getMyStats: protectedProcedure.query(async ({ ctx }) => {
     const userId = ctx.session.user.id;
 
-    const [user, linkCount, todayClicks] = await Promise.all([
+    const today = new Date().toISOString().slice(0, 10);
+    const dailyClickKey = `ref_daily_clicks:${userId}:${today}`;
+
+    const [user, linkCount, todayClicksStr] = await Promise.all([
       ctx.prisma.user.findUnique({
         where: { id: userId },
         select: {
@@ -31,12 +35,10 @@ export const referralRouter = router({
         },
       }),
       ctx.prisma.referralLink.count({ where: { userId } }),
-      ctx.prisma.$queryRaw<[{ count: bigint }]>`
-        SELECT COUNT(*) as count FROM "ReferralLink"
-        WHERE "userId" = ${userId}
-        AND "updatedAt" >= CURRENT_DATE
-      `.then((r) => Number(r[0]?.count ?? 0)),
+      redis.get(dailyClickKey).catch(() => null),
     ]);
+
+    const todayClicks = todayClicksStr ? parseInt(todayClicksStr, 10) : 0;
 
     if (!user) throw new TRPCError({ code: "NOT_FOUND" });
 
@@ -310,35 +312,38 @@ export const referralRouter = router({
       })
     )
     .mutation(async ({ ctx, input }) => {
-      const targetUser = await ctx.prisma.user.findUnique({
-        where: { id: input.userId },
-        select: { id: true, points: true },
-      });
-
-      if (!targetUser) {
-        throw new TRPCError({ code: "NOT_FOUND", message: "用户不存在" });
-      }
-
-      const newBalance = targetUser.points + input.amount;
-      if (newBalance < 0) {
-        throw new TRPCError({ code: "BAD_REQUEST", message: "调整后积分不能为负数" });
-      }
-
-      await ctx.prisma.$transaction([
-        ctx.prisma.user.update({
+      const newBalance = await ctx.prisma.$transaction(async (tx) => {
+        const targetUser = await tx.user.findUnique({
           where: { id: input.userId },
-          data: { points: newBalance },
-        }),
-        ctx.prisma.pointsTransaction.create({
+          select: { id: true, points: true },
+        });
+
+        if (!targetUser) {
+          throw new TRPCError({ code: "NOT_FOUND", message: "用户不存在" });
+        }
+
+        if (targetUser.points + input.amount < 0) {
+          throw new TRPCError({ code: "BAD_REQUEST", message: "调整后积分不能为负数" });
+        }
+
+        const updated = await tx.user.update({
+          where: { id: input.userId },
+          data: { points: { increment: input.amount } },
+          select: { points: true },
+        });
+
+        await tx.pointsTransaction.create({
           data: {
             userId: input.userId,
             amount: input.amount,
-            balance: newBalance,
+            balance: updated.points,
             type: "ADMIN_ADJUST",
             description: input.description || `管理员手动调整 ${input.amount > 0 ? "+" : ""}${input.amount}`,
           },
-        }),
-      ]);
+        });
+
+        return updated.points;
+      });
 
       return { success: true, newBalance };
     }),

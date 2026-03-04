@@ -35,6 +35,7 @@ import {
   Layers,
   Volume2,
   VolumeX,
+  Coins,
 } from "lucide-react";
 import { useState, useRef, useEffect, useCallback } from "react";
 import { useRouter } from "next/navigation";
@@ -208,6 +209,22 @@ export function Header({ onMenuClick }: HeaderProps) {
   const router = useRouter();
 
   const isLoading = !mounted || sessionLoading;
+
+  // 用户积分
+  const { data: meData } = trpc.user.me.useQuery(undefined, {
+    enabled: !!session?.user,
+    staleTime: 60_000,
+  });
+
+  // 每日登录积分
+  const dailyLoginMutation = trpc.referral.claimDailyLogin.useMutation();
+  const dailyLoginCalledRef = useRef(false);
+  useEffect(() => {
+    if (session?.user && !dailyLoginCalledRef.current) {
+      dailyLoginCalledRef.current = true;
+      dailyLoginMutation.mutate();
+    }
+  }, [session?.user]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // 防抖搜索
   const debouncedQuery = useDebounce(searchQuery, 300);
@@ -585,6 +602,12 @@ export function Header({ onMenuClick }: HeaderProps) {
                         </p>
                       </div>
                     </div>
+                    {meData?.points !== undefined && (
+                      <div className="mt-2 flex items-center gap-1.5 text-xs text-amber-600 dark:text-amber-400">
+                        <Coins className="h-3.5 w-3.5" />
+                        <span className="font-medium">{meData.points.toLocaleString()} 积分</span>
+                      </div>
+                    )}
                   </DropdownMenuLabel>
                   <DropdownMenuSeparator />
                   <DropdownMenuItem asChild>

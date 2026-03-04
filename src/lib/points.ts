@@ -1,6 +1,6 @@
 import { prisma } from "@/lib/prisma";
 import { redis } from "@/lib/redis";
-import type { PointsTransactionType } from "@/generated/prisma";
+import type { PointsTransactionType } from "@/generated/prisma/client";
 
 export type PointsAction =
   | "DAILY_LOGIN"

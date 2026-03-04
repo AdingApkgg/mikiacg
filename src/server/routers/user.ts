@@ -31,13 +31,16 @@ export const userRouter = router({
 
       const hashedPassword = await hash(input.password, 10);
 
-      // Resolve referral link if provided
+      // Resolve referral link if provided (must be active)
       let referralLink: { id: string; userId: string } | null = null;
       if (input.referralCode) {
-        referralLink = await ctx.prisma.referralLink.findUnique({
+        const link = await ctx.prisma.referralLink.findUnique({
           where: { code: input.referralCode },
-          select: { id: true, userId: true },
+          select: { id: true, userId: true, isActive: true },
         });
+        if (link?.isActive) {
+          referralLink = link;
+        }
       }
 
       const result = await ctx.prisma.$transaction(async (tx) => {
@@ -244,7 +247,8 @@ export const userRouter = router({
         location: true,
         socialLinks: true,
         role: true,
-          lastIpLocation: true,
+        points: true,
+        lastIpLocation: true,
         createdAt: true,
       },
     });

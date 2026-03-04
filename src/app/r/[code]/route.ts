@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
+import { redis } from "@/lib/redis";
 
 export async function GET(
   request: NextRequest,
@@ -19,7 +20,7 @@ export async function GET(
 
   const link = await prisma.referralLink.findUnique({
     where: { code },
-    select: { id: true, isActive: true, targetUrl: true },
+    select: { id: true, userId: true, isActive: true, targetUrl: true },
   });
 
   if (!link || !link.isActive) {
@@ -31,6 +32,18 @@ export async function GET(
     where: { id: link.id },
     data: { clicks: { increment: 1 } },
   });
+
+  // Track daily clicks per user in Redis
+  const today = new Date().toISOString().slice(0, 10);
+  const dailyClickKey = `ref_daily_clicks:${link.userId}:${today}`;
+  try {
+    const pipe = redis.pipeline();
+    pipe.incr(dailyClickKey);
+    pipe.expire(dailyClickKey, 86400 * 2);
+    await pipe.exec();
+  } catch {
+    // Redis down — daily click stat will be inaccurate, non-critical
+  }
 
   const targetUrl = link.targetUrl || siteUrl;
   const response = NextResponse.redirect(targetUrl);
