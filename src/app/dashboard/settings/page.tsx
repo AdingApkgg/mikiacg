@@ -132,10 +132,10 @@ const configFormSchema = z.object({
   })),
 
   // 验证码 / 人机验证
-  captchaLogin: z.enum(["none", "math", "turnstile"]),
-  captchaRegister: z.enum(["none", "math", "turnstile"]),
-  captchaComment: z.enum(["none", "math", "turnstile"]),
-  captchaForgotPassword: z.enum(["none", "math", "turnstile"]),
+  captchaLogin: z.enum(["none", "math", "turnstile"]).catch("math"),
+  captchaRegister: z.enum(["none", "math", "turnstile"]).catch("none"),
+  captchaComment: z.enum(["none", "math", "turnstile"]).catch("none"),
+  captchaForgotPassword: z.enum(["none", "math", "turnstile"]).catch("none"),
   turnstileSiteKey: z.string().max(500).optional().nullable().or(z.literal("")),
   turnstileSecretKey: z.string().max(500).optional().nullable().or(z.literal("")),
 
@@ -155,7 +155,7 @@ const configFormSchema = z.object({
   googlePrivateKey: z.string().max(10000).optional().nullable().or(z.literal("")),
 
   // 对象存储
-  storageProvider: z.enum(["local", "s3", "r2", "minio", "oss", "cos"]),
+  storageProvider: z.enum(["local", "s3", "r2", "minio", "oss", "cos"]).catch("local"),
   storageEndpoint: z.string().max(500).optional().nullable().or(z.literal("")),
   storageBucket: z.string().max(200).optional().nullable().or(z.literal("")),
   storageRegion: z.string().max(100).optional().nullable().or(z.literal("")),
@@ -173,7 +173,7 @@ const configFormSchema = z.object({
 
   // 视觉效果
   effectEnabled: z.boolean(),
-  effectType: z.enum(["sakura", "firefly", "snow", "stars", "aurora", "cyber", "none"]),
+  effectType: z.enum(["sakura", "firefly", "snow", "stars", "aurora", "cyber", "none"]).catch("sakura"),
   effectDensity: z.number().int().min(1).max(100),
   effectSpeed: z.number().min(0.1).max(3.0),
   effectOpacity: z.number().min(0).max(1),
