@@ -12,6 +12,7 @@ export const userRouter = router({
         username: z.string().min(3).max(20),
         password: z.string().min(6),
         nickname: z.string().optional(),
+        referralCode: z.string().optional(),
       })
     )
     .mutation(async ({ ctx, input }) => {
@@ -30,28 +31,84 @@ export const userRouter = router({
 
       const hashedPassword = await hash(input.password, 10);
 
-      const user = await ctx.prisma.user.create({
-        data: {
-          email: input.email,
-          username: input.username.toLowerCase(),
-          displayUsername: input.username,
-          password: hashedPassword,
-          nickname: input.nickname || input.username,
-        },
+      // Resolve referral link if provided
+      let referralLink: { id: string; userId: string } | null = null;
+      if (input.referralCode) {
+        referralLink = await ctx.prisma.referralLink.findUnique({
+          where: { code: input.referralCode },
+          select: { id: true, userId: true },
+        });
+      }
+
+      const result = await ctx.prisma.$transaction(async (tx) => {
+        const user = await tx.user.create({
+          data: {
+            email: input.email,
+            username: input.username.toLowerCase(),
+            displayUsername: input.username,
+            password: hashedPassword,
+            nickname: input.nickname || input.username,
+            ...(referralLink ? { referredById: referralLink.userId } : {}),
+          },
+        });
+
+        await tx.account.create({
+          data: {
+            userId: user.id,
+            type: "credential",
+            provider: "credential",
+            providerAccountId: user.id,
+            password: hashedPassword,
+          },
+        });
+
+        // Process referral reward
+        if (referralLink) {
+          const siteConfig = await tx.siteConfig.findUnique({
+            where: { id: "default" },
+            select: { referralEnabled: true, referralPointsPerUser: true },
+          });
+
+          if (siteConfig?.referralEnabled) {
+            const pointsReward = siteConfig.referralPointsPerUser || 100;
+
+            await tx.referralRecord.create({
+              data: {
+                referrerId: referralLink.userId,
+                referredUserId: user.id,
+                referralLinkId: referralLink.id,
+                pointsAwarded: pointsReward,
+              },
+            });
+
+            const referrer = await tx.user.update({
+              where: { id: referralLink.userId },
+              data: { points: { increment: pointsReward } },
+              select: { points: true },
+            });
+
+            await tx.pointsTransaction.create({
+              data: {
+                userId: referralLink.userId,
+                amount: pointsReward,
+                balance: referrer.points,
+                type: "REFERRAL_REWARD",
+                description: `推广用户 ${input.username} 注册`,
+                relatedId: user.id,
+              },
+            });
+
+            await tx.referralLink.update({
+              where: { id: referralLink.id },
+              data: { registers: { increment: 1 } },
+            });
+          }
+        }
+
+        return user;
       });
 
-      // 创建 Better Auth credential Account（登录时从此表验证密码）
-      await ctx.prisma.account.create({
-        data: {
-          userId: user.id,
-          type: "credential",
-          provider: "credential",
-          providerAccountId: user.id,
-          password: hashedPassword,
-        },
-      });
-
-      return { id: user.id, email: user.email, username: user.username };
+      return { id: result.id, email: result.email, username: result.username };
     }),
 
   // 获取用户公开资料

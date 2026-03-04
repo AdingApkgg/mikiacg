@@ -12,6 +12,7 @@ import { seriesRouter } from "./series";
 import { siteRouter } from "./site";
 import { setupRouter } from "./setup";
 import { stickerRouter } from "./sticker";
+import { referralRouter } from "./referral";
 
 export const appRouter = router({
   user: userRouter,
@@ -27,6 +28,7 @@ export const appRouter = router({
   site: siteRouter,
   setup: setupRouter,
   sticker: stickerRouter,
+  referral: referralRouter,
 });
 
 export type AppRouter = typeof appRouter;

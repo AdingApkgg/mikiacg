@@ -2,6 +2,7 @@ import { z } from "zod";
 import { Prisma, PrismaClient } from "@/generated/prisma/client";
 import { router, publicProcedure, protectedProcedure } from "../trpc";
 import { TRPCError } from "@trpc/server";
+import { awardPoints } from "@/lib/points";
 
 async function generateImagePostId(prisma: PrismaClient): Promise<string> {
   const maxAttempts = 100;
@@ -448,6 +449,7 @@ export const imageRouter = router({
           ctx.prisma.imagePostLike.create({ data: { userId, imagePostId } }),
           ctx.prisma.imagePostDislike.deleteMany({ where: { userId, imagePostId } }),
         ]);
+        awardPoints(userId, "LIKE_IMAGE", undefined, imagePostId);
         return { liked: true, disliked: false };
       } else {
         const existing = await ctx.prisma.imagePostDislike.findUnique({
@@ -481,6 +483,7 @@ export const imageRouter = router({
       await ctx.prisma.imagePostFavorite.create({
         data: { userId, imagePostId: input.imagePostId },
       });
+      awardPoints(userId, "FAVORITE_IMAGE", undefined, input.imagePostId);
       return { favorited: true };
     }),
 
@@ -515,6 +518,16 @@ export const imageRouter = router({
   recordView: protectedProcedure
     .input(z.object({ imagePostId: z.string() }))
     .mutation(async ({ ctx, input }) => {
+      const existing = await ctx.prisma.imagePostViewHistory.findUnique({
+        where: {
+          userId_imagePostId: {
+            userId: ctx.session.user.id,
+            imagePostId: input.imagePostId,
+          },
+        },
+        select: { id: true },
+      });
+
       await ctx.prisma.imagePostViewHistory.upsert({
         where: {
           userId_imagePostId: {
@@ -528,6 +541,10 @@ export const imageRouter = router({
           imagePostId: input.imagePostId,
         },
       });
+
+      if (!existing) {
+        awardPoints(ctx.session.user.id, "VIEW_IMAGE", undefined, input.imagePostId);
+      }
       return { success: true };
     }),
 

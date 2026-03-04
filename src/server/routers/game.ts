@@ -4,6 +4,7 @@ import { router, publicProcedure, protectedProcedure } from "../trpc";
 import { TRPCError } from "@trpc/server";
 import { getOrSet } from "@/lib/redis";
 import { submitGameToIndexNow, submitGamesToIndexNow } from "@/lib/indexnow";
+import { awardPoints } from "@/lib/points";
 
 const GAME_CACHE_TTL = 60; // 1 minute
 
@@ -493,6 +494,7 @@ export const gameRouter = router({
         await ctx.prisma.gameFavorite.create({
           data: { userId, gameId: input.gameId },
         });
+        awardPoints(userId, "FAVORITE_GAME", undefined, input.gameId);
         return { favorited: true };
       }
     }),
@@ -519,6 +521,7 @@ export const gameRouter = router({
           ctx.prisma.gameLike.create({ data: { userId, gameId } }),
           ctx.prisma.gameDislike.deleteMany({ where: { userId, gameId } }),
         ]);
+        awardPoints(userId, "LIKE_GAME", undefined, gameId);
         return { liked: true, disliked: false };
       } else {
         const existing = await ctx.prisma.gameDislike.findUnique({
@@ -645,6 +648,16 @@ export const gameRouter = router({
   recordView: protectedProcedure
     .input(z.object({ gameId: z.string() }))
     .mutation(async ({ ctx, input }) => {
+      const existing = await ctx.prisma.gameViewHistory.findUnique({
+        where: {
+          userId_gameId: {
+            userId: ctx.session.user.id,
+            gameId: input.gameId,
+          },
+        },
+        select: { id: true },
+      });
+
       await ctx.prisma.gameViewHistory.upsert({
         where: {
           userId_gameId: {
@@ -658,6 +671,10 @@ export const gameRouter = router({
           gameId: input.gameId,
         },
       });
+
+      if (!existing) {
+        awardPoints(ctx.session.user.id, "VIEW_GAME", undefined, input.gameId);
+      }
       return { success: true };
     }),
 

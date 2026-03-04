@@ -4,6 +4,7 @@ import { TRPCError } from "@trpc/server";
 import { Prisma } from "@/generated/prisma/client";
 import { getIpLocation } from "@/lib/ip-location";
 import { parseDeviceInfo, type DeviceInfo } from "@/lib/device-info";
+import { awardPoints } from "@/lib/points";
 
 // 邮箱格式验证
 const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
@@ -395,6 +396,7 @@ export const commentRouter = router({
             lastIpLocation: lastIpLocation || undefined,
           },
         });
+        awardPoints(userId, "COMMENT_VIDEO", undefined, comment.id);
       }
 
       return {

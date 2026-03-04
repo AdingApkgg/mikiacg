@@ -1915,6 +1915,18 @@ export const adminRouter = router({
       googleServiceAccountEmail: z.string().max(500).optional().nullable().or(z.literal("")),
       googlePrivateKey: z.string().max(10000).optional().nullable().or(z.literal("")),
 
+      // 推广系统
+      referralEnabled: z.boolean().optional(),
+      referralPointsPerUser: z.number().int().min(1).max(100000).optional(),
+      referralMaxLinksPerUser: z.number().int().min(1).max(100).optional(),
+
+      // 积分规则
+      pointsRules: z.record(z.string(), z.object({
+        enabled: z.boolean(),
+        points: z.number().int().min(0).max(10000),
+        dailyLimit: z.number().int().min(0).max(1000),
+      })).optional().nullable(),
+
       // 数据备份
       backupEnabled: z.boolean().optional(),
       backupIntervalHours: z.number().int().min(1).max(720).optional(),
@@ -1985,6 +1997,7 @@ export const adminRouter = router({
         "uploadDir", "indexNowKey", "googleServiceAccountEmail", "googlePrivateKey",
         "storageProvider", "storageEndpoint", "storageBucket", "storageRegion",
         "storageAccessKey", "storageSecretKey", "storageCustomDomain", "storagePathPrefix",
+        "referralEnabled", "referralPointsPerUser", "referralMaxLinksPerUser", "pointsRules",
         "backupEnabled", "backupIntervalHours", "backupRetentionDays",
         "backupIncludeUploads", "backupIncludeConfig",
         "themeHue", "themeColorTemp", "themeBorderRadius", "themeGlassOpacity", "themeAnimations",
@@ -2024,6 +2037,9 @@ export const adminRouter = router({
       if (Array.isArray(cleaned.footerLinks)) {
         cleaned.footerLinks = JSON.parse(JSON.stringify(cleaned.footerLinks)) as Prisma.InputJsonValue;
       }
+      if (cleaned.pointsRules != null && typeof cleaned.pointsRules === "object") {
+        cleaned.pointsRules = JSON.parse(JSON.stringify(cleaned.pointsRules)) as Prisma.InputJsonValue;
+      }
 
       const config = await ctx.prisma.siteConfig.upsert({
         where: { id: "default" },
@@ -2040,6 +2056,12 @@ export const adminRouter = router({
       if (oauthChanged) {
         const { invalidateOAuthConfig } = await import("@/lib/auth");
         await invalidateOAuthConfig();
+      }
+
+      // 积分规则变更时清除内存缓存
+      if (input.pointsRules !== undefined) {
+        const { invalidatePointsRulesCache } = await import("@/lib/points");
+        invalidatePointsRulesCache();
       }
 
       // 备份配置变更时热更新调度器
@@ -2116,6 +2138,7 @@ export const adminRouter = router({
         "uploadDir", "indexNowKey", "googleServiceAccountEmail", "googlePrivateKey",
         "storageProvider", "storageEndpoint", "storageBucket", "storageRegion",
         "storageAccessKey", "storageSecretKey", "storageCustomDomain", "storagePathPrefix",
+        "referralEnabled", "referralPointsPerUser", "referralMaxLinksPerUser", "pointsRules",
         "backupEnabled", "backupIntervalHours", "backupRetentionDays",
         "backupIncludeUploads", "backupIncludeConfig",
         "themeHue", "themeColorTemp", "themeBorderRadius", "themeGlassOpacity", "themeAnimations",

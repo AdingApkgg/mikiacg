@@ -73,6 +73,17 @@ model User {
   gameCommentReplies    GameComment[]    @relation("GameCommentReplyTo")
   gameCommentReactions  GameCommentReaction[]
 
+  // 推广系统
+  points             Int      @default(0)
+  referralCode       String?  @unique
+  referredById       String?
+  referredBy         User?    @relation("UserReferral", fields: [referredById], references: [id], onDelete: SetNull)
+  referredUsers      User[]   @relation("UserReferral")
+  referralLinks      ReferralLink[]
+  referralsMade      ReferralRecord[] @relation("Referrer")
+  referralReceived   ReferralRecord?  @relation("ReferredUser")
+  pointsTransactions PointsTransaction[]
+
   @@index([email])
   @@index([username])
 }
@@ -1001,6 +1012,14 @@ model SiteConfig {
   turnstileSiteKey      String?                      // Cloudflare Turnstile Site Key
   turnstileSecretKey    String?                      // Cloudflare Turnstile Secret Key
 
+  // 推广系统
+  referralEnabled         Boolean @default(false)
+  referralPointsPerUser   Int     @default(100)
+  referralMaxLinksPerUser Int     @default(20)
+
+  // 积分规则 (JSON: Record<ActionType, { enabled, points, dailyLimit }>)
+  pointsRules             Json?
+
   // 数据备份
   backupEnabled         Boolean @default(false)  // 是否启用自动备份
   backupIntervalHours   Int     @default(24)     // 自动备份间隔（小时）
@@ -1068,6 +1087,77 @@ model Sticker {
   pack        StickerPack @relation(fields: [packId], references: [id], onDelete: Cascade)
 
   @@index([packId, sortOrder])
+}
+
+// ==================== 推广系统 ====================
+
+model ReferralLink {
+  id          String   @id @default(cuid())
+  userId      String
+  code        String   @unique
+  label       String?
+  channel     String?
+  targetUrl   String?
+  clicks      Int      @default(0)
+  registers   Int      @default(0)
+  isActive    Boolean  @default(true)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  user    User             @relation(fields: [userId], references: [id], onDelete: Cascade)
+  records ReferralRecord[]
+
+  @@index([userId])
+}
+
+model ReferralRecord {
+  id              String   @id @default(cuid())
+  referrerId      String
+  referredUserId  String   @unique
+  referralLinkId  String?
+  pointsAwarded   Int      @default(0)
+  createdAt       DateTime @default(now())
+
+  referrer     User          @relation("Referrer", fields: [referrerId], references: [id], onDelete: Cascade)
+  referredUser User          @relation("ReferredUser", fields: [referredUserId], references: [id], onDelete: Cascade)
+  referralLink ReferralLink? @relation(fields: [referralLinkId], references: [id], onDelete: SetNull)
+
+  @@index([referrerId])
+  @@index([referralLinkId])
+}
+
+model PointsTransaction {
+  id          String                @id @default(cuid())
+  userId      String
+  amount      Int
+  balance     Int
+  type        PointsTransactionType
+  description String?
+  relatedId   String?
+  createdAt   DateTime              @default(now())
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId, createdAt])
+}
+
+enum PointsTransactionType {
+  REFERRAL_REWARD
+  ADMIN_ADJUST
+  POINTS_CONSUME
+  DAILY_LOGIN
+  WATCH_VIDEO
+  LIKE_VIDEO
+  FAVORITE_VIDEO
+  COMMENT_VIDEO
+  VIEW_GAME
+  LIKE_GAME
+  FAVORITE_GAME
+  COMMENT_GAME
+  VIEW_IMAGE
+  LIKE_IMAGE
+  FAVORITE_IMAGE
+  COMMENT_IMAGE
 }
 
 // ==================== 友情链接 ====================

@@ -49,6 +49,7 @@ export interface PublicSiteConfig {
   captchaComment: string;
   captchaForgotPassword: string;
   turnstileSiteKey: string | null;
+  referralEnabled: boolean;
 }
 
 const selectFields = {
@@ -95,6 +96,7 @@ const selectFields = {
   captchaComment: true,
   captchaForgotPassword: true,
   turnstileSiteKey: true,
+  referralEnabled: true,
   oauthGoogleClientId: true,
   oauthGoogleClientSecret: true,
   oauthGithubClientId: true,
@@ -166,6 +168,7 @@ const defaultConfig: PublicSiteConfig = {
   captchaComment: "none",
   captchaForgotPassword: "none",
   turnstileSiteKey: null,
+  referralEnabled: false,
 };
 
 /**

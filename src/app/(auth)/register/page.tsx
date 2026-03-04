@@ -1,7 +1,7 @@
 "use client";
 
-import { useState, useCallback } from "react";
-import { useRouter } from "next/navigation";
+import { useState, useCallback, useEffect } from "react";
+import { useRouter, useSearchParams } from "next/navigation";
 import Link from "next/link";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
@@ -18,9 +18,23 @@ import { SocialLoginButtons } from "@/components/auth/social-login-buttons";
 import { UnifiedCaptcha, type CaptchaType } from "@/components/ui/unified-captcha";
 import { useSiteConfig } from "@/contexts/site-config";
 
+function getReferralCode(): string | undefined {
+  if (typeof document === "undefined") return undefined;
+  const match = document.cookie.match(/(?:^|;\s*)ref_code=([^;]*)/);
+  return match?.[1] || undefined;
+}
+
 export default function RegisterPage() {
   const router = useRouter();
+  const searchParams = useSearchParams();
   const siteConfig = useSiteConfig();
+  const [referralCode, setReferralCode] = useState<string | undefined>();
+
+  useEffect(() => {
+    const fromUrl = searchParams.get("ref") || undefined;
+    const fromCookie = getReferralCode();
+    setReferralCode(fromUrl || fromCookie);
+  }, [searchParams]);
   const [isLoading, setIsLoading] = useState(false);
 
   const turnstileSiteKey = siteConfig?.turnstileSiteKey;
@@ -124,6 +138,7 @@ export default function RegisterPage() {
         email: data.email,
         username: data.username,
         password: data.password,
+        referralCode,
       });
     } finally {
       setIsLoading(false);

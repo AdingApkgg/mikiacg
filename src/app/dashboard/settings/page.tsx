@@ -57,6 +57,8 @@ import {
   ShieldCheck,
   TriangleAlert,
   Copy,
+  TrendingUp,
+  Coins,
 } from "lucide-react";
 import { toast } from "@/lib/toast-with-sound";
 import {
@@ -111,6 +113,18 @@ const configFormSchema = z.object({
   // 备案
   icpBeian: z.string().max(100).optional().nullable(),
   publicSecurityBeian: z.string().max(100).optional().nullable(),
+
+  // 推广系统
+  referralEnabled: z.boolean(),
+  referralPointsPerUser: z.number().int().min(1).max(100000),
+  referralMaxLinksPerUser: z.number().int().min(1).max(100),
+
+  // 积分规则
+  pointsRules: z.record(z.string(), z.object({
+    enabled: z.boolean(),
+    points: z.number().int().min(0).max(10000),
+    dailyLimit: z.number().int().min(0).max(1000),
+  })),
 
   // 广告系统
   adsEnabled: z.boolean(),
@@ -208,6 +222,102 @@ const configFormSchema = z.object({
 });
 
 type ConfigFormValues = z.infer<typeof configFormSchema>;
+
+const POINTS_ACTION_LABELS: Record<string, { label: string; group: string }> = {
+  DAILY_LOGIN:    { label: "每日登录", group: "通用" },
+  WATCH_VIDEO:    { label: "观看视频", group: "视频" },
+  LIKE_VIDEO:     { label: "点赞视频", group: "视频" },
+  FAVORITE_VIDEO: { label: "收藏视频", group: "视频" },
+  COMMENT_VIDEO:  { label: "评论视频", group: "视频" },
+  VIEW_GAME:      { label: "浏览游戏", group: "游戏" },
+  LIKE_GAME:      { label: "点赞游戏", group: "游戏" },
+  FAVORITE_GAME:  { label: "收藏游戏", group: "游戏" },
+  COMMENT_GAME:   { label: "评论游戏", group: "游戏" },
+  VIEW_IMAGE:     { label: "浏览图片", group: "图片" },
+  LIKE_IMAGE:     { label: "点赞图片", group: "图片" },
+  FAVORITE_IMAGE: { label: "收藏图片", group: "图片" },
+  COMMENT_IMAGE:  { label: "评论图片", group: "图片" },
+};
+
+function PointsRulesEditor({ control }: { control: Control<ConfigFormValues> }) {
+  const groups = ["通用", "视频", "游戏", "图片"] as const;
+  const actionsByGroup = Object.entries(POINTS_ACTION_LABELS).reduce<Record<string, string[]>>(
+    (acc, [key, { group }]) => {
+      (acc[group] ??= []).push(key);
+      return acc;
+    },
+    {}
+  );
+
+  return (
+    <div className="space-y-4">
+      {groups.map((group) => (
+        <div key={group} className="space-y-2">
+          <h5 className="text-sm font-medium text-muted-foreground">{group}</h5>
+          <div className="space-y-2">
+            {(actionsByGroup[group] || []).map((action) => {
+              const meta = POINTS_ACTION_LABELS[action];
+              return (
+                <div key={action} className="flex items-center gap-3 rounded-lg border p-3">
+                  <FormField
+                    control={control}
+                    name={`pointsRules.${action}.enabled` as `pointsRules.${string}.enabled`}
+                    render={({ field }) => (
+                      <FormControl>
+                        <Switch checked={!!field.value} onCheckedChange={field.onChange} />
+                      </FormControl>
+                    )}
+                  />
+                  <span className="text-sm font-medium min-w-[5rem]">{meta.label}</span>
+                  <div className="flex items-center gap-2 ml-auto">
+                    <FormField
+                      control={control}
+                      name={`pointsRules.${action}.points` as `pointsRules.${string}.points`}
+                      render={({ field }) => (
+                        <FormItem className="flex items-center gap-1">
+                          <FormLabel className="text-xs text-muted-foreground whitespace-nowrap">积分</FormLabel>
+                          <FormControl>
+                            <Input
+                              type="number"
+                              min={0}
+                              max={10000}
+                              className="w-20 h-8 text-sm"
+                              value={field.value ?? 0}
+                              onChange={(e) => field.onChange(parseInt(e.target.value, 10) || 0)}
+                            />
+                          </FormControl>
+                        </FormItem>
+                      )}
+                    />
+                    <FormField
+                      control={control}
+                      name={`pointsRules.${action}.dailyLimit` as `pointsRules.${string}.dailyLimit`}
+                      render={({ field }) => (
+                        <FormItem className="flex items-center gap-1">
+                          <FormLabel className="text-xs text-muted-foreground whitespace-nowrap">日限</FormLabel>
+                          <FormControl>
+                            <Input
+                              type="number"
+                              min={0}
+                              max={1000}
+                              className="w-20 h-8 text-sm"
+                              value={field.value ?? 0}
+                              onChange={(e) => field.onChange(parseInt(e.target.value, 10) || 0)}
+                            />
+                          </FormControl>
+                        </FormItem>
+                      )}
+                    />
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        </div>
+      ))}
+    </div>
+  );
+}
 
 type AdsFieldArrayProps = {
   control: Control<ConfigFormValues>;
@@ -629,6 +739,24 @@ export default function AdminSettingsPage() {
       footerText: "",
       icpBeian: "",
       publicSecurityBeian: "",
+      referralEnabled: false,
+      referralPointsPerUser: 100,
+      referralMaxLinksPerUser: 20,
+      pointsRules: {
+        DAILY_LOGIN:    { enabled: false, points: 10,  dailyLimit: 1 },
+        WATCH_VIDEO:    { enabled: false, points: 1,   dailyLimit: 20 },
+        LIKE_VIDEO:     { enabled: false, points: 1,   dailyLimit: 10 },
+        FAVORITE_VIDEO: { enabled: false, points: 2,   dailyLimit: 10 },
+        COMMENT_VIDEO:  { enabled: false, points: 3,   dailyLimit: 5 },
+        VIEW_GAME:      { enabled: false, points: 1,   dailyLimit: 20 },
+        LIKE_GAME:      { enabled: false, points: 1,   dailyLimit: 10 },
+        FAVORITE_GAME:  { enabled: false, points: 2,   dailyLimit: 10 },
+        COMMENT_GAME:   { enabled: false, points: 3,   dailyLimit: 5 },
+        VIEW_IMAGE:     { enabled: false, points: 1,   dailyLimit: 20 },
+        LIKE_IMAGE:     { enabled: false, points: 1,   dailyLimit: 10 },
+        FAVORITE_IMAGE: { enabled: false, points: 2,   dailyLimit: 10 },
+        COMMENT_IMAGE:  { enabled: false, points: 3,   dailyLimit: 5 },
+      },
       adsEnabled: false,
       adGateEnabled: false,
       adGateViewsRequired: 3,
@@ -716,6 +844,25 @@ export default function AdminSettingsPage() {
         footerText: config.footerText || "",
         icpBeian: config.icpBeian || "",
         publicSecurityBeian: config.publicSecurityBeian || "",
+        referralEnabled: (config as { referralEnabled?: boolean }).referralEnabled ?? false,
+        referralPointsPerUser: (config as { referralPointsPerUser?: number }).referralPointsPerUser ?? 100,
+        referralMaxLinksPerUser: (config as { referralMaxLinksPerUser?: number }).referralMaxLinksPerUser ?? 20,
+        pointsRules: {
+          DAILY_LOGIN:    { enabled: false, points: 10,  dailyLimit: 1 },
+          WATCH_VIDEO:    { enabled: false, points: 1,   dailyLimit: 20 },
+          LIKE_VIDEO:     { enabled: false, points: 1,   dailyLimit: 10 },
+          FAVORITE_VIDEO: { enabled: false, points: 2,   dailyLimit: 10 },
+          COMMENT_VIDEO:  { enabled: false, points: 3,   dailyLimit: 5 },
+          VIEW_GAME:      { enabled: false, points: 1,   dailyLimit: 20 },
+          LIKE_GAME:      { enabled: false, points: 1,   dailyLimit: 10 },
+          FAVORITE_GAME:  { enabled: false, points: 2,   dailyLimit: 10 },
+          COMMENT_GAME:   { enabled: false, points: 3,   dailyLimit: 5 },
+          VIEW_IMAGE:     { enabled: false, points: 1,   dailyLimit: 20 },
+          LIKE_IMAGE:     { enabled: false, points: 1,   dailyLimit: 10 },
+          FAVORITE_IMAGE: { enabled: false, points: 2,   dailyLimit: 10 },
+          COMMENT_IMAGE:  { enabled: false, points: 3,   dailyLimit: 5 },
+          ...((config as { pointsRules?: Record<string, unknown> }).pointsRules || {}),
+        },
         adsEnabled: (config as { adsEnabled?: boolean }).adsEnabled ?? false,
         adGateEnabled: (config as { adGateEnabled?: boolean }).adGateEnabled ?? false,
         adGateViewsRequired: (config as { adGateViewsRequired?: number }).adGateViewsRequired ?? 3,
@@ -1203,6 +1350,81 @@ export default function AdminSettingsPage() {
                       </FormItem>
                     )}
                   />
+
+                  {/* 推广系统 */}
+                  <div className="border-t pt-6 space-y-4">
+                    <h4 className="font-medium flex items-center gap-2">
+                      <TrendingUp className="h-4 w-4" />
+                      推广系统
+                    </h4>
+                    <FormField
+                      control={form.control}
+                      name="referralEnabled"
+                      render={({ field }) => (
+                        <FormItem className="flex items-center justify-between rounded-lg border p-3">
+                          <div className="space-y-0.5">
+                            <FormLabel>启用推广系统</FormLabel>
+                            <FormDescription>开启后用户可创建推广链接，邀请新用户注册赚取积分</FormDescription>
+                          </div>
+                          <FormControl>
+                            <Switch checked={field.value} onCheckedChange={field.onChange} />
+                          </FormControl>
+                        </FormItem>
+                      )}
+                    />
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                      <FormField
+                        control={form.control}
+                        name="referralPointsPerUser"
+                        render={({ field }) => (
+                          <FormItem>
+                            <FormLabel>每推广一人奖励积分</FormLabel>
+                            <FormControl>
+                              <Input
+                                type="number"
+                                min={1}
+                                max={100000}
+                                {...field}
+                                onChange={(e) => field.onChange(parseInt(e.target.value, 10) || 100)}
+                              />
+                            </FormControl>
+                            <FormMessage />
+                          </FormItem>
+                        )}
+                      />
+                      <FormField
+                        control={form.control}
+                        name="referralMaxLinksPerUser"
+                        render={({ field }) => (
+                          <FormItem>
+                            <FormLabel>每用户最多推广链接数</FormLabel>
+                            <FormControl>
+                              <Input
+                                type="number"
+                                min={1}
+                                max={100}
+                                {...field}
+                                onChange={(e) => field.onChange(parseInt(e.target.value, 10) || 20)}
+                              />
+                            </FormControl>
+                            <FormMessage />
+                          </FormItem>
+                        )}
+                      />
+                    </div>
+                  </div>
+
+                  {/* 积分规则 */}
+                  <div className="border-t pt-6 space-y-4">
+                    <h4 className="font-medium flex items-center gap-2">
+                      <Coins className="h-4 w-4" />
+                      积分规则
+                    </h4>
+                    <FormDescription>
+                      为各类用户行为配置积分奖励。每日限额为 0 时表示不限次数。
+                    </FormDescription>
+                    <PointsRulesEditor control={form.control} />
+                  </div>
 
                   <Button type="submit" disabled={updateConfig.isPending}>
                     {updateConfig.isPending ? (

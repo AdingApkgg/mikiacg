@@ -5,6 +5,7 @@ import { TRPCError } from "@trpc/server";
 import { getCache, setCache, getOrSet, deleteCache, deleteCacheKeys } from "@/lib/redis";
 import { submitVideoToIndexNow, submitVideosToIndexNow } from "@/lib/indexnow";
 import { enqueueCoverForVideo } from "@/lib/cover-auto";
+import { awardPoints } from "@/lib/points";
 
 const VIDEO_CACHE_TTL = 60; // 1 minute
 
@@ -1155,6 +1156,7 @@ export const videoRouter = router({
         },
       });
 
+      awardPoints(ctx.session.user.id, "LIKE_VIDEO", undefined, input.videoId);
       return { liked: true };
     }),
 
@@ -1265,6 +1267,7 @@ export const videoRouter = router({
         },
       });
 
+      awardPoints(ctx.session.user.id, "FAVORITE_VIDEO", undefined, input.videoId);
       return { favorited: true };
     }),
 
@@ -1647,6 +1650,16 @@ export const videoRouter = router({
       })
     )
     .mutation(async ({ ctx, input }) => {
+      const existing = await ctx.prisma.watchHistory.findUnique({
+        where: {
+          userId_videoId: {
+            userId: ctx.session.user.id,
+            videoId: input.videoId,
+          },
+        },
+        select: { id: true },
+      });
+
       await ctx.prisma.watchHistory.upsert({
         where: {
           userId_videoId: {
@@ -1661,6 +1674,10 @@ export const videoRouter = router({
           progress: input.progress,
         },
       });
+
+      if (!existing) {
+        awardPoints(ctx.session.user.id, "WATCH_VIDEO", undefined, input.videoId);
+      }
       return { success: true };
     }),
 

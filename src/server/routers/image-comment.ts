@@ -4,6 +4,7 @@ import { TRPCError } from "@trpc/server";
 import { Prisma } from "@/generated/prisma/client";
 import { getIpLocation } from "@/lib/ip-location";
 import { parseDeviceInfo, type DeviceInfo } from "@/lib/device-info";
+import { awardPoints } from "@/lib/points";
 
 const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 const urlRegex = /^https?:\/\/.+/;
@@ -264,6 +265,7 @@ export const imagePostCommentRouter = router({
           where: { id: userId },
           data: { lastIpLocation: lastIpLocation || undefined },
         });
+        awardPoints(userId, "COMMENT_IMAGE", undefined, comment.id);
       }
 
       return { ...comment, userReaction: null };

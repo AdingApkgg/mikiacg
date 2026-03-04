@@ -34,6 +34,7 @@ import {
   DatabaseBackup,
   Image as ImageIcon,
   Sticker,
+  TrendingUp,
 } from "lucide-react";
 
 const menuItems = [
@@ -90,6 +91,12 @@ const menuItems = [
     label: "贴图管理",
     icon: Sticker,
     scope: "settings:manage",
+  },
+  {
+    href: "/dashboard/referral",
+    label: "推广中心",
+    icon: TrendingUp,
+    scope: null,
   },
   {
     href: "/dashboard/links",
