@@ -1027,6 +1027,34 @@ enum BackupStatus {
   FAILED
 }
 
+// ==================== 贴图包 ====================
+
+model StickerPack {
+  id          String    @id @default(cuid())
+  name        String
+  slug        String    @unique
+  coverUrl    String?
+  isActive    Boolean   @default(true)
+  sortOrder   Int       @default(0)
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+  stickers    Sticker[]
+}
+
+model Sticker {
+  id          String      @id @default(cuid())
+  packId      String
+  name        String
+  imageUrl    String
+  width       Int?
+  height      Int?
+  sortOrder   Int         @default(0)
+  createdAt   DateTime    @default(now())
+  pack        StickerPack @relation(fields: [packId], references: [id], onDelete: Cascade)
+
+  @@index([packId, sortOrder])
+}
+
 // ==================== 友情链接 ====================
 
 model FriendLink {

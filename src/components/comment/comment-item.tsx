@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useCallback } from "react";
+import { useState, useCallback, useRef } from "react";
 import { useSession } from "@/lib/auth-client";
 import { trpc } from "@/lib/trpc";
 import { Button } from "@/components/ui/button";
@@ -51,6 +51,8 @@ import { toast } from "@/lib/toast-with-sound";
 import Link from "next/link";
 import { cn } from "@/lib/utils";
 import { getAvatarUrlClient } from "@/lib/avatar";
+import { CommentContent } from "./comment-content";
+import { EmojiStickerPicker } from "./emoji-sticker-picker";
 
 interface CommentUser {
   id: string;
@@ -113,6 +115,25 @@ export function CommentItem({
   const [localDislikes, setLocalDislikes] = useState(comment.dislikes);
   const [localReaction, setLocalReaction] = useState<boolean | null>(comment.userReaction);
   const [replyToUser, setReplyToUser] = useState<CommentUser | null>(null);
+  const replyTextareaRef = useRef<HTMLTextAreaElement>(null);
+
+  const insertAtReplyCursor = useCallback((text: string) => {
+    const el = replyTextareaRef.current;
+    if (!el) {
+      setReplyContent((prev) => prev + text);
+      return;
+    }
+    const start = el.selectionStart;
+    const end = el.selectionEnd;
+    const before = replyContent.slice(0, start);
+    const after = replyContent.slice(end);
+    setReplyContent(before + text + after);
+    requestAnimationFrame(() => {
+      el.focus();
+      const pos = start + text.length;
+      el.setSelectionRange(pos, pos);
+    });
+  }, [replyContent]);
 
   const utils = trpc.useUtils();
   const isOwner = comment.userId && session?.user?.id === comment.userId;
@@ -542,7 +563,7 @@ export function CommentItem({
                 @{comment.replyToUser.nickname || comment.replyToUser.username}
               </Link>
             )}
-            {comment.content}
+            <CommentContent content={comment.content} />
           </p>
         )}
 
@@ -673,6 +694,7 @@ export function CommentItem({
                 </div>
               )}
               <Textarea
+                ref={replyTextareaRef}
                 placeholder={`回复 @${replyToUser ? (replyToUser.nickname || replyToUser.username) : displayName}...`}
                 value={replyContent}
                 onChange={(e) => setReplyContent(e.target.value)}
@@ -680,25 +702,31 @@ export function CommentItem({
                 maxLength={2000}
                 autoFocus
               />
-              <div className="flex gap-2 justify-end">
-                <Button
-                  size="sm"
-                  variant="ghost"
-                  onClick={() => {
-                    setIsReplying(false);
-                    setReplyContent("");
-                    setReplyToUser(null);
-                  }}
-                >
-                  取消
-                </Button>
-                <Button
-                  size="sm"
-                  onClick={handleReply}
-                  disabled={!replyContent.trim() || createReplyMutation.isPending}
-                >
-                  回复
-                </Button>
+              <div className="flex items-center justify-between">
+                <EmojiStickerPicker
+                  onEmojiSelect={(emoji) => insertAtReplyCursor(emoji)}
+                  onStickerSelect={(markup) => insertAtReplyCursor(markup)}
+                />
+                <div className="flex gap-2">
+                  <Button
+                    size="sm"
+                    variant="ghost"
+                    onClick={() => {
+                      setIsReplying(false);
+                      setReplyContent("");
+                      setReplyToUser(null);
+                    }}
+                  >
+                    取消
+                  </Button>
+                  <Button
+                    size="sm"
+                    onClick={handleReply}
+                    disabled={!replyContent.trim() || createReplyMutation.isPending}
+                  >
+                    回复
+                  </Button>
+                </div>
               </div>
             </div>
           </div>

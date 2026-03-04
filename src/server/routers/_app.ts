@@ -11,6 +11,7 @@ import { imagePostCommentRouter } from "./image-comment";
 import { seriesRouter } from "./series";
 import { siteRouter } from "./site";
 import { setupRouter } from "./setup";
+import { stickerRouter } from "./sticker";
 
 export const appRouter = router({
   user: userRouter,
@@ -25,6 +26,7 @@ export const appRouter = router({
   series: seriesRouter,
   site: siteRouter,
   setup: setupRouter,
+  sticker: stickerRouter,
 });
 
 export type AppRouter = typeof appRouter;

@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useCallback, useEffect } from "react";
+import { useState, useCallback, useEffect, useRef } from "react";
 import { useSession } from "@/lib/auth-client";
 import { trpc } from "@/lib/trpc";
 import { Button } from "@/components/ui/button";
@@ -19,6 +19,7 @@ import {
 import { MessageSquare, ArrowUpDown, User, LogIn } from "lucide-react";
 import { toast } from "@/lib/toast-with-sound";
 import { GameCommentItem } from "./game-comment-item";
+import { EmojiStickerPicker } from "./emoji-sticker-picker";
 import { parseDeviceInfo, getHighEntropyDeviceInfo, mergeDeviceInfo, type DeviceInfo } from "@/lib/device-info";
 import { useIsMounted } from "@/components/motion";
 import { useSiteConfig } from "@/contexts/site-config";
@@ -39,7 +40,26 @@ export function GameCommentSection({ gameId }: GameCommentSectionProps) {
   const [deviceInfo, setDeviceInfo] = useState<DeviceInfo | null>(null);
   
   const requireLogin = siteConfig?.requireLoginToComment ?? false;
-  
+  const textareaRef = useRef<HTMLTextAreaElement>(null);
+
+  const insertAtCursor = useCallback((text: string) => {
+    const el = textareaRef.current;
+    if (!el) {
+      setNewComment((prev) => prev + text);
+      return;
+    }
+    const start = el.selectionStart;
+    const end = el.selectionEnd;
+    const before = newComment.slice(0, start);
+    const after = newComment.slice(end);
+    setNewComment(before + text + after);
+    requestAnimationFrame(() => {
+      el.focus();
+      const pos = start + text.length;
+      el.setSelectionRange(pos, pos);
+    });
+  }, [newComment]);
+
   const [guestName, setGuestName] = useState("");
   const [guestEmail, setGuestEmail] = useState("");
   const [guestWebsite, setGuestWebsite] = useState("");
@@ -225,6 +245,7 @@ export function GameCommentSection({ gameId }: GameCommentSectionProps) {
             </div>
           )}
           <Textarea
+            ref={textareaRef}
             placeholder="添加评论..."
             value={newComment}
             onChange={(e) => setNewComment(e.target.value)}
@@ -232,9 +253,15 @@ export function GameCommentSection({ gameId }: GameCommentSectionProps) {
             maxLength={2000}
           />
           <div className="flex justify-between items-center">
-            <span className="text-xs text-muted-foreground">
-              {newComment.length}/2000
-            </span>
+            <div className="flex items-center gap-1">
+              <EmojiStickerPicker
+                onEmojiSelect={(emoji) => insertAtCursor(emoji)}
+                onStickerSelect={(markup) => insertAtCursor(markup)}
+              />
+              <span className="text-xs text-muted-foreground">
+                {newComment.length}/2000
+              </span>
+            </div>
             <div className="flex gap-2">
               {newComment && (
                 <Button

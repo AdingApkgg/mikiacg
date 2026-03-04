@@ -300,7 +300,7 @@ export const userRouter = router({
         where: { 
           userId: ctx.session.user.id,
           isRevoked: false,
-          expiresAt: { gt: new Date() }, // 只返回未过期的会话
+          expiresAt: { gt: new Date() },
         },
         orderBy: { lastActiveAt: "desc" },
         take: input?.limit || 20,
@@ -314,14 +314,15 @@ export const userRouter = router({
           browserVersion: true,
           brand: true,
           model: true,
+          ipv4Address: true,
           ipv4Location: true,
+          ipv6Address: true,
           ipv6Location: true,
           createdAt: true,
           lastActiveAt: true,
         },
       });
 
-      // 当前会话的 jti
       const currentJti = ctx.session.jti;
 
       return {
@@ -330,7 +331,7 @@ export const userRouter = router({
       };
     }),
 
-  // 撤销会话（登出其他设备）
+  // 撤销会话（登出其他设备）— 同时删除 Better Auth Session 使 cookie 立即失效
   revokeLoginSession: protectedProcedure
     .input(z.object({ id: z.string() }))
     .mutation(async ({ ctx, input }) => {
@@ -343,36 +344,54 @@ export const userRouter = router({
         throw new TRPCError({ code: "FORBIDDEN", message: "无权限撤销该会话" });
       }
 
-      // 不允许撤销当前会话（应该用正常登出）
       if (loginSession.jti === ctx.session.jti) {
         throw new TRPCError({ code: "BAD_REQUEST", message: "不能撤销当前会话，请使用登出功能" });
       }
 
-      // 标记为已撤销
-      await ctx.prisma.loginSession.update({
-        where: { id: input.id },
-        data: { 
-          isRevoked: true,
-          revokedAt: new Date(),
-        },
-      });
+      await ctx.prisma.$transaction([
+        ctx.prisma.loginSession.update({
+          where: { id: input.id },
+          data: { isRevoked: true, revokedAt: new Date() },
+        }),
+        // 删除 Better Auth Session，使对应 cookie 立即失效
+        ctx.prisma.session.deleteMany({
+          where: { sessionToken: loginSession.jti },
+        }),
+      ]);
       
       return { success: true };
     }),
 
   // 撤销所有其他会话
   revokeAllOtherSessions: protectedProcedure.mutation(async ({ ctx }) => {
-    const result = await ctx.prisma.loginSession.updateMany({
+    // 先获取要撤销的 jti 列表
+    const toRevoke = await ctx.prisma.loginSession.findMany({
       where: {
         userId: ctx.session.user.id,
         isRevoked: false,
         NOT: { jti: ctx.session.jti },
       },
-      data: {
-        isRevoked: true,
-        revokedAt: new Date(),
-      },
+      select: { jti: true },
     });
+
+    const jtis = toRevoke.map(s => s.jti);
+
+    const [result] = await ctx.prisma.$transaction([
+      ctx.prisma.loginSession.updateMany({
+        where: {
+          userId: ctx.session.user.id,
+          isRevoked: false,
+          NOT: { jti: ctx.session.jti },
+        },
+        data: { isRevoked: true, revokedAt: new Date() },
+      }),
+      // 删除所有对应的 Better Auth Session
+      ...(jtis.length > 0
+        ? [ctx.prisma.session.deleteMany({
+            where: { sessionToken: { in: jtis } },
+          })]
+        : []),
+    ]);
 
     return { count: result.count };
   }),

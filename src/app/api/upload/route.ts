@@ -42,6 +42,13 @@ const IMAGE_CONFIG: Record<string, ImageConfig> = {
     quality: 85,
     lossless: false,
   },
+  sticker: {
+    width: 256,
+    height: 256,
+    format: "webp",
+    quality: 90,
+    lossless: false,
+  },
 };
 
 export async function POST(request: NextRequest) {

@@ -33,6 +33,7 @@ import {
   Link2,
   DatabaseBackup,
   Image as ImageIcon,
+  Sticker,
 } from "lucide-react";
 
 const menuItems = [
@@ -83,6 +84,12 @@ const menuItems = [
     label: "封面管理",
     icon: ImageIcon,
     scope: "video:manage",
+  },
+  {
+    href: "/dashboard/stickers",
+    label: "贴图管理",
+    icon: Sticker,
+    scope: "settings:manage",
   },
   {
     href: "/dashboard/links",
