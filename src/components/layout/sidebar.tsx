@@ -16,6 +16,7 @@ import {
   Image,
   Gamepad2,
   Play,
+  TrendingUp,
   type LucideIcon,
 } from "lucide-react";
 import { useUIStore, type ContentMode } from "@/stores/app";
@@ -67,6 +68,7 @@ const userNavItems: NavItem[] = [
 
 const moreNavItems: NavItem[] = [
   { href: "/upload", icon: Upload, label: "上传", auth: true, requireUpload: true },
+  { href: "/dashboard/referral", icon: TrendingUp, label: "推广中心", auth: true },
 ];
 
 function NavLink({

@@ -13,6 +13,7 @@ import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from "
 import { toast } from "@/lib/toast-with-sound";
 import { Loader2 } from "lucide-react";
 import { trpc } from "@/lib/trpc";
+import { authClient } from "@/lib/auth-client";
 import { EmailCodeInput } from "@/components/ui/email-code-input";
 import { SocialLoginButtons } from "@/components/auth/social-login-buttons";
 import { UnifiedCaptcha, type CaptchaType } from "@/components/ui/unified-captcha";
@@ -59,10 +60,6 @@ export default function RegisterPage() {
   type RegisterFormValues = z.infer<typeof registerSchema>;
 
   const registerMutation = trpc.user.register.useMutation({
-    onSuccess: () => {
-      toast.success("注册成功", { description: "请登录您的账户" });
-      router.push("/login");
-    },
     onError: (error) => {
       toast.error("注册失败", { description: error.message });
     },
@@ -140,6 +137,20 @@ export default function RegisterPage() {
         password: data.password,
         referralCode,
       });
+
+      const { error } = await authClient.signIn.email({
+        email: data.email,
+        password: data.password,
+      });
+
+      if (error) {
+        toast.success("注册成功", { description: "请手动登录您的账户" });
+        router.push("/login");
+      } else {
+        toast.success("注册成功", { description: "已自动登录" });
+        router.push("/");
+        router.refresh();
+      }
     } finally {
       setIsLoading(false);
     }
