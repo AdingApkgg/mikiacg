@@ -26,9 +26,11 @@ interface ImagePostCardProps {
   index?: number;
 }
 
-function getImageProxyUrl(url: string): string {
-  if (url.startsWith("/uploads/")) return url;
-  return `/api/cover/${encodeURIComponent(url)}`;
+function getImageProxyUrl(url: string, thumb?: { w: number; q?: number }): string {
+  if (!thumb && url.startsWith("/uploads/")) return url;
+  const base = `/api/cover/${encodeURIComponent(url)}`;
+  if (!thumb) return base;
+  return `${base}?w=${thumb.w}&h=${thumb.w}&q=${thumb.q ?? 60}`;
 }
 
 function ImagePostCardComponent({ post, index = 0 }: ImagePostCardProps) {
@@ -51,16 +53,16 @@ function ImagePostCardComponent({ post, index = 0 }: ImagePostCardProps) {
       onMouseEnter={() => play("hover")}
     >
       <Link href={`/image/${post.id}`} className="block">
-        <div className="relative aspect-square overflow-hidden rounded-lg bg-muted shadow-sm group-hover:shadow-xl transition-shadow duration-300">
+        <div className="relative aspect-square overflow-hidden rounded-lg bg-muted shadow-sm group-hover:shadow-xl transition-shadow duration-300 ease-out">
           {previewImages.length >= 4 ? (
             <div className="grid grid-cols-2 grid-rows-2 h-full gap-0.5">
               {previewImages.map((url, i) => (
                 <div key={i} className="relative overflow-hidden">
                   {/* eslint-disable-next-line @next/next/no-img-element */}
                   <img
-                    src={getImageProxyUrl(url)}
+                    src={getImageProxyUrl(url, { w: 300, q: 60 })}
                     alt={`${post.title} - ${i + 1}`}
-                    className="w-full h-full object-cover transition-transform duration-500 ease-out group-hover:scale-105"
+                    className="w-full h-full object-cover transition-transform duration-500 ease-[cubic-bezier(0.16,1,0.3,1)] will-change-transform group-hover:scale-105"
                     loading="lazy"
                   />
                 </div>
@@ -69,9 +71,9 @@ function ImagePostCardComponent({ post, index = 0 }: ImagePostCardProps) {
           ) : previewImages.length > 0 ? (
             // eslint-disable-next-line @next/next/no-img-element
             <img
-              src={getImageProxyUrl(previewImages[0])}
+              src={getImageProxyUrl(previewImages[0], { w: 400, q: 70 })}
               alt={post.title}
-              className="w-full h-full object-cover transition-transform duration-500 ease-out group-hover:scale-105"
+              className="w-full h-full object-cover transition-transform duration-500 ease-[cubic-bezier(0.16,1,0.3,1)] will-change-transform group-hover:scale-105"
               loading="lazy"
             />
           ) : (
@@ -101,7 +103,7 @@ function ImagePostCardComponent({ post, index = 0 }: ImagePostCardProps) {
         </div>
 
         <div className="mt-2 px-0.5 space-y-0.5">
-          <h3 className="font-medium line-clamp-2 text-xs sm:text-sm leading-snug group-hover:text-primary transition-colors duration-200">
+          <h3 className="font-medium line-clamp-2 text-xs sm:text-sm leading-snug group-hover:text-primary transition-colors duration-200 ease-out">
             {post.title}
           </h3>
           {post.description && (

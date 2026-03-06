@@ -10,6 +10,8 @@ interface VideoCoverProps {
   blurDataURL?: string | null;
   title: string;
   className?: string;
+  /** 缩略图宽度（不传则使用原图） */
+  thumbWidth?: number;
 }
 
 function CoverPlaceholder({ className = "" }: { className?: string }) {
@@ -28,7 +30,7 @@ function CoverPlaceholder({ className = "" }: { className?: string }) {
   );
 }
 
-export function VideoCover({ videoId, coverUrl, blurDataURL, title, className = "" }: VideoCoverProps) {
+export function VideoCover({ videoId, coverUrl, blurDataURL, title, className = "", thumbWidth }: VideoCoverProps) {
   const [retryKey, setRetryKey] = useState(0);
   const [giveUp, setGiveUp] = useState(false);
   const [loaded, setLoaded] = useState(false);
@@ -50,16 +52,21 @@ export function VideoCover({ videoId, coverUrl, blurDataURL, title, className = 
 
   const getCoverSrc = () => {
     if (giveUp) return null;
+
+    const thumbSuffix = thumbWidth ? `${coverUrl && !coverUrl.startsWith("/uploads/") || !coverUrl ? "?" : "?"}w=${thumbWidth}&h=${Math.round(thumbWidth * 9 / 16)}&q=60` : "";
     
     if (coverUrl) {
       if (coverUrl.startsWith("/uploads/")) {
+        if (thumbWidth) {
+          return `/api/cover/${encodeURIComponent(coverUrl)}${thumbSuffix}`;
+        }
         return coverUrl;
       }
-      return `/api/cover/${encodeURIComponent(coverUrl)}`;
+      return `/api/cover/${encodeURIComponent(coverUrl)}${thumbSuffix}`;
     }
     
     if (videoId) {
-      return `/api/cover/video/${videoId}`;
+      return `/api/cover/video/${videoId}${thumbSuffix}`;
     }
     
     return null;

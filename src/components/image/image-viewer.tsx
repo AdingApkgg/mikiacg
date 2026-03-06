@@ -11,9 +11,11 @@ interface ImageViewerProps {
   onClose: () => void;
 }
 
-function getImageProxyUrl(url: string): string {
-  if (url.startsWith("/uploads/")) return url;
-  return `/api/cover/${encodeURIComponent(url)}`;
+function getImageProxyUrl(url: string, thumb?: { w: number; q?: number }): string {
+  if (!thumb && url.startsWith("/uploads/")) return url;
+  const base = `/api/cover/${encodeURIComponent(url)}`;
+  if (!thumb) return base;
+  return `${base}?w=${thumb.w}&h=${thumb.w}&q=${thumb.q ?? 60}`;
 }
 
 export function ImageViewer({ images, initialIndex = 0, open, onClose }: ImageViewerProps) {
@@ -125,7 +127,7 @@ export function ImageViewer({ images, initialIndex = 0, open, onClose }: ImageVi
   if (!open) return null;
 
   return (
-    <div className="fixed inset-0 z-[100] bg-black/95 backdrop-blur-sm animate-in fade-in duration-200">
+    <div className="fixed inset-0 z-[100] bg-black/95 backdrop-blur-sm animate-in fade-in duration-200 ease-out">
       {/* Toolbar */}
       <div className="absolute top-0 left-0 right-0 z-10 flex items-center justify-between px-4 py-3 bg-gradient-to-b from-black/60 to-transparent">
         <div className="text-white/80 text-sm font-medium">
@@ -165,10 +167,10 @@ export function ImageViewer({ images, initialIndex = 0, open, onClose }: ImageVi
         <img
           src={getImageProxyUrl(images[currentIndex])}
           alt={`Image ${currentIndex + 1}`}
-          className={cn(
-            "max-w-[90vw] max-h-[85vh] object-contain transition-transform",
-            isDragging ? "duration-0 cursor-grabbing" : "duration-200 cursor-grab"
-          )}
+            className={cn(
+                "max-w-[90vw] max-h-[85vh] object-contain transition-transform will-change-transform",
+                isDragging ? "duration-0 cursor-grabbing" : "duration-200 ease-out cursor-grab"
+              )}
           style={{
             transform: `translate(${translate.x}px, ${translate.y}px) scale(${scale}) rotate(${rotation}deg)`,
           }}
@@ -185,7 +187,7 @@ export function ImageViewer({ images, initialIndex = 0, open, onClose }: ImageVi
           {currentIndex > 0 && (
             <button
               onClick={() => goTo(currentIndex - 1)}
-              className="absolute left-2 sm:left-4 top-1/2 -translate-y-1/2 z-10 p-2 sm:p-3 rounded-full bg-black/50 hover:bg-black/70 text-white/80 hover:text-white transition-all active:scale-90"
+              className="absolute left-2 sm:left-4 top-1/2 -translate-y-1/2 z-10 p-2 sm:p-3 rounded-full bg-black/50 hover:bg-black/70 text-white/80 hover:text-white transition-[background-color,color,transform] duration-150 ease-out active:scale-90"
             >
               <ChevronLeft className="h-5 w-5 sm:h-6 sm:w-6" />
             </button>
@@ -193,7 +195,7 @@ export function ImageViewer({ images, initialIndex = 0, open, onClose }: ImageVi
           {currentIndex < images.length - 1 && (
             <button
               onClick={() => goTo(currentIndex + 1)}
-              className="absolute right-2 sm:right-4 top-1/2 -translate-y-1/2 z-10 p-2 sm:p-3 rounded-full bg-black/50 hover:bg-black/70 text-white/80 hover:text-white transition-all active:scale-90"
+              className="absolute right-2 sm:right-4 top-1/2 -translate-y-1/2 z-10 p-2 sm:p-3 rounded-full bg-black/50 hover:bg-black/70 text-white/80 hover:text-white transition-[background-color,color,transform] duration-150 ease-out active:scale-90"
             >
               <ChevronRight className="h-5 w-5 sm:h-6 sm:w-6" />
             </button>
@@ -210,7 +212,7 @@ export function ImageViewer({ images, initialIndex = 0, open, onClose }: ImageVi
                 key={i}
                 onClick={() => goTo(i)}
                 className={cn(
-                  "shrink-0 w-12 h-12 sm:w-16 sm:h-16 rounded-md overflow-hidden border-2 transition-all",
+                  "shrink-0 w-12 h-12 sm:w-16 sm:h-16 rounded-md overflow-hidden border-2 transition-[border-color,opacity,transform] duration-200 ease-out",
                   i === currentIndex
                     ? "border-white scale-105 shadow-lg"
                     : "border-transparent opacity-60 hover:opacity-90"
@@ -218,7 +220,7 @@ export function ImageViewer({ images, initialIndex = 0, open, onClose }: ImageVi
               >
                 {/* eslint-disable-next-line @next/next/no-img-element */}
                 <img
-                  src={getImageProxyUrl(url)}
+                  src={getImageProxyUrl(url, { w: 100, q: 50 })}
                   alt={`Thumbnail ${i + 1}`}
                   className="w-full h-full object-cover"
                   loading="lazy"
@@ -237,7 +239,7 @@ function ToolButton({ onClick, title, children }: { onClick: () => void; title: 
     <button
       onClick={onClick}
       title={title}
-      className="p-2 rounded-lg text-white/70 hover:text-white hover:bg-white/10 transition-all active:scale-90"
+      className="p-2 rounded-lg text-white/70 hover:text-white hover:bg-white/10 transition-[background-color,color,transform] duration-150 ease-out active:scale-90"
     >
       {children}
     </button>

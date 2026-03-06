@@ -706,7 +706,7 @@ export default function AdminVideosPage() {
                       {/* 封面 */}
                       <div className="relative w-40 h-24 rounded-lg bg-muted overflow-hidden shrink-0">
                         <Image
-                          src={getCoverUrl(video.id, video.coverUrl)}
+                          src={getCoverUrl(video.id, video.coverUrl, { w: 320 })}
                           alt={video.title}
                           fill
                           className="object-cover"

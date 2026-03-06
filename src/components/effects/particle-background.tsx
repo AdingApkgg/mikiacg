@@ -727,10 +727,27 @@ const subscribeResize = (cb: () => void) => {
 const getIsMobile = () => window.innerWidth < 768;
 const getIsMobileServer = () => false;
 
+const subscribeVisibility = (cb: () => void) => {
+  document.addEventListener("visibilitychange", cb);
+  return () => document.removeEventListener("visibilitychange", cb);
+};
+const getPageVisible = () => document.visibilityState === "visible";
+const getPageVisibleServer = () => true;
+
+const subscribeReducedMotion = (cb: () => void) => {
+  const mql = window.matchMedia("(prefers-reduced-motion: reduce)");
+  mql.addEventListener("change", cb);
+  return () => mql.removeEventListener("change", cb);
+};
+const getReducedMotion = () => window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+const getReducedMotionServer = () => false;
+
 export default function ParticleBackground({ config }: { config: ParticleConfig }) {
   const reducedMotion = useUIStore((s) => s.reducedMotion);
   const isMobile = useSyncExternalStore(subscribeResize, getIsMobile, getIsMobileServer);
   const mouseRef = useRef({ x: 0, y: 0 });
+  const pageVisible = useSyncExternalStore(subscribeVisibility, getPageVisible, getPageVisibleServer);
+  const prefersReduced = useSyncExternalStore(subscribeReducedMotion, getReducedMotion, getReducedMotionServer);
 
   useEffect(() => {
     const handler = (e: MouseEvent) => {
@@ -741,7 +758,7 @@ export default function ParticleBackground({ config }: { config: ParticleConfig 
     return () => window.removeEventListener("mousemove", handler);
   }, []);
 
-  if (reducedMotion || config.type === "none") return null;
+  if (reducedMotion || prefersReduced || config.type === "none" || !pageVisible) return null;
 
   const count = mapDensity(config.density, isMobile);
 
@@ -753,9 +770,10 @@ export default function ParticleBackground({ config }: { config: ParticleConfig 
     >
       <Canvas
         camera={{ position: [0, 0, 8], fov: 60 }}
-        dpr={[1, 1.5]}
+        dpr={[1, isMobile ? 1 : 1.5]}
         gl={{ antialias: false, alpha: true, powerPreference: "low-power" }}
         style={{ background: "transparent" }}
+        frameloop="always"
       >
         <ParticleScene config={config} count={count} mouse={mouseRef} />
       </Canvas>

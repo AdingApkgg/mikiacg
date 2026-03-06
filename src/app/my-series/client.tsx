@@ -249,11 +249,12 @@ export default function MySeriesClient({ page }: { page: number }) {
                     <Image
                       src={
                         series.coverUrl
-                          ? getCoverUrl("", series.coverUrl)
+                          ? getCoverUrl("", series.coverUrl, { w: 260 })
                           : series.episodes?.[0]?.video
                           ? getCoverUrl(
                               series.episodes[0].video.id,
-                              series.episodes[0].video.coverUrl
+                              series.episodes[0].video.coverUrl,
+                              { w: 260 }
                             )
                           : "/placeholder.svg"
                       }

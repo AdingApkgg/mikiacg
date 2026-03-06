@@ -5,10 +5,12 @@
  * 1. 代理外部图片（解决 CORS 问题）
  * 2. 本地缓存图片（减少重复请求）
  * 3. 自动从视频生成封面（使用 ffmpeg）
+ * 4. 支持 ?w=&h=&q= 参数生成缩略图（sharp 缩放 + WebP）
  * 
  * 使用方式：
  * - /api/cover/https://example.com/image.jpg - 代理外部图片
  * - /api/cover/video/123456 - 自动生成视频封面
+ * - /api/cover/...?w=300&h=300&q=60 - 生成缩略图
  */
 
 import { NextRequest, NextResponse } from "next/server";
@@ -16,6 +18,7 @@ import { prisma } from "@/lib/prisma";
 import * as fs from "fs/promises";
 import * as path from "path";
 import * as crypto from "crypto";
+import sharp from "sharp";
 import { enqueueCoverForVideo } from "@/lib/cover-auto";
 import { getServerConfig } from "@/lib/server-config";
 
@@ -26,7 +29,6 @@ const PLACEHOLDER_GIF = Buffer.from(
   "base64"
 );
 
-// 延迟初始化：仅首次调用时创建目录
 let cacheDirPromise: Promise<void> | null = null;
 function ensureCacheDir(): Promise<void> {
   if (!cacheDirPromise) {
@@ -47,6 +49,44 @@ async function getCoverDir() {
   }
   return coverDirPromise;
 }
+
+// ==================== 缩略图相关 ====================
+
+interface ThumbParams {
+  w?: number;
+  h?: number;
+  q?: number;
+}
+
+function parseThumbParams(searchParams: URLSearchParams): ThumbParams | null {
+  const w = searchParams.get("w");
+  const h = searchParams.get("h");
+  const q = searchParams.get("q");
+  if (!w && !h) return null;
+  return {
+    w: w ? Math.min(Math.max(parseInt(w, 10) || 0, 16), 1200) : undefined,
+    h: h ? Math.min(Math.max(parseInt(h, 10) || 0, 16), 1200) : undefined,
+    q: q ? Math.min(Math.max(parseInt(q, 10) || 0, 1), 100) : 70,
+  };
+}
+
+function getThumbCacheFile(cacheKey: string, thumb: ThumbParams): string {
+  const key = `${cacheKey}__t_${thumb.w ?? 0}x${thumb.h ?? 0}q${thumb.q ?? 70}`;
+  const hash = crypto.createHash("md5").update(key).digest("hex");
+  return path.join(CACHE_DIR, `${hash}.webp`);
+}
+
+async function resizeImage(
+  data: Buffer,
+  params: ThumbParams
+): Promise<Buffer> {
+  return sharp(data)
+    .resize(params.w, params.h, { fit: "cover", withoutEnlargement: true })
+    .webp({ quality: params.q ?? 70 })
+    .toBuffer();
+}
+
+// ==================== 工具函数 ====================
 
 function getCacheFileName(url: string): string {
   const hash = crypto.createHash("md5").update(url).digest("hex");
@@ -96,7 +136,6 @@ function getPreferredFormat(acceptHeader: string | null): { ext: string; content
 
 /**
  * 并行尝试常见 CDN 缩略图 URL 模式，返回第一个成功的结果
- * 支持 .mp4 和 .m3u8 两种 URL 格式
  */
 async function tryFetchThumbnailFromCDN(videoUrl: string): Promise<Buffer | null> {
   const thumbPatterns: string[] = [];
@@ -137,9 +176,6 @@ async function tryFetchThumbnailFromCDN(videoUrl: string): Promise<Buffer | null
   }
 }
 
-/**
- * 读取本地文件并返回 Response（处理 /uploads/ 开头的本地路径）
- */
 async function serveLocalFile(localPath: string): Promise<Response | null> {
   try {
     const data = await fs.readFile(localPath);
@@ -155,6 +191,8 @@ async function serveLocalFile(localPath: string): Promise<Response | null> {
   }
 }
 
+// ==================== 主请求处理 ====================
+
 export async function GET(
   request: NextRequest,
   { params }: { params: Promise<{ path: string[] }> }
@@ -165,124 +203,64 @@ export async function GET(
     return NextResponse.json({ error: "Missing path" }, { status: 400 });
   }
 
-  // 处理视频封面请求：/api/cover/video/123456
-  if (pathSegments[0] === "video" && pathSegments[1]) {
-    const videoId = pathSegments[1];
-    
-    const video = await prisma.video.findUnique({
-      where: { id: videoId },
-      select: { coverUrl: true, videoUrl: true },
-    });
+  const thumbParams = parseThumbParams(request.nextUrl.searchParams);
+  const thumbCacheKey = pathSegments.join("/");
 
-    if (!video) {
-      return NextResponse.json({ error: "Video not found" }, { status: 404 });
+  // 缩略图缓存命中 → 直接返回（适用于所有类型的封面请求）
+  if (thumbParams) {
+    await ensureCacheDir();
+    const thumbFile = getThumbCacheFile(thumbCacheKey, thumbParams);
+    try {
+      const cached = await fs.readFile(thumbFile);
+      return new Response(new Uint8Array(cached), {
+        headers: {
+          "Content-Type": "image/webp",
+          "Cache-Control": "public, max-age=31536000, immutable",
+        },
+      });
+    } catch {
+      // thumb cache miss, continue
     }
+  }
 
-    // coverUrl 已存在：按类型分发
-    if (video.coverUrl) {
-      // 本地路径：直接读取文件
-      if (video.coverUrl.startsWith("/uploads/") || video.coverUrl.startsWith("/api/cover/")) {
-        const localPath = video.coverUrl.startsWith("/uploads/")
-          ? path.join(process.cwd(), video.coverUrl.slice(1))
-          : null;
-        if (localPath) {
-          const resp = await serveLocalFile(localPath);
-          if (resp) return resp;
-          // 本地文件丢失，异步清除 DB 中的旧路径，让后续请求直接走生成流程
-          prisma.video
-            .update({ where: { id: videoId }, data: { coverUrl: null } })
-            .catch(() => {});
-        }
-      } else {
-        // 外部 URL：缓存代理
-        await ensureCacheDir();
-        const cacheFile = path.join(CACHE_DIR, getCacheFileName(video.coverUrl));
-        
-        try {
-          const cached = await fs.readFile(cacheFile);
-          const ext = path.extname(cacheFile);
-          return new Response(new Uint8Array(cached), {
-            headers: {
-              "Content-Type": getContentType(ext),
-              "Cache-Control": "public, max-age=31536000, immutable",
-            },
-          });
-        } catch {
-          // 缓存不存在
-        }
+  // 获取原图 Response
+  const response = await handleOriginalRequest(request, pathSegments);
 
-        try {
-          const response = await fetch(video.coverUrl, {
-            headers: { "User-Agent": "Mozilla/5.0" },
-          });
-
-          if (response.ok) {
-            const arrayBuffer = await response.arrayBuffer();
-            const buffer = Buffer.from(arrayBuffer);
-            await fs.writeFile(cacheFile, buffer).catch(() => {});
-
-            const contentType = response.headers.get("content-type") || "image/jpeg";
-            return new Response(new Uint8Array(arrayBuffer), {
-              headers: {
-                "Content-Type": contentType,
-                "Cache-Control": "public, max-age=31536000, immutable",
-              },
-            });
-          }
-        } catch {
-          // 继续尝试本地文件
-        }
-      }
-    }
-
-    // 尝试本地已生成的封面文件（按客户端支持的格式优先级）
-    const coverDir = await getCoverDir();
-    const acceptHeader = request.headers.get("accept");
-    const preferredFormats = getPreferredFormat(acceptHeader);
-
-    for (const format of preferredFormats) {
-      const coverFilePath = path.join(coverDir, `${videoId}${format.ext}`);
+  // 需要缩略图时，对原图 Response 进行缩放
+  if (thumbParams && response.status >= 200 && response.status < 300) {
+    const ct = response.headers.get("content-type") || "";
+    if (ct.startsWith("image/") && ct !== "image/gif") {
+      const buf = Buffer.from(await response.arrayBuffer());
       try {
-        const cached = await fs.readFile(coverFilePath);
-        return new Response(new Uint8Array(cached), {
+        const resized = await resizeImage(buf, thumbParams);
+        const thumbFile = getThumbCacheFile(thumbCacheKey, thumbParams);
+        await fs.writeFile(thumbFile, resized).catch(() => {});
+        return new Response(new Uint8Array(resized), {
           headers: {
-            "Content-Type": format.contentType,
+            "Content-Type": "image/webp",
             "Cache-Control": "public, max-age=31536000, immutable",
-            "Vary": "Accept",
           },
         });
       } catch {
-        // 尝试下一个格式
+        return new Response(new Uint8Array(buf), {
+          headers: { "Content-Type": ct, "Cache-Control": "public, max-age=31536000, immutable" },
+        });
       }
     }
+  }
 
-    // 尝试从 CDN 获取缩略图（并行请求，快速返回）
-    const cdnThumbnail = await tryFetchThumbnailFromCDN(video.videoUrl);
-    if (cdnThumbnail) {
-      const cdnCoverPath = path.join(coverDir, `${videoId}.jpg`);
-      await fs.writeFile(cdnCoverPath, cdnThumbnail).catch(() => {});
-      
-      return new Response(new Uint8Array(cdnThumbnail), {
-        headers: {
-          "Content-Type": "image/jpeg",
-          "Cache-Control": "public, max-age=31536000, immutable",
-          "Vary": "Accept",
-        },
-      });
-    }
+  return response;
+}
 
-    // 加入队列异步生成
-    await enqueueCoverForVideo(videoId);
+// ==================== 原图请求处理（不含缩略图逻辑） ====================
 
-    // 返回 1x1 透明 GIF 占位图，避免 <img> 显示为破碎图标
-    return new Response(PLACEHOLDER_GIF, {
-      status: 202,
-      headers: {
-        "Content-Type": "image/gif",
-        "Cache-Control": "no-store",
-        "Retry-After": "5",
-      },
-    });
+async function handleOriginalRequest(
+  request: NextRequest,
+  pathSegments: string[]
+): Promise<Response> {
+  // 处理视频封面请求：/api/cover/video/123456
+  if (pathSegments[0] === "video" && pathSegments[1]) {
+    return handleVideoCover(request, pathSegments[1]);
   }
 
   // 代理外部图片或本地 uploads
@@ -302,7 +280,6 @@ export async function GET(
     const resp = await serveLocalFile(candidateLocalPath);
     if (resp) return resp;
 
-    // 封面文件丢失时，重定向到 /api/cover/video/{videoId} 触发回退+重新生成
     const coverMatch = normalizedLocalPath.match(
       /^uploads\/cover\/([^/]+)\.\w+$/
     );
@@ -326,7 +303,7 @@ export async function GET(
 
   await ensureCacheDir();
   const cacheFile = path.join(CACHE_DIR, getCacheFileName(imageUrl));
-  
+
   try {
     const cached = await fs.readFile(cacheFile);
     const ext = path.extname(cacheFile);
@@ -337,7 +314,7 @@ export async function GET(
       },
     });
   } catch {
-    // 缓存不存在
+    // cache miss
   }
 
   try {
@@ -370,4 +347,118 @@ export async function GET(
     console.error("Error fetching image:", error);
     return NextResponse.json({ error: "Failed to fetch image" }, { status: 500 });
   }
+}
+
+// ==================== 视频封面处理 ====================
+
+async function handleVideoCover(
+  request: NextRequest,
+  videoId: string
+): Promise<Response> {
+  const video = await prisma.video.findUnique({
+    where: { id: videoId },
+    select: { coverUrl: true, videoUrl: true },
+  });
+
+  if (!video) {
+    return NextResponse.json({ error: "Video not found" }, { status: 404 });
+  }
+
+  if (video.coverUrl) {
+    if (video.coverUrl.startsWith("/uploads/") || video.coverUrl.startsWith("/api/cover/")) {
+      const localPath = video.coverUrl.startsWith("/uploads/")
+        ? path.join(process.cwd(), video.coverUrl.slice(1))
+        : null;
+      if (localPath) {
+        const resp = await serveLocalFile(localPath);
+        if (resp) return resp;
+        prisma.video
+          .update({ where: { id: videoId }, data: { coverUrl: null } })
+          .catch(() => {});
+      }
+    } else {
+      await ensureCacheDir();
+      const cacheFile = path.join(CACHE_DIR, getCacheFileName(video.coverUrl));
+      
+      try {
+        const cached = await fs.readFile(cacheFile);
+        const ext = path.extname(cacheFile);
+        return new Response(new Uint8Array(cached), {
+          headers: {
+            "Content-Type": getContentType(ext),
+            "Cache-Control": "public, max-age=31536000, immutable",
+          },
+        });
+      } catch {
+        // cache miss
+      }
+
+      try {
+        const response = await fetch(video.coverUrl, {
+          headers: { "User-Agent": "Mozilla/5.0" },
+        });
+
+        if (response.ok) {
+          const arrayBuffer = await response.arrayBuffer();
+          const buffer = Buffer.from(arrayBuffer);
+          await fs.writeFile(cacheFile, buffer).catch(() => {});
+
+          const contentType = response.headers.get("content-type") || "image/jpeg";
+          return new Response(new Uint8Array(arrayBuffer), {
+            headers: {
+              "Content-Type": contentType,
+              "Cache-Control": "public, max-age=31536000, immutable",
+            },
+          });
+        }
+      } catch {
+        // continue to fallback
+      }
+    }
+  }
+
+  const coverDir = await getCoverDir();
+  const acceptHeader = request.headers.get("accept");
+  const preferredFormats = getPreferredFormat(acceptHeader);
+
+  for (const format of preferredFormats) {
+    const coverFilePath = path.join(coverDir, `${videoId}${format.ext}`);
+    try {
+      const cached = await fs.readFile(coverFilePath);
+      return new Response(new Uint8Array(cached), {
+        headers: {
+          "Content-Type": format.contentType,
+          "Cache-Control": "public, max-age=31536000, immutable",
+          "Vary": "Accept",
+        },
+      });
+    } catch {
+      // try next format
+    }
+  }
+
+  const cdnThumbnail = await tryFetchThumbnailFromCDN(video.videoUrl);
+  if (cdnThumbnail) {
+    const cdnCoverPath = path.join(coverDir, `${videoId}.jpg`);
+    await fs.writeFile(cdnCoverPath, cdnThumbnail).catch(() => {});
+    
+    return new Response(new Uint8Array(cdnThumbnail), {
+      headers: {
+        "Content-Type": "image/jpeg",
+        "Cache-Control": "public, max-age=31536000, immutable",
+        "Vary": "Accept",
+      },
+    });
+  }
+
+  await enqueueCoverForVideo(videoId);
+
+  return new Response(PLACEHOLDER_GIF, {
+    status: 202,
+    headers: {
+      "Content-Type": "image/gif",
+      "Cache-Control": "no-store",
+      "Retry-After": "5",
+    },
+  });
 }

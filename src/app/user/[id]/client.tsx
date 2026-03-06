@@ -37,7 +37,6 @@ import type { SoundType } from "@/lib/audio";
 import { GameCard, type GameCardData } from "@/components/game/game-card";
 import { ImagePostCard } from "@/components/image/image-post-card";
 import { FadeIn, CountUp } from "@/components/motion";
-import { AnimatePresence, motion } from "framer-motion";
 import type { SerializedUser } from "./page";
 
 // ==================== 社交图标 ====================
@@ -634,8 +633,7 @@ export function UserPageClient({ id, initialUser, isOwnProfile: serverIsOwn }: U
   const renderVideoContent = () => (
     <>
       <SubTabs tabs={videoTabs} activeTab={videoSubTab} onTabChange={setVideoSubTab} play={play} />
-      <AnimatePresence mode="wait">
-        <motion.div key={videoSubTab} initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -8 }} transition={{ duration: 0.15 }}>
+      <div key={videoSubTab} className="animate-in fade-in slide-in-from-bottom-1 duration-200 fill-mode-both">
           {videoSubTab === "uploads" && (
             <>
               <VideoGrid
@@ -684,8 +682,7 @@ export function UserPageClient({ id, initialUser, isOwnProfile: serverIsOwn }: U
               <Pagination currentPage={likedPage} totalPages={likedData?.totalPages ?? 1} onPageChange={setLikedPage} className="mt-6" />
             </>
           )}
-        </motion.div>
-      </AnimatePresence>
+      </div>
     </>
   );
 
@@ -693,8 +690,7 @@ export function UserPageClient({ id, initialUser, isOwnProfile: serverIsOwn }: U
   const renderImageContent = () => (
     <>
       <SubTabs tabs={imageTabs} activeTab={imageSubTab} onTabChange={setImageSubTab} play={play} />
-      <AnimatePresence mode="wait">
-        <motion.div key={imageSubTab} initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -8 }} transition={{ duration: 0.15 }}>
+      <div key={imageSubTab} className="animate-in fade-in slide-in-from-bottom-1 duration-200 fill-mode-both">
           {imageSubTab === "posts" && (
             <>
               <ImagePostGrid
@@ -739,8 +735,7 @@ export function UserPageClient({ id, initialUser, isOwnProfile: serverIsOwn }: U
               <Pagination currentPage={imageLikedPage} totalPages={imageLikedData?.totalPages ?? 1} onPageChange={setImageLikedPage} className="mt-6" />
             </>
           )}
-        </motion.div>
-      </AnimatePresence>
+      </div>
     </>
   );
 
@@ -748,8 +743,7 @@ export function UserPageClient({ id, initialUser, isOwnProfile: serverIsOwn }: U
   const renderGameContent = () => (
     <>
       <SubTabs tabs={gameTabs} activeTab={gameSubTab} onTabChange={setGameSubTab} play={play} />
-      <AnimatePresence mode="wait">
-        <motion.div key={gameSubTab} initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -8 }} transition={{ duration: 0.15 }}>
+      <div key={gameSubTab} className="animate-in fade-in slide-in-from-bottom-1 duration-200 fill-mode-both">
           {gameSubTab === "uploads" && (
             <>
               <GameGrid
@@ -794,8 +788,7 @@ export function UserPageClient({ id, initialUser, isOwnProfile: serverIsOwn }: U
               <Pagination currentPage={gameLikedPage} totalPages={gameLikedData?.totalPages ?? 1} onPageChange={setGameLikedPage} className="mt-6" />
             </>
           )}
-        </motion.div>
-      </AnimatePresence>
+      </div>
     </>
   );
 
@@ -915,7 +908,7 @@ export function UserPageClient({ id, initialUser, isOwnProfile: serverIsOwn }: U
                 key={zone.key}
                 onClick={() => switchToZone(zone.key)}
                 className={cn(
-                  "flex items-center gap-1.5 px-4 py-2 text-sm font-medium rounded-full transition-all whitespace-nowrap",
+                  "flex items-center gap-1.5 px-4 py-2 text-sm font-medium rounded-full transition-[color,background-color,box-shadow] duration-200 ease-out whitespace-nowrap",
                   activeZone === zone.key
                     ? "bg-primary text-primary-foreground shadow-sm"
                     : "bg-muted text-muted-foreground hover:bg-accent hover:text-accent-foreground"
@@ -931,20 +924,12 @@ export function UserPageClient({ id, initialUser, isOwnProfile: serverIsOwn }: U
 
       {/* ===== 分区内容 ===== */}
       <FadeIn delay={0.1}>
-        <AnimatePresence mode="wait">
-          <motion.div
-            key={activeZone}
-            initial={{ opacity: 0, y: 12 }}
-            animate={{ opacity: 1, y: 0 }}
-            exit={{ opacity: 0, y: -12 }}
-            transition={{ duration: 0.2 }}
-          >
-            {activeZone === "all" && renderOverview()}
-            {activeZone === "video" && renderVideoContent()}
-            {activeZone === "image" && renderImageContent()}
-            {activeZone === "game" && renderGameContent()}
-          </motion.div>
-        </AnimatePresence>
+        <div key={activeZone} className="animate-in fade-in slide-in-from-bottom-1 duration-200 fill-mode-both" style={{ animationTimingFunction: "cubic-bezier(0.16, 1, 0.3, 1)" }}>
+          {activeZone === "all" && renderOverview()}
+          {activeZone === "video" && renderVideoContent()}
+          {activeZone === "image" && renderImageContent()}
+          {activeZone === "game" && renderGameContent()}
+        </div>
       </FadeIn>
     </div>
   );

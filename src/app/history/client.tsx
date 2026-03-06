@@ -357,7 +357,7 @@ export default function HistoryClient({ page }: { page: number }) {
                           className="relative w-40 h-24 flex-shrink-0 rounded-md overflow-hidden bg-muted"
                         >
                           <Image
-                            src={getCoverUrl(video.id, video.coverUrl)}
+                            src={getCoverUrl(video.id, video.coverUrl, { w: 320 })}
                             alt={video.title}
                             fill
                             className="object-cover"

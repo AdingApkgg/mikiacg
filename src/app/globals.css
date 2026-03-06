@@ -209,10 +209,12 @@
 @layer utilities {
   .animate-float {
     animation: float 3s ease-in-out infinite;
+    will-change: transform;
   }
   
   .animate-float-slow {
     animation: float-ambient 6s ease-in-out infinite;
+    will-change: transform;
   }
   
   .animate-pulse-slow {
@@ -243,14 +245,14 @@
 }
 
 @keyframes float {
-  0%, 100% { transform: translateY(0); }
-  50% { transform: translateY(-10px); }
+  0%, 100% { transform: translate3d(0, 0, 0); }
+  50% { transform: translate3d(0, -10px, 0); }
 }
 
 @keyframes float-ambient {
-  0%, 100% { transform: translateY(0) rotate(0deg); }
-  25% { transform: translateY(-6px) rotate(0.5deg); }
-  75% { transform: translateY(4px) rotate(-0.5deg); }
+  0%, 100% { transform: translate3d(0, 0, 0) rotate(0deg); }
+  25% { transform: translate3d(0, -6px, 0) rotate(0.5deg); }
+  75% { transform: translate3d(0, 4px, 0) rotate(-0.5deg); }
 }
 
 @keyframes shimmer {
@@ -267,6 +269,27 @@
   0% { background-position: 0% 50%; }
   50% { background-position: 100% 50%; }
   100% { background-position: 0% 50%; }
+}
+
+/* Reduced motion: 尊重用户系统无障碍设置 */
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
+
+  .animate-float,
+  .animate-float-slow,
+  .animate-shimmer,
+  .animate-glow,
+  .animate-border-glow,
+  .animate-pulse-slow {
+    animation: none !important;
+  }
 }
 
 /* 滚动条美化 */

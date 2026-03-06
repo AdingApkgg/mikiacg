@@ -86,7 +86,7 @@ function NavLink({
       <Link
         href={item.href}
         className={cn(
-          "flex flex-col items-center justify-center gap-1 rounded-xl px-1 py-3 transition-all",
+          "flex flex-col items-center justify-center gap-1 rounded-xl px-1 py-3 transition-[background-color] duration-150 ease-out",
           "hover:bg-accent/60",
           isActive && "bg-accent"
         )}
@@ -106,7 +106,7 @@ function NavLink({
     <Link
       href={item.href}
       className={cn(
-        "flex items-center gap-5 rounded-xl px-3 py-2 text-sm transition-all",
+        "flex items-center gap-5 rounded-xl px-3 py-2 text-sm transition-[background-color] duration-150 ease-out",
         "hover:bg-accent/60",
         isActive
           ? "bg-accent font-semibold"
@@ -244,7 +244,7 @@ function UserProfileLink({ collapsed, session }: { collapsed: boolean; session: 
     return (
       <Link
         href={`/user/${session.user.id}`}
-        className="flex flex-col items-center justify-center gap-1 rounded-xl px-1 py-3 hover:bg-accent/60 transition-all"
+        className="flex flex-col items-center justify-center gap-1 rounded-xl px-1 py-3 hover:bg-accent/60 transition-[background-color] duration-150 ease-out"
       >
         <Avatar className="h-6 w-6">
           <AvatarImage src={session.user.image || undefined} alt={session.user.name || ""} />
@@ -260,7 +260,7 @@ function UserProfileLink({ collapsed, session }: { collapsed: boolean; session: 
   return (
     <Link
       href={`/user/${session.user.id}`}
-      className="flex items-center gap-3 rounded-xl px-3 py-2 text-sm hover:bg-accent/60 transition-all"
+      className="flex items-center gap-3 rounded-xl px-3 py-2 text-sm hover:bg-accent/60 transition-[background-color] duration-150 ease-out"
     >
       <Avatar className="h-7 w-7 shrink-0">
         <AvatarImage src={session.user.image || undefined} alt={session.user.name || ""} />
@@ -293,7 +293,7 @@ export function Sidebar({ collapsed, onToggle, overlay = false }: SidebarProps) 
       
       <aside
         className={cn(
-          "fixed left-0 top-14 z-40 h-[calc(100vh-3.5rem)] bg-background transition-all duration-200 ease-in-out",
+          "fixed left-0 top-14 z-40 h-[calc(100vh-3.5rem)] bg-background transition-[width,opacity] duration-200 ease-[cubic-bezier(0.16,1,0.3,1)]",
           "hidden md:flex md:flex-col",
           overlay 
             ? collapsed ? "w-[240px] -translate-x-full" : "w-[240px] translate-x-0"
@@ -430,7 +430,7 @@ function NavGroupMobile({
             href={item.href}
             onClick={onClick}
             className={cn(
-              "flex items-center gap-5 rounded-xl px-3 py-2 text-sm transition-all",
+              "flex items-center gap-5 rounded-xl px-3 py-2 text-sm transition-[background-color] duration-150 ease-out",
               "hover:bg-accent/60",
               isActive
                 ? "bg-accent font-semibold"

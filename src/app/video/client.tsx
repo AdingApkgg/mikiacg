@@ -353,7 +353,7 @@ export default function VideoListClient({ initialTags, initialVideos, siteConfig
                                     {video ? (
                                       // eslint-disable-next-line @next/next/no-img-element
                                       <img
-                                        src={getCoverUrl(video.id, video.coverUrl)}
+                                        src={getCoverUrl(video.id, video.coverUrl, { w: 250 })}
                                         alt={video.title}
                                         className="w-full h-full object-cover"
                                       />

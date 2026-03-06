@@ -727,7 +727,7 @@ export default function DashboardGamesPage() {
                         {game.coverUrl ? (
                           // eslint-disable-next-line @next/next/no-img-element
                           <img
-                            src={game.coverUrl.startsWith("/uploads/") ? game.coverUrl : `/api/cover/${encodeURIComponent(game.coverUrl)}`}
+                            src={`/api/cover/${encodeURIComponent(game.coverUrl)}?w=200&h=260&q=60`}
                             alt={game.title}
                             className="w-full h-full object-cover"
                           />

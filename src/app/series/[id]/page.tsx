@@ -140,7 +140,7 @@ export default function SeriesPage() {
                   <div className="relative aspect-video bg-muted">
                     {/* eslint-disable-next-line @next/next/no-img-element */}
                     <img
-                      src={getCoverUrl(episode.video.id, episode.video.coverUrl)}
+                      src={getCoverUrl(episode.video.id, episode.video.coverUrl, { w: 400 })}
                       alt={episode.video.title}
                       className="w-full h-full object-cover"
                     />

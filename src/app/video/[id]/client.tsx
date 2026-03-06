@@ -202,16 +202,23 @@ export function VideoPageClient({ id: initialId, initialVideo }: VideoPageClient
       const vid = vars.videoId;
       await utils.video.getInteractionStatus.cancel({ videoId: vid });
       const prev = utils.video.getInteractionStatus.getData({ videoId: vid });
+      const willLike = !prev?.liked;
       utils.video.getInteractionStatus.setData({ videoId: vid }, () => ({
-        liked: !prev?.liked,
-        disliked: prev?.disliked ?? false,
-        confused: prev?.confused ?? false,
+        liked: willLike,
+        disliked: false,
+        confused: false,
         favorited: prev?.favorited ?? false,
       }));
       const prevVideo = utils.video.getById.getData({ id: vid });
       if (prevVideo?._count) {
-        const delta = prev?.liked ? -1 : 1;
-        utils.video.getById.setData({ id: vid }, (old) => old ? { ...old, _count: { ...old._count, likes: Math.max(0, (old._count?.likes ?? 0) + delta) } } : old);
+        utils.video.getById.setData({ id: vid }, (old) => {
+          if (!old) return old;
+          const counts = { ...old._count };
+          counts.likes = Math.max(0, (counts.likes ?? 0) + (willLike ? 1 : -1));
+          if (willLike && prev?.disliked) counts.dislikes = Math.max(0, (counts.dislikes ?? 0) - 1);
+          if (willLike && prev?.confused) counts.confused = Math.max(0, (counts.confused ?? 0) - 1);
+          return { ...old, _count: counts };
+        });
       }
       return { prev };
     },
@@ -226,16 +233,23 @@ export function VideoPageClient({ id: initialId, initialVideo }: VideoPageClient
       const vid = vars.videoId;
       await utils.video.getInteractionStatus.cancel({ videoId: vid });
       const prev = utils.video.getInteractionStatus.getData({ videoId: vid });
+      const willDislike = !prev?.disliked;
       utils.video.getInteractionStatus.setData({ videoId: vid }, () => ({
-        liked: prev?.liked ?? false,
-        disliked: !prev?.disliked,
-        confused: prev?.confused ?? false,
+        liked: false,
+        disliked: willDislike,
+        confused: false,
         favorited: prev?.favorited ?? false,
       }));
       const prevVideo = utils.video.getById.getData({ id: vid });
       if (prevVideo?._count) {
-        const delta = prev?.disliked ? -1 : 1;
-        utils.video.getById.setData({ id: vid }, (old) => old ? { ...old, _count: { ...old._count, dislikes: Math.max(0, (old._count?.dislikes ?? 0) + delta) } } : old);
+        utils.video.getById.setData({ id: vid }, (old) => {
+          if (!old) return old;
+          const counts = { ...old._count };
+          counts.dislikes = Math.max(0, (counts.dislikes ?? 0) + (willDislike ? 1 : -1));
+          if (willDislike && prev?.liked) counts.likes = Math.max(0, (counts.likes ?? 0) - 1);
+          if (willDislike && prev?.confused) counts.confused = Math.max(0, (counts.confused ?? 0) - 1);
+          return { ...old, _count: counts };
+        });
       }
       return { prev };
     },
@@ -249,16 +263,23 @@ export function VideoPageClient({ id: initialId, initialVideo }: VideoPageClient
       const vid = vars.videoId;
       await utils.video.getInteractionStatus.cancel({ videoId: vid });
       const prev = utils.video.getInteractionStatus.getData({ videoId: vid });
+      const willConfuse = !prev?.confused;
       utils.video.getInteractionStatus.setData({ videoId: vid }, () => ({
-        liked: prev?.liked ?? false,
-        disliked: prev?.disliked ?? false,
-        confused: !prev?.confused,
+        liked: false,
+        disliked: false,
+        confused: willConfuse,
         favorited: prev?.favorited ?? false,
       }));
       const prevVideo = utils.video.getById.getData({ id: vid });
       if (prevVideo?._count) {
-        const delta = prev?.confused ? -1 : 1;
-        utils.video.getById.setData({ id: vid }, (old) => old ? { ...old, _count: { ...old._count, confused: Math.max(0, (old._count?.confused ?? 0) + delta) } } : old);
+        utils.video.getById.setData({ id: vid }, (old) => {
+          if (!old) return old;
+          const counts = { ...old._count };
+          counts.confused = Math.max(0, (counts.confused ?? 0) + (willConfuse ? 1 : -1));
+          if (willConfuse && prev?.liked) counts.likes = Math.max(0, (counts.likes ?? 0) - 1);
+          if (willConfuse && prev?.disliked) counts.dislikes = Math.max(0, (counts.dislikes ?? 0) - 1);
+          return { ...old, _count: counts };
+        });
       }
       return { prev };
     },
@@ -662,7 +683,7 @@ export function VideoPageClient({ id: initialId, initialVideo }: VideoPageClient
                     {seriesEpisodes[currentEpisodeIndex]?.video ? (
                       // eslint-disable-next-line @next/next/no-img-element
                       <img 
-                        src={getCoverUrl(seriesEpisodes[currentEpisodeIndex].video.id, seriesEpisodes[currentEpisodeIndex].video.coverUrl)} 
+                        src={getCoverUrl(seriesEpisodes[currentEpisodeIndex].video.id, seriesEpisodes[currentEpisodeIndex].video.coverUrl, { w: 160 })} 
                         alt="" 
                         className="w-full h-full object-cover" 
                       />
@@ -996,7 +1017,7 @@ export function VideoPageClient({ id: initialId, initialVideo }: VideoPageClient
                         >
                           <div className="relative w-20 h-12 rounded overflow-hidden bg-muted shrink-0">
                             {/* eslint-disable-next-line @next/next/no-img-element */}
-                            <img src={getCoverUrl(ep.video.id, ep.video.coverUrl)} alt="" className="w-full h-full object-cover" />
+                            <img src={getCoverUrl(ep.video.id, ep.video.coverUrl, { w: 200 })} alt="" className="w-full h-full object-cover" />
                             {isCurrentVideo && (
                               <div className="absolute inset-0 bg-black/50 flex items-center justify-center">
                                 <Play className="h-4 w-4 text-white fill-white" />

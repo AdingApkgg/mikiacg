@@ -145,7 +145,7 @@ function ContentRankItem({
       {item.coverUrl && (
         <div className="w-14 h-10 rounded-lg overflow-hidden bg-muted shrink-0 relative">
           {/* eslint-disable-next-line @next/next/no-img-element */}
-          <img src={item.coverUrl} alt="" className="w-full h-full object-cover" />
+          <img src={`/api/cover/${encodeURIComponent(item.coverUrl)}?w=120&h=80&q=50`} alt="" className="w-full h-full object-cover" />
         </div>
       )}
 

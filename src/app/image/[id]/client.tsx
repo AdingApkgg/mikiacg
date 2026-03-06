@@ -16,9 +16,11 @@ import { cn } from "@/lib/utils";
 import { ImagePostCommentSection } from "@/components/comment/image-post-comment-section";
 import type { SerializedImagePost } from "./page";
 
-function getImageProxyUrl(url: string): string {
-  if (url.startsWith("/uploads/")) return url;
-  return `/api/cover/${encodeURIComponent(url)}`;
+function getImageProxyUrl(url: string, thumb?: { w: number; q?: number }): string {
+  if (!thumb && url.startsWith("/uploads/")) return url;
+  const base = `/api/cover/${encodeURIComponent(url)}`;
+  if (!thumb) return base;
+  return `${base}?w=${thumb.w}&h=${thumb.w}&q=${thumb.q ?? 60}`;
 }
 
 interface ImageDetailClientProps {
@@ -281,7 +283,7 @@ export function ImageDetailClient({ post }: ImageDetailClientProps) {
               >
                 {/* eslint-disable-next-line @next/next/no-img-element */}
                 <img
-                  src={getImageProxyUrl(url)}
+                  src={getImageProxyUrl(url, { w: 400, q: 70 })}
                   alt={`${post.title} - ${index + 1}`}
                   className="w-full h-full object-cover transition-transform duration-300 group-hover:scale-105"
                   loading="lazy"

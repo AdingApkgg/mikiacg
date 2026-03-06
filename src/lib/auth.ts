@@ -99,6 +99,20 @@ function createAuthInstance(oauthConfig: OAuthConfig, siteUrl?: string) {
       },
     },
     socialProviders: buildSocialProviders(oauthConfig),
+    databaseHooks: {
+      user: {
+        create: {
+          before: async (user) => {
+            if (!user.username) {
+              const prefix = (user.email?.split("@")[0] || "user").replace(/[^a-zA-Z0-9_]/g, "_").slice(0, 14);
+              const suffix = Math.random().toString(36).slice(2, 6);
+              return { data: { ...user, username: `${prefix}_${suffix}` } };
+            }
+            return { data: user };
+          },
+        },
+      },
+    },
     plugins: [
       username({
         minUsernameLength: 1,
@@ -173,6 +187,7 @@ function createAuthInstance(oauthConfig: OAuthConfig, siteUrl?: string) {
         accountId: "providerAccountId",
         accessToken: "access_token",
         refreshToken: "refresh_token",
+        idToken: "id_token",
       },
       accountLinking: {
         enabled: true,

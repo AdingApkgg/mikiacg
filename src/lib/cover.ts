@@ -4,20 +4,32 @@
 
 const BASE_URL = process.env.NEXT_PUBLIC_APP_URL || "http://localhost:3000";
 
+export interface CoverThumb {
+  w: number;
+  q?: number;
+}
+
+function appendThumbParams(url: string, thumb?: CoverThumb): string {
+  if (!thumb) return url;
+  return `${url}${url.includes("?") ? "&" : "?"}w=${thumb.w}&h=${thumb.w}&q=${thumb.q ?? 60}`;
+}
+
 /**
  * 获取视频封面 URL（相对路径，用于前端组件）
  * 如果有 coverUrl 则返回缓存代理 URL，否则返回自动生成的封面 URL
+ * 可选 thumb 参数用于请求缩略图
  */
-export function getCoverUrl(videoId: string, coverUrl?: string | null): string {
+export function getCoverUrl(videoId: string, coverUrl?: string | null, thumb?: CoverThumb): string {
   if (coverUrl) {
-    // 本地路径直接访问，外部 URL 走代理
     if (coverUrl.startsWith("/uploads/")) {
+      if (thumb) {
+        return appendThumbParams(`/api/cover/${encodeURIComponent(coverUrl)}`, thumb);
+      }
       return coverUrl;
     }
-    return `/api/cover/${encodeURIComponent(coverUrl)}`;
+    return appendThumbParams(`/api/cover/${encodeURIComponent(coverUrl)}`, thumb);
   }
-  // 自动从视频生成封面
-  return `/api/cover/video/${videoId}`;
+  return appendThumbParams(`/api/cover/video/${videoId}`, thumb);
 }
 
 /**
@@ -25,16 +37,13 @@ export function getCoverUrl(videoId: string, coverUrl?: string | null): string {
  */
 export function getCoverFullUrl(videoId: string, coverUrl?: string | null): string {
   if (coverUrl) {
-    // 本地路径需要拼接完整 URL
     if (coverUrl.startsWith("/")) {
       return `${BASE_URL}${coverUrl}`;
     }
-    // 已经是完整 URL
     if (coverUrl.startsWith("http")) {
       return coverUrl;
     }
   }
-  // 使用 API 生成的封面
   return `${BASE_URL}/api/cover/video/${videoId}`;
 }
 

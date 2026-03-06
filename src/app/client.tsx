@@ -100,7 +100,7 @@ export default function LandingClient() {
               "border border-purple-500/20 dark:border-purple-400/15",
               "hover:border-purple-500/50 dark:hover:border-purple-400/40",
               "hover:shadow-[0_0_40px_-8px] hover:shadow-purple-500/25",
-              "transition-all duration-500 ease-out",
+              "transition-[transform,border-color,box-shadow] duration-500 ease-[cubic-bezier(0.16,1,0.3,1)]",
               "hover:-translate-y-2 hover:scale-[1.02]",
               "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-purple-500 focus-visible:ring-offset-2"
             )}
@@ -109,11 +109,11 @@ export default function LandingClient() {
               "relative flex h-20 w-20 items-center justify-center rounded-2xl",
               "bg-gradient-to-br from-blue-500/20 via-purple-500/15 to-violet-500/20",
               "text-purple-500 dark:text-purple-400",
-              "transition-all duration-500 group-hover:scale-110",
+              "transition-[transform,box-shadow] duration-500 ease-[cubic-bezier(0.16,1,0.3,1)] group-hover:scale-110",
               "group-hover:shadow-[0_0_30px_-5px] group-hover:shadow-purple-500/30"
             )}>
-              <Play className="h-10 w-10 transition-transform duration-300 group-hover:scale-110" />
-              <Sparkles className="absolute -top-2 -right-2 h-4 w-4 text-purple-400 opacity-0 transition-all duration-300 group-hover:opacity-100 group-hover:-translate-y-1" />
+              <Play className="h-10 w-10 transition-transform duration-300 ease-out group-hover:scale-110" />
+              <Sparkles className="absolute -top-2 -right-2 h-4 w-4 text-purple-400 opacity-0 transition-[opacity,transform] duration-300 ease-out group-hover:opacity-100 group-hover:-translate-y-1" />
             </div>
             <div className="space-y-1.5">
               <h2 className="text-xl font-semibold transition-colors group-hover:text-purple-500 dark:group-hover:text-purple-400">
@@ -137,7 +137,7 @@ export default function LandingClient() {
               "border border-pink-500/20 dark:border-pink-400/15",
               "hover:border-pink-500/50 dark:hover:border-pink-400/40",
               "hover:shadow-[0_0_40px_-8px] hover:shadow-pink-500/25",
-              "transition-all duration-500 ease-out",
+              "transition-[transform,border-color,box-shadow] duration-500 ease-[cubic-bezier(0.16,1,0.3,1)]",
               "hover:-translate-y-2 hover:scale-[1.02]",
               "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-pink-500 focus-visible:ring-offset-2"
             )}
@@ -146,11 +146,11 @@ export default function LandingClient() {
               "relative flex h-20 w-20 items-center justify-center rounded-2xl",
               "bg-gradient-to-br from-rose-500/20 via-pink-500/15 to-fuchsia-500/20",
               "text-pink-500 dark:text-pink-400",
-              "transition-all duration-500 group-hover:scale-110",
+              "transition-[transform,box-shadow] duration-500 ease-[cubic-bezier(0.16,1,0.3,1)] group-hover:scale-110",
               "group-hover:shadow-[0_0_30px_-5px] group-hover:shadow-pink-500/30"
             )}>
-              <ImageIcon className="h-10 w-10 transition-transform duration-300 group-hover:scale-110" />
-              <Palette className="absolute -top-2 -right-2 h-4 w-4 text-pink-400 opacity-0 transition-all duration-300 group-hover:opacity-100 group-hover:-translate-y-1" />
+              <ImageIcon className="h-10 w-10 transition-transform duration-300 ease-out group-hover:scale-110" />
+              <Palette className="absolute -top-2 -right-2 h-4 w-4 text-pink-400 opacity-0 transition-[opacity,transform] duration-300 ease-out group-hover:opacity-100 group-hover:-translate-y-1" />
             </div>
             <div className="space-y-1.5">
               <h2 className="text-xl font-semibold transition-colors group-hover:text-pink-500 dark:group-hover:text-pink-400">
@@ -174,7 +174,7 @@ export default function LandingClient() {
               "border border-emerald-500/20 dark:border-emerald-400/15",
               "hover:border-emerald-500/50 dark:hover:border-emerald-400/40",
               "hover:shadow-[0_0_40px_-8px] hover:shadow-emerald-500/25",
-              "transition-all duration-500 ease-out",
+              "transition-[transform,border-color,box-shadow] duration-500 ease-[cubic-bezier(0.16,1,0.3,1)]",
               "hover:-translate-y-2 hover:scale-[1.02]",
               "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-500 focus-visible:ring-offset-2"
             )}
@@ -183,11 +183,11 @@ export default function LandingClient() {
               "relative flex h-20 w-20 items-center justify-center rounded-2xl",
               "bg-gradient-to-br from-green-500/20 via-emerald-500/15 to-teal-500/20",
               "text-emerald-500 dark:text-emerald-400",
-              "transition-all duration-500 group-hover:scale-110",
+              "transition-[transform,box-shadow] duration-500 ease-[cubic-bezier(0.16,1,0.3,1)] group-hover:scale-110",
               "group-hover:shadow-[0_0_30px_-5px] group-hover:shadow-emerald-500/30"
             )}>
-              <Gamepad2 className="h-10 w-10 transition-transform duration-300 group-hover:scale-110" />
-              <Zap className="absolute -top-2 -right-2 h-4 w-4 text-emerald-400 opacity-0 transition-all duration-300 group-hover:opacity-100 group-hover:-translate-y-1" />
+              <Gamepad2 className="h-10 w-10 transition-transform duration-300 ease-out group-hover:scale-110" />
+              <Zap className="absolute -top-2 -right-2 h-4 w-4 text-emerald-400 opacity-0 transition-[opacity,transform] duration-300 ease-out group-hover:opacity-100 group-hover:-translate-y-1" />
             </div>
             <div className="space-y-1.5">
               <h2 className="text-xl font-semibold transition-colors group-hover:text-emerald-500 dark:group-hover:text-emerald-400">

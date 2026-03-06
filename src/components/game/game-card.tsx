@@ -56,16 +56,15 @@ interface GameCardProps {
 
 function GameCoverImage({ coverUrl, title }: { coverUrl?: string | null; title: string }) {
   if (coverUrl) {
-    const src = coverUrl.startsWith("/uploads/")
-      ? coverUrl
-      : `/api/cover/${encodeURIComponent(coverUrl)}`;
+    const proxyBase = `/api/cover/${encodeURIComponent(coverUrl)}`;
+    const src = `${proxyBase}?w=480&h=270&q=60`;
 
     return (
       <Image
         src={src}
         alt={title}
         fill
-        className="object-cover transition-transform duration-500 ease-out group-hover:scale-105"
+        className="object-cover transition-transform duration-500 ease-[cubic-bezier(0.16,1,0.3,1)] will-change-transform group-hover:scale-105"
         sizes="(max-width: 640px) 50vw, (max-width: 1024px) 33vw, 25vw"
         unoptimized
       />
@@ -108,14 +107,14 @@ function GameCardComponent({ game, index = 0 }: GameCardProps) {
       onMouseEnter={() => play("hover")}
     >
       <Link href={`/game/${game.id}`} className="block">
-        <div className="relative aspect-video overflow-hidden rounded-lg bg-muted shadow-sm group-hover:shadow-xl transition-shadow duration-300">
+        <div className="relative aspect-video overflow-hidden rounded-lg bg-muted shadow-sm group-hover:shadow-xl transition-shadow duration-300 ease-out">
           <GameCoverImage coverUrl={game.coverUrl} title={game.title} />
 
           <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-black/20 to-transparent" />
 
           {/* Hover icon */}
-          <div className="absolute inset-0 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-all duration-300">
-            <div className="bg-white/90 dark:bg-black/80 backdrop-blur-md rounded-full p-3 shadow-2xl transition-transform duration-200 group-hover:scale-110 active:scale-95">
+          <div className="absolute inset-0 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity duration-250 ease-out">
+            <div className="bg-white/90 dark:bg-black/80 backdrop-blur-md rounded-full p-3 shadow-2xl scale-90 group-hover:scale-100 transition-transform duration-250 ease-[cubic-bezier(0.16,1,0.3,1)] active:scale-95">
               <Gamepad2 className="h-5 w-5 text-primary" />
             </div>
           </div>
@@ -162,7 +161,7 @@ function GameCardComponent({ game, index = 0 }: GameCardProps) {
         </div>
 
         <div className="mt-2 px-0.5 space-y-0.5">
-          <h3 className="font-medium line-clamp-2 text-xs sm:text-sm leading-snug group-hover:text-primary transition-colors duration-200">
+          <h3 className="font-medium line-clamp-2 text-xs sm:text-sm leading-snug group-hover:text-primary transition-colors duration-200 ease-out">
             {game.title}
           </h3>
           <p className="text-[10px] sm:text-xs text-muted-foreground truncate">

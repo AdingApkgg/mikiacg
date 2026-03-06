@@ -108,7 +108,7 @@ function LoginForm() {
 
   return (
     <div className="container flex items-center justify-center min-h-[calc(100vh-200px)] py-8">
-      <div className="w-full max-w-md animate-in fade-in slide-in-from-bottom-4 duration-500">
+      <div className="w-full max-w-md animate-in fade-in slide-in-from-bottom-3 duration-400 ease-out fill-mode-both">
         <Card>
           <CardHeader className="text-center">
             <div>

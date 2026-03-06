@@ -40,12 +40,19 @@ export function useTilt<T extends HTMLElement>(options: TiltOptions = {}) {
     el.style.transformStyle = "preserve-3d";
     el.style.willChange = "transform";
 
-    const tick = () => {
+    let prevTime = 0;
+
+    const tick = (timestamp: number) => {
+      const dt = prevTime ? Math.min((timestamp - prevTime) / 16.67, 2) : 1;
+      prevTime = timestamp;
+
       const c = current.current;
       const t = target.current;
-      c.rx += (t.rx - c.rx) * 0.12;
-      c.ry += (t.ry - c.ry) * 0.12;
-      c.s += (t.s - c.s) * 0.12;
+
+      const lerpFactor = 1 - Math.pow(0.85, dt);
+      c.rx += (t.rx - c.rx) * lerpFactor;
+      c.ry += (t.ry - c.ry) * lerpFactor;
+      c.s += (t.s - c.s) * lerpFactor;
 
       el.style.transform = `perspective(${perspective}px) rotateX(${c.rx}deg) rotateY(${c.ry}deg) scale3d(${c.s},${c.s},${c.s})`;
 
@@ -56,6 +63,8 @@ export function useTilt<T extends HTMLElement>(options: TiltOptions = {}) {
 
       if (hovering.current || stillMoving) {
         raf.current = requestAnimationFrame(tick);
+      } else {
+        prevTime = 0;
       }
     };
 
@@ -78,6 +87,7 @@ export function useTilt<T extends HTMLElement>(options: TiltOptions = {}) {
 
     const onEnter = () => {
       hovering.current = true;
+      prevTime = 0;
       raf.current = requestAnimationFrame(tick);
     };
 
@@ -89,9 +99,9 @@ export function useTilt<T extends HTMLElement>(options: TiltOptions = {}) {
       }
     };
 
-    el.addEventListener("mousemove", onMove);
-    el.addEventListener("mouseenter", onEnter);
-    el.addEventListener("mouseleave", onLeave);
+    el.addEventListener("mousemove", onMove, { passive: true });
+    el.addEventListener("mouseenter", onEnter, { passive: true });
+    el.addEventListener("mouseleave", onLeave, { passive: true });
 
     return () => {
       cancelAnimationFrame(raf.current);

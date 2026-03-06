@@ -1136,6 +1136,7 @@ export const videoRouter = router({
         await ctx.prisma.like.delete({
           where: { id: existing.id },
         });
+        await deleteCache(`video:${input.videoId}`);
         return { liked: false };
       }
 
@@ -1156,6 +1157,7 @@ export const videoRouter = router({
         },
       });
 
+      await deleteCache(`video:${input.videoId}`);
       const pointsAwarded = await awardPoints(ctx.session.user.id, "LIKE_VIDEO", undefined, input.videoId, { firstTimeOnly: true });
       return { liked: true, pointsAwarded };
     }),
@@ -1177,6 +1179,7 @@ export const videoRouter = router({
         await ctx.prisma.dislike.delete({
           where: { id: existing.id },
         });
+        await deleteCache(`video:${input.videoId}`);
         return { disliked: false };
       }
 
@@ -1197,6 +1200,7 @@ export const videoRouter = router({
         },
       });
 
+      await deleteCache(`video:${input.videoId}`);
       return { disliked: true };
     }),
 
@@ -1217,6 +1221,7 @@ export const videoRouter = router({
         await ctx.prisma.confused.delete({
           where: { id: existing.id },
         });
+        await deleteCache(`video:${input.videoId}`);
         return { confused: false };
       }
 
@@ -1237,6 +1242,7 @@ export const videoRouter = router({
         },
       });
 
+      await deleteCache(`video:${input.videoId}`);
       return { confused: true };
     }),
 
@@ -1257,6 +1263,7 @@ export const videoRouter = router({
         await ctx.prisma.favorite.delete({
           where: { id: existing.id },
         });
+        await deleteCache(`video:${input.videoId}`);
         return { favorited: false };
       }
 
@@ -1267,6 +1274,7 @@ export const videoRouter = router({
         },
       });
 
+      await deleteCache(`video:${input.videoId}`);
       const pointsAwarded = await awardPoints(ctx.session.user.id, "FAVORITE_VIDEO", undefined, input.videoId, { firstTimeOnly: true });
       return { favorited: true, pointsAwarded };
     }),

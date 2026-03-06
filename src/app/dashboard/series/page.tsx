@@ -387,9 +387,9 @@ export default function AdminSeriesPage() {
               const isExpanded = expandedIds.has(series.id);
               const firstEpisodeCover = series.episodes?.[0]?.video;
               const coverSrc = series.coverUrl
-                ? getCoverUrl("", series.coverUrl)
+                ? getCoverUrl("", series.coverUrl, { w: 260 })
                 : firstEpisodeCover
-                ? getCoverUrl(firstEpisodeCover.id, firstEpisodeCover.coverUrl)
+                ? getCoverUrl(firstEpisodeCover.id, firstEpisodeCover.coverUrl, { w: 260 })
                 : null;
 
               return (
@@ -586,7 +586,7 @@ export default function AdminSeriesPage() {
                                   >
                                     <div className="relative w-16 h-10 rounded bg-muted overflow-hidden shrink-0">
                                       <Image
-                                        src={getCoverUrl(ep.video.id, ep.video.coverUrl)}
+                                        src={getCoverUrl(ep.video.id, ep.video.coverUrl, { w: 160 })}
                                         alt={ep.video.title}
                                         fill
                                         className="object-cover"
