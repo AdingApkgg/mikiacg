@@ -921,6 +921,11 @@ model SiteConfig {
   contactEmail    String?
   socialLinks     Json?    // { github?: string, twitter?: string, discord?: string, ... }
   
+  // 法律与信息页面（Markdown）
+  privacyPolicy   String?  @db.Text  // 隐私政策
+  termsOfService  String?  @db.Text  // 服务条款
+  aboutPage       String?  @db.Text  // 关于我们
+
   // 页脚
   footerText      String?  @db.Text  // 自定义页脚文本
   footerLinks     Json?    // [{ label: string, url: string }]

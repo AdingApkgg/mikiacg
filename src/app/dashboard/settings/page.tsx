@@ -57,6 +57,7 @@ import {
   ShieldCheck,
   TriangleAlert,
   Copy,
+  ScrollText,
 } from "lucide-react";
 import { toast } from "@/lib/toast-with-sound";
 import {
@@ -105,6 +106,11 @@ const configFormSchema = z.object({
   // 联系方式
   contactEmail: z.string().email("请输入有效的邮箱").optional().nullable().or(z.literal("")),
   
+  // 法律与信息页面
+  privacyPolicy: z.string().max(50000).optional().nullable(),
+  termsOfService: z.string().max(50000).optional().nullable(),
+  aboutPage: z.string().max(50000).optional().nullable(),
+
   // 页脚
   footerText: z.string().max(1000).optional().nullable(),
   
@@ -626,6 +632,9 @@ export default function AdminSettingsPage() {
       maxUploadSize: 500,
       allowedVideoFormats: "mp4,webm,m3u8",
       contactEmail: "",
+      privacyPolicy: "",
+      termsOfService: "",
+      aboutPage: "",
       footerText: "",
       icpBeian: "",
       publicSecurityBeian: "",
@@ -713,6 +722,9 @@ export default function AdminSettingsPage() {
         maxUploadSize: config.maxUploadSize,
         allowedVideoFormats: config.allowedVideoFormats,
         contactEmail: config.contactEmail || "",
+        privacyPolicy: ((config as Record<string, unknown>).privacyPolicy as string) || "",
+        termsOfService: ((config as Record<string, unknown>).termsOfService as string) || "",
+        aboutPage: ((config as Record<string, unknown>).aboutPage as string) || "",
         footerText: config.footerText || "",
         icpBeian: config.icpBeian || "",
         publicSecurityBeian: config.publicSecurityBeian || "",
@@ -894,54 +906,70 @@ export default function AdminSettingsPage() {
       </AlertDialog>
 
       <Tabs defaultValue="basic" className="space-y-4">
-        <TabsList className="grid w-full grid-cols-6 sm:grid-cols-12 lg:w-auto lg:inline-grid">
-          <TabsTrigger value="basic" className="gap-2">
+        <TabsList className="h-auto flex flex-wrap gap-1 p-1">
+          <TabsTrigger value="basic" className="gap-1.5">
             <Info className="h-4 w-4" />
             <span className="hidden sm:inline">基本信息</span>
           </TabsTrigger>
-          <TabsTrigger value="features" className="gap-2">
+          <TabsTrigger value="features" className="gap-1.5">
             <ToggleLeft className="h-4 w-4" />
             <span className="hidden sm:inline">功能开关</span>
           </TabsTrigger>
-          <TabsTrigger value="captcha" className="gap-2">
-            <ShieldCheck className="h-4 w-4" />
-            <span className="hidden sm:inline">验证码</span>
-          </TabsTrigger>
-          <TabsTrigger value="theme" className="gap-2">
-            <Palette className="h-4 w-4" />
-            <span className="hidden sm:inline">个性化样式</span>
-          </TabsTrigger>
-          <TabsTrigger value="effects" className="gap-2">
-            <Sparkles className="h-4 w-4" />
-            <span className="hidden sm:inline">视觉效果</span>
-          </TabsTrigger>
-          <TabsTrigger value="content" className="gap-2">
+          <TabsTrigger value="content" className="gap-1.5">
             <FileText className="h-4 w-4" />
             <span className="hidden sm:inline">内容设置</span>
           </TabsTrigger>
-          <TabsTrigger value="email" className="gap-2">
-            <Mail className="h-4 w-4" />
-            <span className="hidden sm:inline">邮件</span>
+
+          <div className="hidden sm:block w-px h-5 bg-border mx-0.5 self-center" />
+
+          <TabsTrigger value="theme" className="gap-1.5">
+            <Palette className="h-4 w-4" />
+            <span className="hidden sm:inline">样式</span>
           </TabsTrigger>
-          <TabsTrigger value="storage" className="gap-2">
-            <HardDrive className="h-4 w-4" />
-            <span className="hidden sm:inline">对象存储</span>
+          <TabsTrigger value="effects" className="gap-1.5">
+            <Sparkles className="h-4 w-4" />
+            <span className="hidden sm:inline">视觉效果</span>
           </TabsTrigger>
-          <TabsTrigger value="footer" className="gap-2">
+
+          <div className="hidden sm:block w-px h-5 bg-border mx-0.5 self-center" />
+
+          <TabsTrigger value="pages" className="gap-1.5">
+            <ScrollText className="h-4 w-4" />
+            <span className="hidden sm:inline">页面</span>
+          </TabsTrigger>
+          <TabsTrigger value="footer" className="gap-1.5">
             <Link2 className="h-4 w-4" />
-            <span className="hidden sm:inline">页脚备案</span>
+            <span className="hidden sm:inline">页脚</span>
           </TabsTrigger>
-          <TabsTrigger value="ads" className="gap-2">
+          <TabsTrigger value="ads" className="gap-1.5">
             <Megaphone className="h-4 w-4" />
             <span className="hidden sm:inline">广告</span>
           </TabsTrigger>
-          <TabsTrigger value="seo" className="gap-2">
+
+          <div className="hidden sm:block w-px h-5 bg-border mx-0.5 self-center" />
+
+          <TabsTrigger value="captcha" className="gap-1.5">
+            <ShieldCheck className="h-4 w-4" />
+            <span className="hidden sm:inline">验证码</span>
+          </TabsTrigger>
+          <TabsTrigger value="oauth" className="gap-1.5">
+            <KeyRound className="h-4 w-4" />
+            <span className="hidden sm:inline">登录</span>
+          </TabsTrigger>
+          <TabsTrigger value="email" className="gap-1.5">
+            <Mail className="h-4 w-4" />
+            <span className="hidden sm:inline">邮件</span>
+          </TabsTrigger>
+
+          <div className="hidden sm:block w-px h-5 bg-border mx-0.5 self-center" />
+
+          <TabsTrigger value="storage" className="gap-1.5">
+            <HardDrive className="h-4 w-4" />
+            <span className="hidden sm:inline">存储</span>
+          </TabsTrigger>
+          <TabsTrigger value="seo" className="gap-1.5">
             <Search className="h-4 w-4" />
             <span className="hidden sm:inline">SEO</span>
-          </TabsTrigger>
-          <TabsTrigger value="oauth" className="gap-2">
-            <KeyRound className="h-4 w-4" />
-            <span className="hidden sm:inline">社交登录</span>
           </TabsTrigger>
         </TabsList>
 
@@ -2316,6 +2344,92 @@ export default function AdminSettingsPage() {
                       />
                     </div>
                   )}
+
+                  <Button type="submit" disabled={updateConfig.isPending}>
+                    {updateConfig.isPending ? (
+                      <Loader2 className="h-4 w-4 animate-spin mr-2" />
+                    ) : (
+                      <Save className="h-4 w-4 mr-2" />
+                    )}
+                    保存设置
+                  </Button>
+                </CardContent>
+              </Card>
+            </TabsContent>
+
+            {/* 页面内容 */}
+            <TabsContent value="pages" forceMount className="data-[state=inactive]:hidden">
+              <Card>
+                <CardHeader>
+                  <CardTitle className="flex items-center gap-2">
+                    <FileText className="h-5 w-5" />
+                    页面内容管理
+                  </CardTitle>
+                  <CardDescription>编辑隐私政策、服务条款、关于我们等页面内容，支持 MDX 格式（Markdown + JSX）。配置后将自动在页脚显示对应链接。</CardDescription>
+                </CardHeader>
+                <CardContent className="space-y-6">
+                  <FormField
+                    control={form.control}
+                    name="privacyPolicy"
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormLabel>隐私政策</FormLabel>
+                        <FormControl>
+                          <Textarea
+                            {...field}
+                            value={field.value || ""}
+                            placeholder={"# 隐私政策\n\n本网站非常重视用户的隐私保护...\n\n## 信息收集\n\n支持 MDX 格式（Markdown + JSX）"}
+                            rows={12}
+                            className="font-mono text-sm"
+                          />
+                        </FormControl>
+                        <FormDescription>留空则不显示隐私政策页面。访问路径：/privacy</FormDescription>
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
+
+                  <FormField
+                    control={form.control}
+                    name="termsOfService"
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormLabel>服务条款</FormLabel>
+                        <FormControl>
+                          <Textarea
+                            {...field}
+                            value={field.value || ""}
+                            placeholder={"# 服务条款\n\n欢迎使用本网站提供的服务...\n\n## 使用规则\n\n支持 MDX 格式（Markdown + JSX）"}
+                            rows={12}
+                            className="font-mono text-sm"
+                          />
+                        </FormControl>
+                        <FormDescription>留空则不显示服务条款页面。访问路径：/terms</FormDescription>
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
+
+                  <FormField
+                    control={form.control}
+                    name="aboutPage"
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormLabel>关于我们</FormLabel>
+                        <FormControl>
+                          <Textarea
+                            {...field}
+                            value={field.value || ""}
+                            placeholder={"# 关于我们\n\n本站是一个 ACGN 内容分享平台...\n\n## 联系方式\n\n支持 MDX 格式（Markdown + JSX）"}
+                            rows={12}
+                            className="font-mono text-sm"
+                          />
+                        </FormControl>
+                        <FormDescription>留空则不显示关于页面。访问路径：/about</FormDescription>
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
 
                   <Button type="submit" disabled={updateConfig.isPending}>
                     {updateConfig.isPending ? (

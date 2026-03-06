@@ -39,7 +39,22 @@ export function Footer() {
               </a>
             )}
           </div>
-          <div className="flex items-center gap-4">
+          <div className="flex items-center gap-4 flex-wrap justify-center sm:justify-end">
+            {config?.privacyPolicy && (
+              <Link href="/privacy" className="hover:text-foreground transition-colors">
+                隐私政策
+              </Link>
+            )}
+            {config?.termsOfService && (
+              <Link href="/terms" className="hover:text-foreground transition-colors">
+                服务条款
+              </Link>
+            )}
+            {config?.aboutPage && (
+              <Link href="/about" className="hover:text-foreground transition-colors">
+                关于
+              </Link>
+            )}
             <Link href="/links" className="hover:text-foreground transition-colors">
               友链
             </Link>

@@ -22,6 +22,9 @@ export interface PublicSiteConfig {
   requireLoginToComment: boolean;
   contactEmail: string | null;
   socialLinks: Record<string, string> | null;
+  privacyPolicy: string | null;
+  termsOfService: string | null;
+  aboutPage: string | null;
   footerText: string | null;
   footerLinks: Array<{ label: string; url: string }> | null;
   icpBeian: string | null;
@@ -70,6 +73,9 @@ const selectFields = {
   requireLoginToComment: true,
   contactEmail: true,
   socialLinks: true,
+  privacyPolicy: true,
+  termsOfService: true,
+  aboutPage: true,
   footerText: true,
   footerLinks: true,
   icpBeian: true,
@@ -141,6 +147,9 @@ const defaultConfig: PublicSiteConfig = {
   requireLoginToComment: false,
   contactEmail: null,
   socialLinks: null,
+  privacyPolicy: null,
+  termsOfService: null,
+  aboutPage: null,
   footerText: null,
   footerLinks: null,
   icpBeian: null,

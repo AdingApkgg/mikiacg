@@ -2239,6 +2239,11 @@ export const adminRouter = router({
       contactEmail: z.string().email().optional().nullable().or(z.literal("")),
       socialLinks: z.record(z.string(), z.string()).optional().nullable(),
       
+      // 法律与信息页面
+      privacyPolicy: z.string().max(50000).optional().nullable(),
+      termsOfService: z.string().max(50000).optional().nullable(),
+      aboutPage: z.string().max(50000).optional().nullable(),
+
       // 页脚
       footerText: z.string().max(1000).optional().nullable(),
       footerLinks: z.array(z.object({
@@ -2381,6 +2386,7 @@ export const adminRouter = router({
         "announcement", "announcementEnabled", "allowRegistration", "allowUpload",
         "allowComment", "requireLoginToComment", "requireEmailVerify", "videosPerPage", "commentsPerPage",
         "maxUploadSize", "allowedVideoFormats", "contactEmail", "socialLinks",
+        "privacyPolicy", "termsOfService", "aboutPage",
         "footerText", "footerLinks", "icpBeian", "publicSecurityBeian",
         "adsEnabled", "adGateEnabled", "adGateViewsRequired", "adGateHours", "sponsorAds",
         "captchaLogin", "captchaRegister", "captchaComment", "captchaForgotPassword",
