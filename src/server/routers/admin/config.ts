@@ -35,6 +35,8 @@ const ALLOWED_CONFIG_KEYS = new Set([
   "imageDefaultSort",
   "videoSelectorMode",
   "videoSelectorMaxCount",
+  "videoSelectorSeriesType",
+  "seriesTypes",
   "videosPerPage",
   "commentsPerPage",
   "maxUploadSize",
@@ -293,6 +295,24 @@ export const adminConfigRouter = router({
         // 内容设置
         videoSelectorMode: z.enum(["series", "author", "uploader", "disabled"]).optional(),
         videoSelectorMaxCount: z.number().int().min(10).max(10000).optional(),
+        videoSelectorSeriesType: z.string().max(40).optional().nullable().or(z.literal("")),
+        seriesTypes: z
+          .array(
+            z.object({
+              code: z
+                .string()
+                .min(1)
+                .max(40)
+                .regex(/^[a-z0-9_]+$/, "只允许小写字母、数字和下划线")
+                .refine((v) => v !== "all", 'code 不能是保留字 "all"'),
+              label: z.string().min(1).max(40),
+              color: z.string().max(32).optional().nullable().or(z.literal("")),
+              description: z.string().max(200).optional().nullable().or(z.literal("")),
+            }),
+          )
+          .max(50)
+          .optional()
+          .nullable(),
         videosPerPage: z.number().int().min(5).max(100).optional(),
         commentsPerPage: z.number().int().min(5).max(100).optional(),
         maxUploadSize: z.number().int().min(10).max(10000).optional(),
@@ -786,6 +806,28 @@ export const adminConfigRouter = router({
       }
       if (cleaned.homeLayout != null && typeof cleaned.homeLayout === "object") {
         cleaned.homeLayout = JSON.parse(JSON.stringify(cleaned.homeLayout)) as Prisma.InputJsonValue;
+      }
+      if (Array.isArray(cleaned.seriesTypes)) {
+        // 去重 + 仅保留必要字段
+        const seen = new Set<string>();
+        const list: Array<{ code: string; label: string; color?: string; description?: string }> = [];
+        for (const raw of cleaned.seriesTypes as Array<Record<string, unknown>>) {
+          const code = String(raw.code || "")
+            .trim()
+            .toLowerCase();
+          const label = String(raw.label || "").trim();
+          if (!code || !label || seen.has(code)) continue;
+          seen.add(code);
+          const color = typeof raw.color === "string" && raw.color.trim() ? raw.color.trim() : undefined;
+          const description =
+            typeof raw.description === "string" && raw.description.trim() ? raw.description.trim() : undefined;
+          list.push({ code, label, ...(color ? { color } : {}), ...(description ? { description } : {}) });
+        }
+        cleaned.seriesTypes = JSON.parse(JSON.stringify(list)) as Prisma.InputJsonValue;
+      }
+      // "all" 表示不过滤，存为 null 简化业务侧判断
+      if (cleaned.videoSelectorSeriesType === "all") {
+        cleaned.videoSelectorSeriesType = null;
       }
 
       const config = await ctx.prisma.siteConfig.upsert({

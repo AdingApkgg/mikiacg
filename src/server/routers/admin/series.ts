@@ -2,14 +2,33 @@ import { router, adminProcedure, requireScope } from "../../trpc";
 import { TRPCError } from "@trpc/server";
 import { z } from "zod";
 import { Prisma } from "@/generated/prisma/client";
+import { getPublicSiteConfig } from "@/lib/site-config";
+
+const SERIES_TYPE_CODE = z
+  .string()
+  .min(1)
+  .max(40)
+  .regex(/^[a-z0-9_]+$/)
+  .refine((v) => v !== "all", 'code 不能是保留字 "all"');
 
 export const adminSeriesRouter = router({
   // ==================== 合集管理 ====================
 
   getSeriesStats: adminProcedure.use(requireScope("video:moderate")).query(async ({ ctx }) => {
-    const [total, totalEpisodes] = await Promise.all([ctx.prisma.series.count(), ctx.prisma.seriesEpisode.count()]);
+    const [total, totalEpisodes, byType] = await Promise.all([
+      ctx.prisma.series.count(),
+      ctx.prisma.seriesEpisode.count(),
+      ctx.prisma.series.groupBy({
+        by: ["type"],
+        _count: { _all: true },
+      }),
+    ]);
 
-    return { total, totalEpisodes };
+    return {
+      total,
+      totalEpisodes,
+      byType: byType.map((row) => ({ type: row.type, count: row._count._all })),
+    };
   }),
 
   listAllSeries: adminProcedure
@@ -19,17 +38,28 @@ export const adminSeriesRouter = router({
         page: z.number().min(1).default(1),
         limit: z.number().min(1).max(100).default(50),
         search: z.string().optional(),
+        type: z.string().max(40).optional(),
+        brand: z.string().max(100).optional(),
       }),
     )
     .query(async ({ ctx, input }) => {
-      const { page, limit, search } = input;
+      const { page, limit, search, type, brand } = input;
 
       const where: Prisma.SeriesWhereInput = {};
       if (search) {
         where.OR = [
           { title: { contains: search, mode: "insensitive" } },
           { description: { contains: search, mode: "insensitive" } },
+          { brand: { contains: search, mode: "insensitive" } },
         ];
+      }
+      if (type === "__untyped__") {
+        where.type = null;
+      } else if (type && type !== "all") {
+        where.type = type;
+      }
+      if (brand) {
+        where.brand = brand;
       }
 
       const [series, totalCount] = await Promise.all([
@@ -111,6 +141,8 @@ export const adminSeriesRouter = router({
         coverUrl: z.string().optional().nullable(),
         downloadUrl: z.string().optional().nullable(),
         downloadNote: z.string().max(1000).optional().nullable(),
+        type: SERIES_TYPE_CODE.optional().or(z.literal("")).nullable(),
+        brand: z.string().max(100).optional().nullable().or(z.literal("")),
       }),
     )
     .mutation(async ({ ctx, input }) => {
@@ -129,6 +161,19 @@ export const adminSeriesRouter = router({
       if (data.coverUrl !== undefined) updateData.coverUrl = data.coverUrl || null;
       if (data.downloadUrl !== undefined) updateData.downloadUrl = data.downloadUrl || null;
       if (data.downloadNote !== undefined) updateData.downloadNote = data.downloadNote;
+      if (data.type !== undefined) {
+        const code = data.type || null;
+        if (code) {
+          const cfg = await getPublicSiteConfig();
+          if (!cfg.seriesTypes.some((t) => t.code === code)) {
+            throw new TRPCError({ code: "BAD_REQUEST", message: `未知的合集类型: ${code}` });
+          }
+        }
+        updateData.type = code;
+      }
+      if (data.brand !== undefined) {
+        updateData.brand = data.brand?.trim() || null;
+      }
 
       return ctx.prisma.series.update({
         where: { id },

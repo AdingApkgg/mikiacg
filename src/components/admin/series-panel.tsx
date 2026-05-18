@@ -60,6 +60,7 @@ import { cn } from "@/lib/utils";
 import { TransferOwnerDialog } from "@/components/admin/transfer-owner-dialog";
 import { formatRelativeTime, formatDuration } from "@/lib/format";
 import { useThumb, useVideoCoverThumb } from "@/hooks/use-thumb";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 
 interface SeriesItem {
   id: string;
@@ -68,6 +69,8 @@ interface SeriesItem {
   coverUrl: string | null;
   downloadUrl: string | null;
   downloadNote: string | null;
+  type: string | null;
+  brand: string | null;
   createdAt: Date;
   updatedAt: Date;
   creator: {
@@ -93,6 +96,8 @@ interface EditSeriesData {
   coverUrl: string;
   downloadUrl: string;
   downloadNote: string;
+  type: string;
+  brand: string;
 }
 
 export function SeriesPanel() {
@@ -114,13 +119,17 @@ export function SeriesPanel() {
   const limit = 50;
   const utils = trpc.useUtils();
 
+  const [typeFilter, setTypeFilter] = useState<string>("all");
+
   const { data: permissions } = trpc.admin.getMyPermissions.useQuery();
   const { data: stats } = trpc.admin.getSeriesStats.useQuery(undefined, {
     enabled: permissions?.scopes.includes("video:moderate"),
   });
+  const { data: typesData } = trpc.series.listTypes.useQuery();
+  const seriesTypes = typesData?.types ?? [];
 
   const { data, isLoading, isFetching } = trpc.admin.listAllSeries.useQuery(
-    { page, limit, search: search || undefined },
+    { page, limit, search: search || undefined, type: typeFilter === "all" ? undefined : typeFilter },
     { enabled: permissions?.scopes.includes("video:moderate") },
   );
 
@@ -229,6 +238,8 @@ export function SeriesPanel() {
       coverUrl: series.coverUrl || "",
       downloadUrl: series.downloadUrl || "",
       downloadNote: series.downloadNote || "",
+      type: series.type || "",
+      brand: series.brand || "",
     });
   };
 
@@ -241,6 +252,8 @@ export function SeriesPanel() {
       coverUrl: editData.coverUrl || null,
       downloadUrl: editData.downloadUrl || null,
       downloadNote: editData.downloadNote || null,
+      type: editData.type || null,
+      brand: editData.brand || null,
     });
   };
 
@@ -265,7 +278,7 @@ export function SeriesPanel() {
         </div>
 
         {stats && (
-          <div className="flex items-center gap-4 text-sm">
+          <div className="flex items-center gap-4 text-sm flex-wrap">
             <div className="flex items-center gap-1.5">
               <span className="text-muted-foreground">合集</span>
               <Badge variant="outline">{stats.total}</Badge>
@@ -274,16 +287,34 @@ export function SeriesPanel() {
               <span className="text-muted-foreground">总集数</span>
               <Badge variant="secondary">{stats.totalEpisodes}</Badge>
             </div>
+            {stats.byType && stats.byType.length > 0 && (
+              <div className="flex items-center gap-1.5 flex-wrap">
+                {stats.byType.map((row) => {
+                  const t = seriesTypes.find((x) => x.code === row.type);
+                  const label = row.type === null ? "未分类" : (t?.label ?? row.type);
+                  return (
+                    <Badge
+                      key={row.type ?? "__untyped__"}
+                      variant="outline"
+                      className="text-[10px]"
+                      style={t?.color ? { borderColor: t.color, color: t.color } : undefined}
+                    >
+                      {label} {row.count}
+                    </Badge>
+                  );
+                })}
+              </div>
+            )}
           </div>
         )}
       </div>
 
-      {/* 搜索 */}
+      {/* 搜索 + 类型过滤 */}
       <div className="flex flex-col sm:flex-row gap-3">
         <div className="relative flex-1 sm:max-w-md">
           <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
           <Input
-            placeholder="搜索合集标题或描述..."
+            placeholder="搜索合集标题、描述或品牌..."
             value={searchInput}
             onChange={(e) => {
               setSearchInput(e.target.value);
@@ -295,6 +326,26 @@ export function SeriesPanel() {
             className="pl-10"
           />
         </div>
+        <Select
+          value={typeFilter}
+          onValueChange={(v) => {
+            setTypeFilter(v);
+            setPage(1);
+          }}
+        >
+          <SelectTrigger className="w-full sm:w-56">
+            <SelectValue placeholder="按类型过滤" />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value="all">全部类型</SelectItem>
+            <SelectItem value="__untyped__">未分类</SelectItem>
+            {seriesTypes.map((t) => (
+              <SelectItem key={t.code} value={t.code}>
+                {t.label}
+              </SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
       </div>
 
       {/* 批量操作栏 */}
@@ -408,11 +459,29 @@ export function SeriesPanel() {
                               <span>·</span>
                               <span>{formatRelativeTime(series.updatedAt)}</span>
                             </div>
-                            <div className="flex items-center gap-3 text-xs text-muted-foreground mt-2">
+                            <div className="flex items-center gap-2 text-xs text-muted-foreground mt-2 flex-wrap">
                               <span className="flex items-center gap-1">
                                 <Video className="h-3 w-3" />
                                 {series._count.episodes} 集
                               </span>
+                              {(() => {
+                                const t = seriesTypes.find((x) => x.code === series.type);
+                                if (!t) return null;
+                                return (
+                                  <Badge
+                                    variant="outline"
+                                    className="text-[10px] px-1.5 py-0"
+                                    style={t.color ? { borderColor: t.color, color: t.color } : undefined}
+                                  >
+                                    {t.label}
+                                  </Badge>
+                                );
+                              })()}
+                              {series.brand && (
+                                <Badge variant="secondary" className="text-[10px] px-1.5 py-0">
+                                  {series.brand}
+                                </Badge>
+                              )}
                               {series.downloadUrl && (
                                 <span className="flex items-center gap-1 text-green-600">
                                   <Download className="h-3 w-3" />
@@ -772,6 +841,37 @@ export function SeriesPanel() {
                   onChange={(e) => setEditData({ ...editData, title: e.target.value })}
                   placeholder="输入合集标题..."
                 />
+              </div>
+
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                <div className="space-y-2">
+                  <Label htmlFor="edit-type">合集类型</Label>
+                  <Select
+                    value={editData.type || "__none__"}
+                    onValueChange={(v) => setEditData({ ...editData, type: v === "__none__" ? "" : v })}
+                  >
+                    <SelectTrigger id="edit-type">
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="__none__">未分类</SelectItem>
+                      {seriesTypes.map((t) => (
+                        <SelectItem key={t.code} value={t.code}>
+                          {t.label}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+                <div className="space-y-2">
+                  <Label htmlFor="edit-brand">品牌 / 工作室</Label>
+                  <Input
+                    id="edit-brand"
+                    value={editData.brand}
+                    onChange={(e) => setEditData({ ...editData, brand: e.target.value })}
+                    placeholder="如 T-Rex / Pink Pineapple..."
+                  />
+                </div>
               </div>
 
               <div className="space-y-2">

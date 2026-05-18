@@ -112,6 +112,11 @@ model User {
   // 开发者 API Key
   apiKeys         ApiKey[]
 
+  // 反馈工单
+  tickets         Ticket[]       @relation("TicketAuthor")
+  assignedTickets Ticket[]       @relation("TicketAssignee")
+  ticketReplies   TicketReply[]
+
   @@index([email])
   @@index([username])
   @@index([groupId])
@@ -353,17 +358,24 @@ model Series {
   coverUrl     String?  // 合集封面
   downloadUrl  String?  // 下载链接
   downloadNote String?  @db.Text // 下载提示
-  
+
+  /// 合集类型 code，对应 SiteConfig.seriesTypes 配置项；null 表示未分类
+  type         String?
+  /// 品牌/工作室（参考 hanime1.me 的 brand 字段，如 "T-Rex / Pink Pineapple"）
+  brand        String?
+
   creatorId   String
   creator     User     @relation(fields: [creatorId], references: [id], onDelete: Cascade)
-  
+
   episodes    SeriesEpisode[]
-  
+
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt
 
   @@index([creatorId])
   @@index([createdAt])
+  @@index([type])
+  @@index([brand])
 }
 
 // 合集-视频关联（剧集）
@@ -1105,6 +1117,10 @@ model SiteConfig {
   // 内容设置
   videoSelectorMode      String  @default("series") /// 选集器模式: series | author | uploader | disabled
   videoSelectorMaxCount  Int     @default(100)     /// 选集器（author/uploader 模式）拉取的视频数量上限
+  /// 合集类型可选项配置（动态维护），结构 [{ code, label, color?, description? }]，未配置时使用内置默认值
+  seriesTypes              Json?
+  /// 选集器（series 模式）只显示该类型的合集；为空 / "all" 表示不过滤
+  videoSelectorSeriesType  String?
   videosPerPage       Int     @default(20)     // 每页视频数
   commentsPerPage     Int     @default(20)     // 每页评论数
   maxUploadSize       Int     @default(500)    // 最大上传大小 (MB)
@@ -1657,6 +1673,7 @@ enum NotificationType {
   NEW_MESSAGE
   CONTENT_STATUS
   FOLLOW
+  TICKET_UPDATE
 }
 
 model Notification {
@@ -2003,4 +2020,81 @@ model AdMetric {
   @@id([adId, date])
   @@index([adId])
   @@index([date])
+}
+
+// ==================== 工单 / 反馈 ====================
+
+/// 工单分类
+enum TicketCategory {
+  BUG               /// BUG 反馈
+  RESOURCE_REQUEST  /// 求资源（番剧/漫画/图片/游戏等）
+  FEATURE_REQUEST   /// 功能建议
+  CONTENT_REPORT    /// 内容举报
+  ACCOUNT_ISSUE     /// 账号问题
+  OTHER             /// 其他
+}
+
+/// 工单状态
+enum TicketStatus {
+  PENDING       /// 待处理
+  IN_PROGRESS   /// 处理中
+  WAITING_USER  /// 等待用户补充
+  RESOLVED      /// 已解决
+  CLOSED        /// 已关闭
+}
+
+/// 工单优先级
+enum TicketPriority {
+  LOW
+  NORMAL
+  HIGH
+  URGENT
+}
+
+/// 用户反馈工单
+model Ticket {
+  id          String         @id @default(cuid())
+  userId      String         /// 提交人
+  category    TicketCategory
+  status      TicketStatus   @default(PENDING)
+  priority    TicketPriority @default(NORMAL)
+  title       String         /// 标题
+  content     String         @db.Text /// 详细描述
+  attachments Json?          /// 附件列表 [{ url, name, size, type }]
+  metadata    Json?          /// 分类相关附加字段（求资源时的类型/名称/链接、BUG 时的页面/浏览器等）
+
+  assigneeId  String?        /// 处理人（管理员）
+  resolvedAt  DateTime?      /// 标记已解决时间
+  closedAt    DateTime?      /// 关闭时间
+  lastReplyAt DateTime?      /// 最近一次回复时间，用于排序
+
+  createdAt   DateTime       @default(now())
+  updatedAt   DateTime       @updatedAt
+
+  user     User          @relation("TicketAuthor",   fields: [userId],     references: [id], onDelete: Cascade)
+  assignee User?         @relation("TicketAssignee", fields: [assigneeId], references: [id], onDelete: SetNull)
+  replies  TicketReply[]
+
+  @@index([userId, status, createdAt])
+  @@index([status, priority, createdAt])
+  @@index([category, status])
+  @@index([assigneeId, status])
+}
+
+/// 工单回复（对话消息 + 系统消息 + 内部备注）
+model TicketReply {
+  id          String   @id @default(cuid())
+  ticketId    String
+  userId      String   /// 发言人（用户或管理员）
+  content     String   @db.Text
+  attachments Json?    /// 附件列表
+  isStaff     Boolean  @default(false) /// 是否管理员回复
+  isInternal  Boolean  @default(false) /// 内部备注（仅管理员可见）
+  isSystem    Boolean  @default(false) /// 系统消息（状态变更等自动产生）
+  createdAt   DateTime @default(now())
+
+  ticket Ticket @relation(fields: [ticketId], references: [id], onDelete: Cascade)
+  user   User   @relation(fields: [userId],   references: [id], onDelete: Cascade)
+
+  @@index([ticketId, createdAt])
 }

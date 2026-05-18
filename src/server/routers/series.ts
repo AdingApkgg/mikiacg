@@ -1,8 +1,27 @@
 import { z } from "zod";
 import { TRPCError } from "@trpc/server";
+import { Prisma } from "@/generated/prisma/client";
 import { router, publicProcedure, protectedProcedure } from "../trpc";
+import { getPublicSiteConfig } from "@/lib/site-config";
+
+/** code 校验：与 series-types.ts 中的规则保持一致 */
+const SERIES_TYPE_CODE = z
+  .string()
+  .min(1)
+  .max(40)
+  .regex(/^[a-z0-9_]+$/)
+  .refine((v) => v !== "all", 'code 不能是保留字 "all"');
 
 export const seriesRouter = router({
+  // 获取站点配置的合集类型可选项（供创建/编辑表单使用）
+  listTypes: publicProcedure.query(async () => {
+    const cfg = await getPublicSiteConfig();
+    return {
+      types: cfg.seriesTypes,
+      defaultFilter: cfg.videoSelectorSeriesType, // null 表示不过滤
+    };
+  }),
+
   // 获取所有公开合集（首页用，页码分页）
   list: publicProcedure
     .input(
@@ -10,10 +29,14 @@ export const seriesRouter = router({
         limit: z.number().min(1).max(50).default(12),
         page: z.number().min(1).default(1),
         sortBy: z.enum(["latest", "videoCount", "views"]).default("latest"),
+        /** 按合集类型 code 过滤；"all" / 不传 表示不过滤 */
+        type: z.string().max(40).optional(),
+        /** 按品牌过滤（精确匹配） */
+        brand: z.string().max(100).optional(),
       }),
     )
     .query(async ({ ctx, input }) => {
-      const { limit, page, sortBy } = input;
+      const { limit, page, sortBy, type, brand } = input;
 
       // 构建排序条件
       const orderBy =
@@ -23,10 +46,15 @@ export const seriesRouter = router({
             ? { updatedAt: "desc" as const } // 暂时用更新时间代替
             : { updatedAt: "desc" as const };
 
+      const where: Prisma.SeriesWhereInput = {};
+      if (type && type !== "all") where.type = type;
+      if (brand) where.brand = brand;
+
       const skip = (page - 1) * limit;
 
       const [series, totalCount] = await Promise.all([
         ctx.prisma.series.findMany({
+          where,
           include: {
             creator: {
               select: {
@@ -56,7 +84,7 @@ export const seriesRouter = router({
           take: limit,
           skip,
         }),
-        ctx.prisma.series.count(),
+        ctx.prisma.series.count({ where }),
       ]);
 
       // 计算合集总播放量
@@ -76,6 +104,8 @@ export const seriesRouter = router({
             title: s.title,
             description: s.description,
             coverUrl: s.coverUrl || s.episodes[0]?.video.coverUrl || null,
+            type: s.type,
+            brand: s.brand,
             creator: s.creator,
             episodeCount: s._count.episodes,
             totalViews: totalViews._sum.views || 0,
@@ -106,6 +136,7 @@ export const seriesRouter = router({
         userId: z.string().optional(),
         limit: z.number().min(1).max(50).default(20),
         page: z.number().min(1).default(1),
+        type: z.string().max(40).optional(),
       }),
     )
     .query(async ({ ctx, input }) => {
@@ -114,8 +145,9 @@ export const seriesRouter = router({
         throw new TRPCError({ code: "UNAUTHORIZED", message: "请先登录" });
       }
 
-      const { limit, page } = input;
-      const where = { creatorId: userId };
+      const { limit, page, type } = input;
+      const where: Prisma.SeriesWhereInput = { creatorId: userId };
+      if (type && type !== "all") where.type = type;
 
       const [series, totalCount] = await Promise.all([
         ctx.prisma.series.findMany({
@@ -190,50 +222,64 @@ export const seriesRouter = router({
   }),
 
   // 根据视频ID获取其所属的合集
-  getByVideoId: publicProcedure.input(z.object({ videoId: z.string() })).query(async ({ ctx, input }) => {
-    const episode = await ctx.prisma.seriesEpisode.findFirst({
-      where: { videoId: input.videoId },
-      include: {
-        series: {
-          include: {
-            creator: {
-              select: {
-                id: true,
-                username: true,
-                nickname: true,
-                avatar: true,
+  getByVideoId: publicProcedure
+    .input(
+      z.object({
+        videoId: z.string(),
+        /** 仅返回该类型的合集；"all" / 不传 表示不过滤。命中不匹配返回 null */
+        typeFilter: z.string().max(40).optional(),
+      }),
+    )
+    .query(async ({ ctx, input }) => {
+      const episode = await ctx.prisma.seriesEpisode.findFirst({
+        where: { videoId: input.videoId },
+        include: {
+          series: {
+            include: {
+              creator: {
+                select: {
+                  id: true,
+                  username: true,
+                  nickname: true,
+                  avatar: true,
+                },
               },
-            },
-            episodes: {
-              orderBy: { episodeNum: "asc" },
-              include: {
-                video: {
-                  select: {
-                    id: true,
-                    title: true,
-                    coverUrl: true,
-                    duration: true,
-                    views: true,
-                    status: true,
-                    _count: { select: { likes: true } },
+              episodes: {
+                orderBy: { episodeNum: "asc" },
+                include: {
+                  video: {
+                    select: {
+                      id: true,
+                      title: true,
+                      coverUrl: true,
+                      duration: true,
+                      views: true,
+                      status: true,
+                      _count: { select: { likes: true } },
+                    },
                   },
                 },
               },
             },
           },
         },
-      },
-    });
+      });
 
-    if (!episode) {
-      return null;
-    }
+      if (!episode) {
+        return null;
+      }
 
-    return {
-      series: episode.series,
-      currentEpisode: episode.episodeNum,
-    };
-  }),
+      // 类型过滤：站点配置或调用方指定的过滤生效时，未匹配类型直接返回 null
+      const filter = input.typeFilter && input.typeFilter !== "all" ? input.typeFilter : null;
+      if (filter && episode.series.type !== filter) {
+        return null;
+      }
+
+      return {
+        series: episode.series,
+        currentEpisode: episode.episodeNum,
+      };
+    }),
 
   // 创建合集
   create: protectedProcedure
@@ -244,9 +290,20 @@ export const seriesRouter = router({
         coverUrl: z.string().url().optional().or(z.literal("")),
         downloadUrl: z.string().url().optional().or(z.literal("")),
         downloadNote: z.string().max(1000).optional(),
+        type: SERIES_TYPE_CODE.optional().or(z.literal("")),
+        brand: z.string().max(100).optional().or(z.literal("")),
       }),
     )
     .mutation(async ({ ctx, input }) => {
+      // 校验 type 是否在配置的可选项中
+      const normalizedType: string | null = input.type || null;
+      if (normalizedType) {
+        const cfg = await getPublicSiteConfig();
+        if (!cfg.seriesTypes.some((t) => t.code === normalizedType)) {
+          throw new TRPCError({ code: "BAD_REQUEST", message: `未知的合集类型: ${normalizedType}` });
+        }
+      }
+
       const series = await ctx.prisma.series.create({
         data: {
           title: input.title,
@@ -254,6 +311,8 @@ export const seriesRouter = router({
           coverUrl: input.coverUrl || null,
           downloadUrl: input.downloadUrl || null,
           downloadNote: input.downloadNote || null,
+          type: normalizedType,
+          brand: input.brand?.trim() || null,
           creatorId: ctx.session.user.id,
         },
       });
@@ -271,6 +330,8 @@ export const seriesRouter = router({
         coverUrl: z.string().url().optional().or(z.literal("")),
         downloadUrl: z.string().url().optional().or(z.literal("")),
         downloadNote: z.string().max(1000).optional(),
+        type: SERIES_TYPE_CODE.optional().or(z.literal("")).nullable(),
+        brand: z.string().max(100).optional().or(z.literal("")).nullable(),
       }),
     )
     .mutation(async ({ ctx, input }) => {
@@ -286,15 +347,31 @@ export const seriesRouter = router({
         throw new TRPCError({ code: "FORBIDDEN", message: "无权修改此合集" });
       }
 
+      const data: Prisma.SeriesUpdateInput = {
+        title: input.title,
+        description: input.description,
+        coverUrl: input.coverUrl || null,
+        downloadUrl: input.downloadUrl || null,
+        downloadNote: input.downloadNote,
+      };
+
+      if (input.type !== undefined) {
+        const code = input.type || null;
+        if (code) {
+          const cfg = await getPublicSiteConfig();
+          if (!cfg.seriesTypes.some((t) => t.code === code)) {
+            throw new TRPCError({ code: "BAD_REQUEST", message: `未知的合集类型: ${code}` });
+          }
+        }
+        data.type = code;
+      }
+      if (input.brand !== undefined) {
+        data.brand = input.brand?.trim() || null;
+      }
+
       return ctx.prisma.series.update({
         where: { id: input.id },
-        data: {
-          title: input.title,
-          description: input.description,
-          coverUrl: input.coverUrl || null,
-          downloadUrl: input.downloadUrl || null,
-          downloadNote: input.downloadNote,
-        },
+        data,
       });
     }),
 

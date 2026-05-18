@@ -2,6 +2,7 @@ import { prisma } from "@/lib/prisma";
 import type { Ad } from "@/lib/ads";
 import { mergeHomeLayout, type HomeLayoutConfig } from "@/lib/home-layout";
 import { mergeThumbnailPresets, type ThumbnailPresets } from "@/lib/thumbnail-presets";
+import { mergeSeriesTypes, type SeriesTypeOption } from "@/lib/series-types";
 
 /** 公开站点配置（不含敏感字段，可安全传给客户端） */
 export interface PublicSiteConfig {
@@ -73,6 +74,10 @@ export interface PublicSiteConfig {
   referralEnabled: boolean;
   videoSelectorMode: string;
   videoSelectorMaxCount: number;
+  /** 选集器（series 模式）只显示该类型的合集；null 表示不过滤 */
+  videoSelectorSeriesType: string | null;
+  /** 合集类型可选项（动态可维护，未配置时使用内置默认值） */
+  seriesTypes: SeriesTypeOption[];
   sectionCompositeEnabled: boolean;
   sectionVideoEnabled: boolean;
   sectionImageEnabled: boolean;
@@ -252,6 +257,11 @@ function toPublic(c: Record<string, unknown>): PublicSiteConfig {
     referralEnabled: (c.referralEnabled as boolean) ?? false,
     videoSelectorMode: (c.videoSelectorMode as string) ?? "series",
     videoSelectorMaxCount: (c.videoSelectorMaxCount as number) ?? 100,
+    videoSelectorSeriesType:
+      typeof c.videoSelectorSeriesType === "string" && c.videoSelectorSeriesType && c.videoSelectorSeriesType !== "all"
+        ? (c.videoSelectorSeriesType as string)
+        : null,
+    seriesTypes: mergeSeriesTypes(c.seriesTypes),
     sectionCompositeEnabled: (c.sectionCompositeEnabled as boolean) ?? true,
     sectionVideoEnabled: (c.sectionVideoEnabled as boolean) ?? true,
     sectionImageEnabled: (c.sectionImageEnabled as boolean) ?? true,

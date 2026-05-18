@@ -1,12 +1,14 @@
 "use client";
 
+import { useFieldArray } from "react-hook-form";
 import type { SiteConfig } from "@/generated/prisma/client";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Form, FormControl, FormDescription, FormField, FormItem, FormLabel, FormMessage } from "@/components/ui/form";
 import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Loader2, Save } from "lucide-react";
+import { Badge } from "@/components/ui/badge";
+import { Loader2, Save, Plus, Trash2, ArrowUp, ArrowDown } from "lucide-react";
 import { contentTabSchema, pickContentValues } from "../_lib/schema";
 import { useTabForm } from "../_lib/use-tab-form";
 
@@ -16,6 +18,19 @@ export function TabContent({ config }: { config: SiteConfig | undefined }) {
     pickValues: pickContentValues,
     config,
   });
+
+  const {
+    fields: typeFields,
+    append: appendType,
+    remove: removeType,
+    move: moveType,
+  } = useFieldArray({
+    control: form.control,
+    name: "seriesTypes",
+  });
+
+  const selectorMode = form.watch("videoSelectorMode");
+  const watchedTypes = form.watch("seriesTypes");
 
   return (
     <Form {...form}>
@@ -77,6 +92,169 @@ export function TabContent({ config }: { config: SiteConfig | undefined }) {
                 </FormItem>
               )}
             />
+
+            <FormField
+              control={form.control}
+              name="videoSelectorSeriesType"
+              render={({ field }) => (
+                <FormItem>
+                  <FormLabel>选集器默认类型过滤</FormLabel>
+                  <Select
+                    onValueChange={field.onChange}
+                    value={field.value || "all"}
+                    disabled={selectorMode !== "series"}
+                  >
+                    <FormControl>
+                      <SelectTrigger className="w-full md:w-64">
+                        <SelectValue />
+                      </SelectTrigger>
+                    </FormControl>
+                    <SelectContent>
+                      <SelectItem value="all">全部（不过滤）</SelectItem>
+                      {watchedTypes
+                        ?.filter((t) => t.code)
+                        .map((t) => (
+                          <SelectItem key={t.code} value={t.code}>
+                            {t.label || t.code}
+                          </SelectItem>
+                        ))}
+                    </SelectContent>
+                  </Select>
+                  <FormDescription>
+                    仅在「合集」模式下生效：选定后选集器只展示对应类型的合集，例如「里番系列合集」。下方维护可选类型。
+                  </FormDescription>
+                  <FormMessage />
+                </FormItem>
+              )}
+            />
+
+            {/* 合集类型管理 */}
+            <div className="space-y-3 rounded-md border p-4">
+              <div className="flex items-center justify-between gap-2 flex-wrap">
+                <div>
+                  <div className="text-sm font-medium">合集类型管理</div>
+                  <p className="text-xs text-muted-foreground mt-1">
+                    维护合集的可选类型，参考 hanime1.me 的「影片系列」分类。code 是数据库存储用的稳定标识，label
+                    是前台显示文案。color 可填 Tailwind 颜色（如 #e11d48）。
+                  </p>
+                </div>
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  onClick={() => appendType({ code: "", label: "", color: "", description: "" })}
+                >
+                  <Plus className="h-4 w-4 mr-1" />
+                  添加类型
+                </Button>
+              </div>
+
+              {typeFields.length === 0 ? (
+                <p className="text-sm text-muted-foreground text-center py-6">
+                  暂无类型，点击「添加类型」开始（留空保存则回退到内置默认值）
+                </p>
+              ) : (
+                <div className="space-y-2">
+                  {typeFields.map((row, index) => (
+                    <div key={row.id} className="grid grid-cols-1 md:grid-cols-12 gap-2 items-start">
+                      <FormField
+                        control={form.control}
+                        name={`seriesTypes.${index}.code`}
+                        render={({ field }) => (
+                          <FormItem className="md:col-span-3">
+                            <FormControl>
+                              <Input placeholder="code（如 hentai_series）" {...field} />
+                            </FormControl>
+                            <FormMessage />
+                          </FormItem>
+                        )}
+                      />
+                      <FormField
+                        control={form.control}
+                        name={`seriesTypes.${index}.label`}
+                        render={({ field }) => (
+                          <FormItem className="md:col-span-3">
+                            <FormControl>
+                              <Input placeholder="显示名称（如 里番系列合集）" {...field} />
+                            </FormControl>
+                            <FormMessage />
+                          </FormItem>
+                        )}
+                      />
+                      <FormField
+                        control={form.control}
+                        name={`seriesTypes.${index}.color`}
+                        render={({ field }) => (
+                          <FormItem className="md:col-span-2">
+                            <FormControl>
+                              <div className="flex items-center gap-1.5">
+                                <Input placeholder="#e11d48" {...field} value={field.value ?? ""} />
+                                {field.value ? (
+                                  <Badge
+                                    variant="outline"
+                                    style={{ borderColor: field.value, color: field.value }}
+                                    className="shrink-0 text-[10px]"
+                                  >
+                                    示
+                                  </Badge>
+                                ) : null}
+                              </div>
+                            </FormControl>
+                            <FormMessage />
+                          </FormItem>
+                        )}
+                      />
+                      <FormField
+                        control={form.control}
+                        name={`seriesTypes.${index}.description`}
+                        render={({ field }) => (
+                          <FormItem className="md:col-span-3">
+                            <FormControl>
+                              <Input placeholder="说明（可选）" {...field} value={field.value ?? ""} />
+                            </FormControl>
+                            <FormMessage />
+                          </FormItem>
+                        )}
+                      />
+                      <div className="md:col-span-1 flex items-center gap-1">
+                        <Button
+                          type="button"
+                          variant="ghost"
+                          size="icon"
+                          className="h-9 w-9"
+                          disabled={index === 0}
+                          onClick={() => moveType(index, index - 1)}
+                          title="上移"
+                        >
+                          <ArrowUp className="h-4 w-4" />
+                        </Button>
+                        <Button
+                          type="button"
+                          variant="ghost"
+                          size="icon"
+                          className="h-9 w-9"
+                          disabled={index === typeFields.length - 1}
+                          onClick={() => moveType(index, index + 1)}
+                          title="下移"
+                        >
+                          <ArrowDown className="h-4 w-4" />
+                        </Button>
+                        <Button
+                          type="button"
+                          variant="ghost"
+                          size="icon"
+                          className="h-9 w-9 text-destructive"
+                          onClick={() => removeType(index)}
+                          title="删除"
+                        >
+                          <Trash2 className="h-4 w-4" />
+                        </Button>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
 
             <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
               <FormField

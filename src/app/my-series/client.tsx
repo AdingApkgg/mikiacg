@@ -38,6 +38,8 @@ import { useThumb, useVideoCoverThumb } from "@/hooks/use-thumb";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Pagination } from "@/components/ui/pagination";
 import { InlineAdList } from "@/components/ads/inline-ad-list";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Badge } from "@/components/ui/badge";
 
 interface EditingSeriesData {
   id: string;
@@ -46,6 +48,8 @@ interface EditingSeriesData {
   coverUrl: string;
   downloadUrl: string;
   downloadNote: string;
+  type: string;
+  brand: string;
 }
 
 export default function MySeriesClient({ page }: { page: number }) {
@@ -59,17 +63,24 @@ export default function MySeriesClient({ page }: { page: number }) {
   const [editData, setEditData] = useState<EditingSeriesData | null>(null);
   const [isCreating, setIsCreating] = useState(false);
   const [newSeriesTitle, setNewSeriesTitle] = useState("");
+  const [newSeriesType, setNewSeriesType] = useState<string>("");
+  const [newSeriesBrand, setNewSeriesBrand] = useState("");
 
   const { data, isLoading } = trpc.series.listByUser.useQuery(
     { limit: 20, page },
     { enabled: !!session, placeholderData: (prev) => prev },
   );
 
+  const { data: typesData } = trpc.series.listTypes.useQuery();
+  const seriesTypes = typesData?.types ?? [];
+
   const createMutation = trpc.series.create.useMutation({
     onSuccess: () => {
       toast.success("合集已创建");
       setIsCreating(false);
       setNewSeriesTitle("");
+      setNewSeriesType("");
+      setNewSeriesBrand("");
       utils.series.listByUser.invalidate();
     },
     onError: (error) => {
@@ -112,6 +123,8 @@ export default function MySeriesClient({ page }: { page: number }) {
     coverUrl: string | null;
     downloadUrl?: string | null;
     downloadNote?: string | null;
+    type?: string | null;
+    brand?: string | null;
   }) => {
     setEditingId(series.id);
     setEditData({
@@ -121,6 +134,8 @@ export default function MySeriesClient({ page }: { page: number }) {
       coverUrl: series.coverUrl || "",
       downloadUrl: series.downloadUrl || "",
       downloadNote: series.downloadNote || "",
+      type: series.type || "",
+      brand: series.brand || "",
     });
   };
 
@@ -133,6 +148,8 @@ export default function MySeriesClient({ page }: { page: number }) {
       coverUrl: editData.coverUrl || "",
       downloadUrl: editData.downloadUrl || "",
       downloadNote: editData.downloadNote || undefined,
+      type: editData.type || null,
+      brand: editData.brand || null,
     });
   };
 
@@ -141,7 +158,11 @@ export default function MySeriesClient({ page }: { page: number }) {
       toast.error("请输入合集标题");
       return;
     }
-    createMutation.mutate({ title: newSeriesTitle.trim() });
+    createMutation.mutate({
+      title: newSeriesTitle.trim(),
+      type: newSeriesType || undefined,
+      brand: newSeriesBrand.trim() || undefined,
+    });
   };
 
   if (authStatus === "loading" || isLoading) {

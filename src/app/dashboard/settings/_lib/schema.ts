@@ -9,6 +9,7 @@ import {
 } from "@/lib/home-layout";
 import { mergeImageCompressBypassRules, mergeImageCompressProfiles } from "@/lib/image-compress-config";
 import { mergeThumbnailPresets, THUMBNAIL_PRESET_NAMES } from "@/lib/thumbnail-presets";
+import { mergeSeriesTypes } from "@/lib/series-types";
 
 // ---------------------------------------------------------------------------
 // 工具
@@ -152,9 +153,24 @@ export const effectsTabSchema = z.object({
   entrySoundIntervalHours: z.number().int().min(1).max(8760),
 });
 
+export const seriesTypeOptionSchema = z.object({
+  code: z
+    .string()
+    .min(1)
+    .max(40)
+    .regex(/^[a-z0-9_]+$/, "只允许小写字母、数字和下划线")
+    .refine((v) => v !== "all", 'code 不能是保留字 "all"'),
+  label: z.string().min(1, "请填写名称").max(40),
+  color: z.string().max(32).optional().or(z.literal("")),
+  description: z.string().max(200).optional().or(z.literal("")),
+});
+
 export const contentTabSchema = z.object({
   videoSelectorMode: videoSelectorModeEnum,
   videoSelectorMaxCount: z.number().int().min(10).max(10000),
+  /** 选集器（series 模式）仅显示该类型；"all" 表示不过滤 */
+  videoSelectorSeriesType: z.string().max(40),
+  seriesTypes: z.array(seriesTypeOptionSchema).max(50),
   videosPerPage: z.number().int().min(5).max(100),
   commentsPerPage: z.number().int().min(5).max(100),
   maxUploadSize: z.number().int().min(10).max(10000),
@@ -491,9 +507,17 @@ export function pickEffectsValues(cfg: SiteConfig): EffectsTabValues {
 }
 
 export function pickContentValues(cfg: SiteConfig): ContentTabValues {
+  const cfgAny = cfg as unknown as Record<string, unknown>;
   return {
     videoSelectorMode: validEnum(cfg.videoSelectorMode, ["series", "author", "uploader", "disabled"], "series"),
     videoSelectorMaxCount: n(cfg.videoSelectorMaxCount, 100),
+    videoSelectorSeriesType: s(cfgAny.videoSelectorSeriesType, "all"),
+    seriesTypes: mergeSeriesTypes(cfgAny.seriesTypes).map((t) => ({
+      code: t.code,
+      label: t.label,
+      color: t.color ?? "",
+      description: t.description ?? "",
+    })),
     videosPerPage: cfg.videosPerPage,
     commentsPerPage: cfg.commentsPerPage,
     maxUploadSize: cfg.maxUploadSize,

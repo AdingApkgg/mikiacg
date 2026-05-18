@@ -10,6 +10,7 @@ export const ADMIN_SCOPES = {
   "comment:manage": "评论管理",
   "referral:view_all": "全站推广查看",
   "stats:view": "数据总览",
+  "ticket:manage": "工单管理",
 } as const;
 
 export type AdminScope = keyof typeof ADMIN_SCOPES;
