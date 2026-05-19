@@ -18,6 +18,7 @@ import { adminStoragePoliciesRouter } from "./storage-policies";
 import { adminGroupsRouter } from "./groups";
 import { adminAdsRouter } from "./ads";
 import { adminRankingRouter } from "./ranking";
+import { adminTicketsRouter } from "./tickets";
 
 export const adminRouter = mergeRouters(
   adminStatsRouter,
@@ -39,4 +40,5 @@ export const adminRouter = mergeRouters(
   adminGroupsRouter,
   router({ ads: adminAdsRouter }),
   router({ ranking: adminRankingRouter }),
+  adminTicketsRouter,
 );

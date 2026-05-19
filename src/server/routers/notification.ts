@@ -19,7 +19,16 @@ export const notificationRouter = router({
         cursor: z.string().optional(),
         limit: z.number().min(1).max(50).default(20),
         type: z
-          .enum(["COMMENT_REPLY", "LIKE", "FAVORITE", "SYSTEM", "NEW_MESSAGE", "CONTENT_STATUS", "FOLLOW"])
+          .enum([
+            "COMMENT_REPLY",
+            "LIKE",
+            "FAVORITE",
+            "SYSTEM",
+            "NEW_MESSAGE",
+            "CONTENT_STATUS",
+            "FOLLOW",
+            "TICKET_UPDATE",
+          ])
           .optional(),
         unreadOnly: z.boolean().default(false),
       }),
@@ -150,6 +159,7 @@ export const notificationRouter = router({
       NEW_MESSAGE: 0,
       CONTENT_STATUS: 0,
       FOLLOW: 0,
+      TICKET_UPDATE: 0,
     } as Record<string, number>;
 
     let total = 0;

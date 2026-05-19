@@ -17,6 +17,7 @@ import {
   BarChart3,
   UsersRound,
   Trophy,
+  Inbox,
   type LucideIcon,
 } from "lucide-react";
 
@@ -80,6 +81,13 @@ export const dashboardMenuGroups: DashboardMenuGroup[] = [
         keywords: ["comment"],
       },
       { href: "/dashboard/stickers", label: "贴图", icon: Sticker, scope: "settings:manage", keywords: ["sticker"] },
+      {
+        href: "/dashboard/tickets",
+        label: "工单反馈",
+        icon: Inbox,
+        scope: "ticket:manage",
+        keywords: ["ticket", "feedback", "工单", "反馈"],
+      },
     ],
   },
   {

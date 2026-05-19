@@ -6,7 +6,7 @@ import { trpc } from "@/lib/trpc";
 import dayjs from "dayjs";
 import relativeTime from "dayjs/plugin/relativeTime";
 import "dayjs/locale/zh-cn";
-import { MessageSquare, Heart, Star, Megaphone, Mail, Shield, UserPlus } from "lucide-react";
+import { MessageSquare, Heart, Star, Megaphone, Mail, Shield, UserPlus, Inbox } from "lucide-react";
 import type { NotificationType } from "@/generated/prisma/client";
 
 dayjs.extend(relativeTime);
@@ -31,6 +31,7 @@ const typeIcons: Record<NotificationType, React.ComponentType<{ className?: stri
   NEW_MESSAGE: Mail,
   CONTENT_STATUS: Shield,
   FOLLOW: UserPlus,
+  TICKET_UPDATE: Inbox,
 };
 
 const typeColors: Record<NotificationType, string> = {
@@ -41,6 +42,7 @@ const typeColors: Record<NotificationType, string> = {
   NEW_MESSAGE: "text-green-500",
   CONTENT_STATUS: "text-orange-500",
   FOLLOW: "text-pink-500",
+  TICKET_UPDATE: "text-cyan-500",
 };
 
 function getNotificationUrl(notification: NotificationData): string | null {
@@ -68,6 +70,8 @@ function getNotificationUrl(notification: NotificationData): string | null {
       return null;
     case "FOLLOW":
       return data.followerId ? `/user/${data.followerId}` : null;
+    case "TICKET_UPDATE":
+      return data.ticketId ? `/feedback/${data.ticketId}` : null;
     default:
       return null;
   }

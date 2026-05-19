@@ -215,6 +215,8 @@ const API_SCOPE_ROUTER_MAP: Record<string, ScopeMapping> = {
   redeem: { read: "payment:read", write: "payment:write" },
   // 通知
   notification: { read: "notification:read", write: "notification:write" },
+  // 工单 / 反馈
+  ticket: "block",
   // 管理后台（仍需管理员角色）
   admin: { read: "admin:read", write: "admin:write" },
   // 系统

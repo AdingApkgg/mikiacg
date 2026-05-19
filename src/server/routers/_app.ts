@@ -28,6 +28,7 @@ import { searchRouter } from "./search";
 import { playlistRouter } from "./playlist";
 import { adRouter } from "./ad";
 import { rankingRouter } from "./ranking";
+import { ticketRouter } from "./ticket";
 
 export const appRouter = router({
   user: userRouter,
@@ -59,6 +60,7 @@ export const appRouter = router({
   playlist: playlistRouter,
   ad: adRouter,
   ranking: rankingRouter,
+  ticket: ticketRouter,
 });
 
 export type AppRouter = typeof appRouter;
