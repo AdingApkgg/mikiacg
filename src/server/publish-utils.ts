@@ -91,7 +91,24 @@ export function generateTagSlug(tagName: string): string {
 }
 
 /**
- * 批量将标签名称解析为 tagId（含并发控制和 slug 冲突 fallback）。
+ * 规范化标签名：剥离形如 ` (N)` / `（N）` 的尾部计数后缀（含 NBSP），合并多余空白。
+ * 不做大小写、繁简转换。空串退回 trim 后的原值，避免吞掉退化输入。
+ */
+export function normalizeTagName(name: string): string {
+  const stripped = name
+    .replace(/（/g, "(")
+    .replace(/）/g, ")")
+    .replace(/[\s ]*\(\d+\)\s*$/u, "")
+    .replace(/[\s ]+/g, " ")
+    .trim();
+  return stripped || name.trim();
+}
+
+/**
+ * 批量将标签名称解析为 tagId。
+ * - 写入前 normalizeTagName 剥离尾部 `(N)` 后缀，新数据统一落到规范化 Tag 上；
+ * - 同时按 TagAlias 查询，避免历史脏数据继续累积；
+ * - 原始名（若 != canonical）写入 TagAlias，便于后续按原名查找。
  */
 export async function resolveTagNames(prisma: PrismaClient, tagNames: string[]): Promise<Map<string, string>> {
   const tagNameToId = new Map<string, string>();
@@ -103,20 +120,48 @@ export async function resolveTagNames(prisma: PrismaClient, tagNames: string[]):
   for (let i = 0; i < unique.length; i += CONCURRENCY) {
     const chunk = unique.slice(i, i + CONCURRENCY);
     await Promise.all(
-      chunk.map(async (tagName) => {
-        const slug = generateTagSlug(tagName);
-        try {
-          const tag = await prisma.tag.upsert({
-            where: { name: tagName },
-            update: {},
-            create: { name: tagName, slug },
-          });
-          tagNameToId.set(tagName, tag.id);
-        } catch {
-          const existing = await prisma.tag.findFirst({
-            where: { OR: [{ name: tagName }, { slug }] },
-          });
-          if (existing) tagNameToId.set(tagName, existing.id);
+      chunk.map(async (original) => {
+        const canonical = normalizeTagName(original);
+        if (!canonical) return;
+        const slug = generateTagSlug(canonical);
+
+        let tag = await prisma.tag.findFirst({
+          where: {
+            OR: [{ name: canonical }, { aliases: { some: { name: canonical } } }],
+          },
+          select: { id: true, name: true },
+        });
+
+        if (!tag) {
+          try {
+            tag = await prisma.tag.upsert({
+              where: { name: canonical },
+              update: {},
+              create: { name: canonical, slug },
+              select: { id: true, name: true },
+            });
+          } catch {
+            const fallback = await prisma.tag.findFirst({
+              where: { OR: [{ name: canonical }, { slug }] },
+              select: { id: true, name: true },
+            });
+            if (fallback) tag = fallback;
+          }
+        }
+
+        if (!tag) return;
+        tagNameToId.set(original, tag.id);
+
+        if (original !== tag.name) {
+          try {
+            await prisma.tagAlias.upsert({
+              where: { name: original },
+              update: {},
+              create: { name: original, tagId: tag.id },
+            });
+          } catch {
+            // 别名已被其它 tag 占用，忽略；merge 脚本会处理
+          }
         }
       }),
     );

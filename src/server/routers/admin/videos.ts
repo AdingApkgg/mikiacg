@@ -8,6 +8,7 @@ import { enqueueCoverForVideo } from "@/lib/cover-auto";
 import { createNotification } from "@/lib/notification";
 import { safeSync } from "@/lib/meilisearch";
 import { syncVideo, deleteVideo as deleteVideoSearchIndex } from "@/lib/search-sync";
+import { resolveTagNames } from "@/server/publish-utils";
 
 export const adminVideosRouter = router({
   // ========== 视频管理 ==========
@@ -483,20 +484,9 @@ export const adminVideosRouter = router({
           // 处理标签
           const tagIds: string[] = [];
           if (videoData.tagNames && videoData.tagNames.length > 0) {
-            for (const tagName of videoData.tagNames) {
-              const slug =
-                tagName
-                  .toLowerCase()
-                  .replace(/\s+/g, "-")
-                  .replace(/[^a-z0-9\u4e00-\u9fa5-]/g, "") || `tag-${Date.now()}`;
-
-              const tag = await ctx.prisma.tag.upsert({
-                where: { name: tagName },
-                update: {},
-                create: { name: tagName, slug },
-              });
-              tagIds.push(tag.id);
-            }
+            // resolveTagNames \u5185\u90e8\u4f1a\u5265\u79bb (N) \u540e\u7f00 + \u901a\u8fc7 TagAlias \u5408\u5e76\u5386\u53f2\u91cd\u540d
+            const nameToId = await resolveTagNames(ctx.prisma, videoData.tagNames);
+            for (const id of nameToId.values()) tagIds.push(id);
           }
 
           // 检查自定义 ID 是否已存在

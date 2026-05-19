@@ -5,6 +5,7 @@ import { Prisma } from "@/generated/prisma/client";
 import { submitGameToIndexNow, submitGamesToIndexNow } from "@/lib/indexnow";
 import { safeSync } from "@/lib/meilisearch";
 import { syncGame, deleteGame as deleteGameSearchIndex } from "@/lib/search-sync";
+import { resolveTagNames } from "@/server/publish-utils";
 
 export const adminGamesRouter = router({
   // ==================== 游戏管理 ====================
@@ -178,16 +179,11 @@ export const adminGamesRouter = router({
         throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "无法生成唯一游戏 ID" });
       }
 
-      // 处理标签
-      const tagConnections = [];
-      for (const tagName of input.tagNames) {
-        const slug = tagName.toLowerCase().replace(/\s+/g, "-");
-        const tag = await ctx.prisma.tag.upsert({
-          where: { slug },
-          update: {},
-          create: { name: tagName, slug },
-        });
-        tagConnections.push({ tagId: tag.id });
+      // 处理标签（resolveTagNames 内部会剥离 (N) 后缀 + 通过 TagAlias 合并历史重名）
+      const tagConnections: { tagId: string }[] = [];
+      if (input.tagNames.length > 0) {
+        const nameToId = await resolveTagNames(ctx.prisma, input.tagNames);
+        for (const id of nameToId.values()) tagConnections.push({ tagId: id });
       }
 
       const game = await ctx.prisma.game.create({
@@ -264,20 +260,18 @@ export const adminGamesRouter = router({
         data: updateData,
       });
 
-      // 如果提供了标签，更新标签关联
+      // 如果提供了标签，更新标签关联（resolveTagNames 内部会规范化并合并历史重名）
       if (tagNames) {
         await ctx.prisma.tagOnGame.deleteMany({ where: { gameId } });
 
-        for (const tagName of tagNames) {
-          const slug = tagName.toLowerCase().replace(/\s+/g, "-");
-          const tag = await ctx.prisma.tag.upsert({
-            where: { slug },
-            update: {},
-            create: { name: tagName, slug },
-          });
-          await ctx.prisma.tagOnGame.create({
-            data: { gameId, tagId: tag.id },
-          });
+        if (tagNames.length > 0) {
+          const nameToId = await resolveTagNames(ctx.prisma, tagNames);
+          const seen = new Set<string>();
+          for (const id of nameToId.values()) {
+            if (seen.has(id)) continue;
+            seen.add(id);
+            await ctx.prisma.tagOnGame.create({ data: { gameId, tagId: id } });
+          }
         }
       }
 
