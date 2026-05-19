@@ -207,15 +207,48 @@ export default function MySeriesClient({ page }: { page: number }) {
               <DialogTitle>创建新合集</DialogTitle>
               <DialogDescription>创建一个新合集来组织你的视频系列</DialogDescription>
             </DialogHeader>
-            <div className="py-4">
-              <Label htmlFor="new-title">合集标题</Label>
-              <Input
-                id="new-title"
-                value={newSeriesTitle}
-                onChange={(e) => setNewSeriesTitle(e.target.value)}
-                placeholder="输入合集标题..."
-                className="mt-2"
-              />
+            <div className="py-4 space-y-3">
+              <div>
+                <Label htmlFor="new-title">合集标题</Label>
+                <Input
+                  id="new-title"
+                  value={newSeriesTitle}
+                  onChange={(e) => setNewSeriesTitle(e.target.value)}
+                  placeholder="输入合集标题..."
+                  className="mt-2"
+                />
+              </div>
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                <div>
+                  <Label htmlFor="new-type">类型</Label>
+                  <Select
+                    value={newSeriesType || "__none__"}
+                    onValueChange={(v) => setNewSeriesType(v === "__none__" ? "" : v)}
+                  >
+                    <SelectTrigger id="new-type" className="mt-2">
+                      <SelectValue placeholder="未分类" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="__none__">未分类</SelectItem>
+                      {seriesTypes.map((t) => (
+                        <SelectItem key={t.code} value={t.code}>
+                          {t.label}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+                <div>
+                  <Label htmlFor="new-brand">品牌 / 工作室</Label>
+                  <Input
+                    id="new-brand"
+                    value={newSeriesBrand}
+                    onChange={(e) => setNewSeriesBrand(e.target.value)}
+                    placeholder="可选，如 T-Rex"
+                    className="mt-2"
+                  />
+                </div>
+              </div>
             </div>
             <DialogFooter>
               <Button variant="outline" onClick={() => setIsCreating(false)}>
@@ -287,11 +320,29 @@ export default function MySeriesClient({ page }: { page: number }) {
                       {series.description && (
                         <p className="text-sm text-muted-foreground line-clamp-2 mt-1">{series.description}</p>
                       )}
-                      <div className="flex items-center gap-3 mt-2 text-xs text-muted-foreground flex-wrap">
+                      <div className="flex items-center gap-2 mt-2 text-xs text-muted-foreground flex-wrap">
                         <span className="flex items-center gap-1">
                           <Video className="h-3 w-3" />
                           {series.episodeCount} 集
                         </span>
+                        {(() => {
+                          const t = seriesTypes.find((x) => x.code === series.type);
+                          if (!t) return null;
+                          return (
+                            <Badge
+                              variant="outline"
+                              className="text-[10px] px-1.5 py-0"
+                              style={t.color ? { borderColor: t.color, color: t.color } : undefined}
+                            >
+                              {t.label}
+                            </Badge>
+                          );
+                        })()}
+                        {series.brand && (
+                          <Badge variant="secondary" className="text-[10px] px-1.5 py-0">
+                            {series.brand}
+                          </Badge>
+                        )}
                         {series.downloadUrl && (
                           <span className="flex items-center gap-1 text-green-600">
                             <Download className="h-3 w-3" />
@@ -362,6 +413,37 @@ export default function MySeriesClient({ page }: { page: number }) {
                   onChange={(e) => setEditData({ ...editData, title: e.target.value })}
                   placeholder="输入合集标题..."
                 />
+              </div>
+
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                <div className="space-y-2">
+                  <Label htmlFor="edit-type">类型</Label>
+                  <Select
+                    value={editData.type || "__none__"}
+                    onValueChange={(v) => setEditData({ ...editData, type: v === "__none__" ? "" : v })}
+                  >
+                    <SelectTrigger id="edit-type">
+                      <SelectValue placeholder="未分类" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="__none__">未分类</SelectItem>
+                      {seriesTypes.map((t) => (
+                        <SelectItem key={t.code} value={t.code}>
+                          {t.label}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+                <div className="space-y-2">
+                  <Label htmlFor="edit-brand">品牌 / 工作室</Label>
+                  <Input
+                    id="edit-brand"
+                    value={editData.brand}
+                    onChange={(e) => setEditData({ ...editData, brand: e.target.value })}
+                    placeholder="如 T-Rex / Pink Pineapple"
+                  />
+                </div>
               </div>
 
               <div className="space-y-2">

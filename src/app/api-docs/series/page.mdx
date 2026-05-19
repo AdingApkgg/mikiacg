@@ -2,7 +2,26 @@ import { Endpoint, ParamTable, P } from "@/components/mdx/api-doc-components"
 
 # 合集
 
-合集（系列）的创建、管理和剧集排序接口。
+合集（系列）的创建、管理和剧集排序接口。合集支持 **type（类型）** 与 **brand（品牌/工作室）** 两个分类字段，参考 hanime1.me 的「影片系列」设计。
+
+- `type` 存储类型 `code`（如 `hentai_series_compilation`、`ova`、`movie`），完整可选项由站点配置 `siteConfig.seriesTypes` 维护。
+- `brand` 为自由字符串，用于标注制作方（如 `T-Rex / Pink Pineapple`）。
+- 选集器（视频详情页）可在后台配置「默认类型过滤」，仅展示对应类型的合集。
+
+---
+
+## 合集类型可选项
+
+<Endpoint method="POST" path="series.listTypes" auth="public" />
+
+返回站点配置的合集类型列表，以及选集器默认过滤类型（`null` 表示不过滤）。
+
+```ts
+type Response = {
+  types: Array<{ code: string; label: string; color?: string; description?: string }>;
+  defaultFilter: string | null;
+};
+```
 
 ---
 
@@ -13,8 +32,12 @@ import { Endpoint, ParamTable, P } from "@/components/mdx/api-doc-components"
 <ParamTable>
   <P name="limit" type="number" required>每页数量</P>
   <P name="page" type="number" required>页码</P>
-  <P name="sortBy" type="string">排序方式</P>
+  <P name="sortBy" type="string">排序方式：`latest` / `videoCount` / `views`</P>
+  <P name="type" type="string">按类型 code 过滤，`all` 或省略表示不过滤</P>
+  <P name="brand" type="string">按品牌精确过滤</P>
 </ParamTable>
+
+返回 items 中每条包含 `type` 与 `brand` 字段。
 
 ---
 
@@ -22,10 +45,23 @@ import { Endpoint, ParamTable, P } from "@/components/mdx/api-doc-components"
 
 <Endpoint method="POST" path="series.getById" auth="public" />
 
-返回合集信息及所含剧集列表。
+返回合集信息及所含剧集列表，包含 `type` 与 `brand`。
 
 <ParamTable>
   <P name="id" type="string" required>合集 ID</P>
+</ParamTable>
+
+---
+
+## 根据视频 ID 查询所属合集
+
+<Endpoint method="POST" path="series.getByVideoId" auth="public" />
+
+视频详情页选集器使用。返回视频所属合集与当前集数；指定 `typeFilter` 时仅在合集类型匹配时返回，否则返回 `null`。
+
+<ParamTable>
+  <P name="videoId" type="string" required>视频 ID</P>
+  <P name="typeFilter" type="string">仅返回该类型合集；`all` 或省略表示不过滤</P>
 </ParamTable>
 
 ---
@@ -40,6 +76,8 @@ import { Endpoint, ParamTable, P } from "@/components/mdx/api-doc-components"
   <P name="coverUrl" type="string">封面 URL</P>
   <P name="downloadUrl" type="string">下载链接</P>
   <P name="downloadNote" type="string">下载说明</P>
+  <P name="type" type="string">类型 code，必须在 `siteConfig.seriesTypes` 中存在</P>
+  <P name="brand" type="string">品牌 / 工作室</P>
 </ParamTable>
 
 ---
@@ -53,6 +91,10 @@ import { Endpoint, ParamTable, P } from "@/components/mdx/api-doc-components"
   <P name="title" type="string">新标题</P>
   <P name="description" type="string">新描述</P>
   <P name="coverUrl" type="string">新封面</P>
+  <P name="downloadUrl" type="string">下载链接</P>
+  <P name="downloadNote" type="string">下载说明</P>
+  <P name="type" type="string">类型 code（传空字符串或 `null` 表示清空为未分类）</P>
+  <P name="brand" type="string">品牌 / 工作室（传空清空）</P>
 </ParamTable>
 
 ---

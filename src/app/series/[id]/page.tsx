@@ -28,6 +28,8 @@ export default function SeriesPage() {
   const gridCover = useVideoCoverThumb("gridPrimary");
 
   const { data: series, isLoading, error } = trpc.series.getById.useQuery({ id: seriesId }, { enabled: !!seriesId });
+  const { data: typesData } = trpc.series.listTypes.useQuery(undefined, { staleTime: 5 * 60_000 });
+  const seriesTypeInfo = series?.type ? (typesData?.types.find((t) => t.code === series.type) ?? null) : null;
 
   if (isLoading) {
     return (
@@ -82,7 +84,27 @@ export default function SeriesPage() {
         {/* 合集信息 */}
         <MotionPage>
           <div className="mb-6">
-            <h1 className="text-2xl font-bold mb-2">{series.title}</h1>
+            <div className="flex items-center gap-2 flex-wrap mb-2">
+              <h1 className="text-2xl font-bold">{series.title}</h1>
+              {seriesTypeInfo && (
+                <Badge
+                  variant="outline"
+                  className="text-xs"
+                  style={
+                    seriesTypeInfo.color
+                      ? { borderColor: seriesTypeInfo.color, color: seriesTypeInfo.color }
+                      : undefined
+                  }
+                >
+                  {seriesTypeInfo.label}
+                </Badge>
+              )}
+              {series.brand && (
+                <Badge variant="secondary" className="text-xs">
+                  {series.brand}
+                </Badge>
+              )}
+            </div>
             {series.description && <p className="text-muted-foreground mb-3">{series.description}</p>}
             <div className="flex items-center gap-4 text-sm text-muted-foreground">
               <Link

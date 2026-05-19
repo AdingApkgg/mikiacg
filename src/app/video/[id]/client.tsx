@@ -191,12 +191,22 @@ export function VideoPageClient({ id: initialId, initialVideo }: VideoPageClient
 
   // 选集器模式（后台可配置）
   const selectorMode = siteConfig?.videoSelectorMode ?? "series";
+  const selectorSeriesTypeFilter = siteConfig?.videoSelectorSeriesType ?? null;
 
   // --- 合集模式 ---
   const { data: seriesData } = trpc.series.getByVideoId.useQuery(
-    { videoId: initialId },
+    { videoId: initialId, typeFilter: selectorSeriesTypeFilter ?? undefined },
     { enabled: selectorMode === "series", staleTime: 60000 },
   );
+  // 合集类型清单（用于渲染类型徽章）
+  const { data: seriesTypesData } = trpc.series.listTypes.useQuery(undefined, {
+    enabled: selectorMode === "series" && !!seriesData?.series,
+    staleTime: 5 * 60_000,
+  });
+  const seriesTypeCode = seriesData?.series?.type ?? null;
+  const seriesTypeInfo = seriesTypeCode
+    ? (seriesTypesData?.types.find((t) => t.code === seriesTypeCode) ?? null)
+    : null;
   const seriesEpisodes = useMemo(() => {
     if (!seriesData?.series?.episodes) return [];
     return [...seriesData.series.episodes].sort((a, b) => b.episodeNum - a.episodeNum);
@@ -848,6 +858,28 @@ export function VideoPageClient({ id: initialId, initialVideo }: VideoPageClient
                         ? `第 ${currentEpisodeIndex >= 0 ? seriesEpisodes[currentEpisodeIndex]?.episodeNum : "?"} 集 / 共 ${seriesData?.series?.episodes.length ?? 0} 集`
                         : `共 ${selectorTotalCount ?? 0} 个作品`}
                     </p>
+                    {selectorMode === "series" && (seriesTypeInfo || seriesData?.series?.brand) && (
+                      <div className="flex items-center gap-1 mt-1 flex-wrap">
+                        {seriesTypeInfo && (
+                          <Badge
+                            variant="outline"
+                            className="text-[9px] px-1 py-0"
+                            style={
+                              seriesTypeInfo.color
+                                ? { borderColor: seriesTypeInfo.color, color: seriesTypeInfo.color }
+                                : undefined
+                            }
+                          >
+                            {seriesTypeInfo.label}
+                          </Badge>
+                        )}
+                        {seriesData?.series?.brand && (
+                          <Badge variant="secondary" className="text-[9px] px-1 py-0">
+                            {seriesData.series.brand}
+                          </Badge>
+                        )}
+                      </div>
+                    )}
                   </div>
                   <div className={`shrink-0 transition-transform ${mobileSeriesExpanded ? "rotate-180" : ""}`}>
                     <svg
@@ -1286,6 +1318,28 @@ export function VideoPageClient({ id: initialId, initialVideo }: VideoPageClient
                           ? `第 ${currentEpisodeIndex >= 0 ? seriesEpisodes[currentEpisodeIndex]?.episodeNum : "?"} 集 / 共 ${seriesData?.series?.episodes.length ?? 0} 集`
                           : `共 ${selectorTotalCount ?? 0} 个作品`}
                       </p>
+                      {selectorMode === "series" && (seriesTypeInfo || seriesData?.series?.brand) && (
+                        <div className="flex items-center gap-1.5 mt-1.5 flex-wrap">
+                          {seriesTypeInfo && (
+                            <Badge
+                              variant="outline"
+                              className="text-[10px] px-1.5 py-0"
+                              style={
+                                seriesTypeInfo.color
+                                  ? { borderColor: seriesTypeInfo.color, color: seriesTypeInfo.color }
+                                  : undefined
+                              }
+                            >
+                              {seriesTypeInfo.label}
+                            </Badge>
+                          )}
+                          {seriesData?.series?.brand && (
+                            <Badge variant="secondary" className="text-[10px] px-1.5 py-0">
+                              {seriesData.series.brand}
+                            </Badge>
+                          )}
+                        </div>
+                      )}
                     </div>
                   </div>
                   <div ref={episodeListRef} className="max-h-[400px] overflow-y-auto">
