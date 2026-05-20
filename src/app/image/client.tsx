@@ -155,6 +155,57 @@ export function ImageListClient({ initialTags, initialPosts }: ImageListClientPr
     return ALL_SORT_OPTIONS.filter((opt) => enabledKeys.includes(opt.id));
   }, [siteConfigCtx?.imageSortOptions]);
 
+  // 瀑布流 items 数组用 memo 锁定引用，避免父组件每次 re-render 都让 ImageMasonry 的列分配失效
+  const skeletonItems = useMemo(
+    () =>
+      Array.from({ length: 12 }).map((_, i) => ({
+        key: `skel-${i}`,
+        node: (
+          <div className="space-y-2">
+            <Skeleton
+              className="w-full rounded-2xl"
+              style={{ aspectRatio: SKELETON_RATIOS[i % SKELETON_RATIOS.length] }}
+            />
+            <Skeleton className="h-4 w-3/4" />
+            <Skeleton className="h-3 w-1/2" />
+          </div>
+        ),
+      })),
+    [],
+  );
+
+  const adGridItems = useMemo(
+    () =>
+      gridItems.map((item, index) =>
+        item.type === "ad"
+          ? {
+              key: `ad-${item.adIndex}`,
+              node: <AdCard ad={pickedAds[item.adIndex]} slotId="in-feed" />,
+            }
+          : {
+              key: item.data.id,
+              node: (
+                <ImagePostCard
+                  post={item.data}
+                  index={index}
+                  isFavorited={favoritedSet.has(item.data.id)}
+                  variant="masonry"
+                />
+              ),
+            },
+      ),
+    [gridItems, pickedAds, favoritedSet],
+  );
+
+  const postItems = useMemo(
+    () =>
+      posts.map((post, index) => ({
+        key: post.id,
+        node: <ImagePostCard post={post} index={index} isFavorited={favoritedSet.has(post.id)} variant="masonry" />,
+      })),
+    [posts, favoritedSet],
+  );
+
   const modules: Record<SectionModuleId, ReactNode> = {
     headerBanner: <HeaderBannerCarousel className="mb-4" />,
     announcement: (
@@ -213,56 +264,11 @@ export function ImageListClient({ initialTags, initialPosts }: ImageListClientPr
         ) : (
           <div key={`${sortBy}-${selectedSlugs.join(",")}-${excludedSlugs.join(",")}-${page}`}>
             {showSkeleton ? (
-              <ImageMasonry
-                items={Array.from({ length: 12 }).map((_, i) => ({
-                  key: `skel-${i}`,
-                  node: (
-                    <div className="space-y-2">
-                      <Skeleton
-                        className="w-full rounded-2xl"
-                        style={{ aspectRatio: SKELETON_RATIOS[i % SKELETON_RATIOS.length] }}
-                      />
-                      <Skeleton className="h-4 w-3/4" />
-                      <Skeleton className="h-3 w-1/2" />
-                    </div>
-                  ),
-                }))}
-              />
+              <ImageMasonry items={skeletonItems} />
             ) : hasAds ? (
-              <ImageMasonry
-                items={gridItems.map((item, index) =>
-                  item.type === "ad"
-                    ? {
-                        key: `ad-${item.adIndex}`,
-                        node: <AdCard ad={pickedAds[item.adIndex]} slotId="in-feed" />,
-                      }
-                    : {
-                        key: item.data.id,
-                        node: (
-                          <ImagePostCard
-                            post={item.data}
-                            index={index}
-                            isFavorited={favoritedSet.has(item.data.id)}
-                            variant="masonry"
-                          />
-                        ),
-                      },
-                )}
-              />
+              <ImageMasonry items={adGridItems} />
             ) : (
-              <ImageMasonry
-                items={posts.map((post, index) => ({
-                  key: post.id,
-                  node: (
-                    <ImagePostCard
-                      post={post}
-                      index={index}
-                      isFavorited={favoritedSet.has(post.id)}
-                      variant="masonry"
-                    />
-                  ),
-                }))}
-              />
+              <ImageMasonry items={postItems} />
             )}
 
             {!isLoading && !isFetching && posts.length === 0 && (

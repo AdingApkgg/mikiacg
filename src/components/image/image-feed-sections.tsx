@@ -2,6 +2,7 @@
 
 import Link from "next/link";
 import { ArrowRight, Sparkles, Flame, Trophy } from "lucide-react";
+import { useMemo } from "react";
 import { trpc } from "@/lib/trpc";
 import { ImagePostCard } from "./image-post-card";
 import { ImageMasonry } from "./image-masonry";
@@ -86,13 +87,40 @@ function FeedSection({
     { limit, page: 1, sortBy: section.sortBy, timeRange: section.timeRange ?? "all" },
     { staleTime: 60_000 },
   );
-  const posts = data?.posts ?? [];
-  const imagePostIds = posts.map((p) => p.id);
+  const posts = useMemo(() => data?.posts ?? [], [data?.posts]);
+  const imagePostIds = useMemo(() => posts.map((p) => p.id), [posts]);
   const { data: favoritedData } = trpc.image.favoritedMap.useQuery(
     { imagePostIds },
     { enabled: imagePostIds.length > 0, staleTime: 30_000 },
   );
-  const favoritedSet = new Set(favoritedData?.favoritedIds ?? []);
+  const favoritedSet = useMemo(() => new Set(favoritedData?.favoritedIds ?? []), [favoritedData?.favoritedIds]);
+
+  const skeletonItems = useMemo(
+    () =>
+      Array.from({ length: limit }).map((_, i) => ({
+        key: `skel-${i}`,
+        node: <SectionCardSkeleton index={i} />,
+      })),
+    [limit],
+  );
+
+  const postItems = useMemo(
+    () =>
+      posts.map((p, i) => ({
+        key: p.id,
+        node: (
+          <ImagePostCard
+            post={p}
+            index={i}
+            priority={eagerFirstRow && i < 4}
+            rank={section.showRank ? i + 1 : undefined}
+            isFavorited={favoritedSet.has(p.id)}
+            variant="masonry"
+          />
+        ),
+      })),
+    [posts, eagerFirstRow, section.showRank, favoritedSet],
+  );
 
   const { Icon } = section;
 
@@ -113,28 +141,9 @@ function FeedSection({
       </header>
 
       {isLoading && posts.length === 0 ? (
-        <ImageMasonry
-          items={Array.from({ length: limit }).map((_, i) => ({
-            key: `skel-${i}`,
-            node: <SectionCardSkeleton index={i} />,
-          }))}
-        />
+        <ImageMasonry items={skeletonItems} />
       ) : posts.length > 0 ? (
-        <ImageMasonry
-          items={posts.map((p, i) => ({
-            key: p.id,
-            node: (
-              <ImagePostCard
-                post={p}
-                index={i}
-                priority={eagerFirstRow && i < 4}
-                rank={section.showRank ? i + 1 : undefined}
-                isFavorited={favoritedSet.has(p.id)}
-                variant="masonry"
-              />
-            ),
-          }))}
-        />
+        <ImageMasonry items={postItems} />
       ) : (
         <div className="text-sm text-muted-foreground py-8 text-center">暂无内容</div>
       )}
