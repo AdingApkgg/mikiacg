@@ -178,7 +178,7 @@ export function TabSeo({ config }: { config: SiteConfig | undefined }) {
             <Globe className="h-5 w-5" />
             搜索引擎推送
           </CardTitle>
-          <CardDescription>主动通知搜索引擎索引新内容，加快收录速度</CardDescription>
+          <CardDescription>主动通知搜索引擎索引新内容（视频、游戏、图片帖、合集），加快收录速度</CardDescription>
         </CardHeader>
         <CardContent className="space-y-4">
           <div className="space-y-2">
@@ -222,9 +222,9 @@ export function TabSeo({ config }: { config: SiteConfig | undefined }) {
           <div className="rounded-lg bg-muted/50 p-3 text-sm text-muted-foreground">
             <p className="mb-1 font-medium">自动触发场景：</p>
             <ul className="list-inside list-disc space-y-0.5 text-xs">
-              <li>视频发布成功后</li>
-              <li>视频信息更新后</li>
-              <li>管理员审核通过后</li>
+              <li>视频 / 游戏 / 图片帖 发布或更新后</li>
+              <li>管理员审核通过（视频 / 游戏 / 图片帖）</li>
+              <li>合集创建或编辑后</li>
             </ul>
           </div>
 
@@ -283,7 +283,7 @@ export function TabSeo({ config }: { config: SiteConfig | undefined }) {
                   ) : (
                     <Send className="mr-1 h-4 w-4" />
                   )}
-                  提交全部视频
+                  提交全部内容
                 </Button>
 
                 {engineStatus?.google.configured && (
@@ -302,6 +302,8 @@ export function TabSeo({ config }: { config: SiteConfig | undefined }) {
                   </Button>
                 )}
               </div>
+
+              <p className="text-xs text-muted-foreground">「最近」「全部内容」覆盖：视频 + 游戏 + 图片帖 + 合集</p>
 
               {lastResult && (
                 <p className="text-xs text-muted-foreground">

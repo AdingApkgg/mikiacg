@@ -18,6 +18,7 @@ import {
 import { meili, INDEX, safeSync } from "@/lib/meilisearch";
 import { syncImagePost, deleteImagePost } from "@/lib/search-sync";
 import { shouldMeiliListSearch, imageListMeiliFilter, imageListMeiliSort } from "@/lib/meili-filters";
+import { submitImagePostToIndexNow, submitImagePostsToIndexNow } from "@/lib/indexnow";
 
 export const imageRouter = router({
   list: publicProcedure
@@ -243,6 +244,11 @@ export const imageRouter = router({
 
       scheduleTagCountRefresh(allTagIds, "图片创建");
       void safeSync(syncImagePost(post.id));
+
+      if (post.status === "PUBLISHED") {
+        submitImagePostToIndexNow(post.id).catch(() => {});
+      }
+
       return { id: post.id, status: post.status };
     }),
 
@@ -327,10 +333,15 @@ export const imageRouter = router({
 
       scheduleTagCountRefresh([...new Set([...previousTagIds, ...tagNameToId.values()])], "图片批量导入");
 
+      const indexableIds: string[] = [];
       for (const r of results) {
         if (r.id && !r.error) {
           void safeSync(syncImagePost(r.id));
+          if (status === "PUBLISHED") indexableIds.push(r.id);
         }
+      }
+      if (indexableIds.length > 0) {
+        submitImagePostsToIndexNow(indexableIds).catch(() => {});
       }
 
       return { results };
@@ -420,6 +431,10 @@ export const imageRouter = router({
       }
 
       void safeSync(syncImagePost(id));
+
+      if (status === "PUBLISHED") {
+        submitImagePostToIndexNow(id).catch(() => {});
+      }
 
       return { success: true };
     }),

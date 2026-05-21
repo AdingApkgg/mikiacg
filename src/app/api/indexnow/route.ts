@@ -2,9 +2,16 @@ import { NextRequest, NextResponse } from "next/server";
 import { getSession } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { isPrivileged } from "@/lib/permissions";
-import { submitVideosToIndexNow, submitGamesToIndexNow, submitSitePages, submitToIndexNow } from "@/lib/indexnow";
+import { submitContentsToIndexNow, submitSitePages, submitToIndexNow, type IndexableContentType } from "@/lib/indexnow";
 import { submitSitemapToGoogle, isGoogleConfigured } from "@/lib/google-indexing";
 import { getServerConfig } from "@/lib/server-config";
+
+const CONTENT_LABELS: Record<IndexableContentType, string> = {
+  video: "视频",
+  game: "游戏",
+  image: "图片帖",
+  series: "合集",
+};
 
 export async function POST(request: NextRequest) {
   try {
@@ -23,7 +30,15 @@ export async function POST(request: NextRequest) {
     }
 
     const body = await request.json();
-    const { type = "recent", days = 7, urls } = body;
+    const {
+      type = "recent",
+      days = 7,
+      urls,
+    } = body as {
+      type?: string;
+      days?: number;
+      urls?: string[];
+    };
 
     const config = await getServerConfig();
     const hasIndexNow = !!config.indexNowKey;
@@ -33,15 +48,17 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: "未配置任何搜索引擎推送" }, { status: 400 });
     }
 
-    const results: { indexnow?: { success: number; failed: number } | boolean; google?: boolean } = {};
+    const results: {
+      indexnow?: { success: number; failed: number } | boolean;
+      google?: boolean;
+    } = {};
     const messages: string[] = [];
 
-    let videoIds: string[] = [];
-    let gameIds: string[] = [];
+    const idsByType: Partial<Record<IndexableContentType, string[]>> = {};
 
     switch (type) {
       case "all": {
-        const [videos, games] = await Promise.all([
+        const [videos, games, images, seriesList] = await Promise.all([
           prisma.video.findMany({
             where: { status: "PUBLISHED" },
             select: { id: true },
@@ -52,16 +69,27 @@ export async function POST(request: NextRequest) {
             select: { id: true },
             orderBy: { createdAt: "desc" },
           }),
+          prisma.imagePost.findMany({
+            where: { status: "PUBLISHED" },
+            select: { id: true },
+            orderBy: { createdAt: "desc" },
+          }),
+          prisma.series.findMany({
+            select: { id: true },
+            orderBy: { createdAt: "desc" },
+          }),
         ]);
-        videoIds = videos.map((v) => v.id);
-        gameIds = games.map((g) => g.id);
+        idsByType.video = videos.map((v) => v.id);
+        idsByType.game = games.map((g) => g.id);
+        idsByType.image = images.map((i) => i.id);
+        idsByType.series = seriesList.map((s) => s.id);
         break;
       }
 
       case "recent": {
         const since = new Date();
         since.setDate(since.getDate() - days);
-        const [videos, games] = await Promise.all([
+        const [videos, games, images, seriesList] = await Promise.all([
           prisma.video.findMany({
             where: {
               status: "PUBLISHED",
@@ -76,9 +104,24 @@ export async function POST(request: NextRequest) {
             },
             select: { id: true },
           }),
+          prisma.imagePost.findMany({
+            where: {
+              status: "PUBLISHED",
+              OR: [{ createdAt: { gte: since } }, { updatedAt: { gte: since } }],
+            },
+            select: { id: true },
+          }),
+          prisma.series.findMany({
+            where: {
+              OR: [{ createdAt: { gte: since } }, { updatedAt: { gte: since } }],
+            },
+            select: { id: true },
+          }),
         ]);
-        videoIds = videos.map((v) => v.id);
-        gameIds = games.map((g) => g.id);
+        idsByType.video = videos.map((v) => v.id);
+        idsByType.game = games.map((g) => g.id);
+        idsByType.image = images.map((i) => i.id);
+        idsByType.series = seriesList.map((s) => s.id);
         break;
       }
 
@@ -116,17 +159,21 @@ export async function POST(request: NextRequest) {
     }
 
     if (hasIndexNow) {
-      const [videoResult, gameResult] = await Promise.all([
-        submitVideosToIndexNow(videoIds),
-        submitGamesToIndexNow(gameIds),
-      ]);
-      results.indexnow = {
-        success: videoResult.success + gameResult.success,
-        failed: videoResult.failed + gameResult.failed,
-      };
-      const parts: string[] = [];
-      if (videoResult.success > 0) parts.push(`${videoResult.success} 个视频`);
-      if (gameResult.success > 0) parts.push(`${gameResult.success} 个游戏`);
+      const orderedTypes: IndexableContentType[] = ["video", "game", "image", "series"];
+      const submitResults = await Promise.all(
+        orderedTypes.map(async (t) => {
+          const ids = idsByType[t] ?? [];
+          if (ids.length === 0) return { type: t, success: 0, failed: 0 };
+          const r = await submitContentsToIndexNow(t, ids);
+          return { type: t, ...r };
+        }),
+      );
+
+      const totalSuccess = submitResults.reduce((a, r) => a + r.success, 0);
+      const totalFailed = submitResults.reduce((a, r) => a + r.failed, 0);
+      results.indexnow = { success: totalSuccess, failed: totalFailed };
+
+      const parts = submitResults.filter((r) => r.success > 0).map((r) => `${r.success} 个${CONTENT_LABELS[r.type]}`);
       messages.push(`IndexNow: ${parts.join("、") || "0 条内容"}`);
     }
 

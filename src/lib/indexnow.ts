@@ -6,6 +6,16 @@ const INDEXNOW_ENDPOINTS = [
 ];
 
 const REQUEST_TIMEOUT = 5000;
+const BATCH_SIZE = 10000;
+
+export type IndexableContentType = "video" | "game" | "image" | "series";
+
+const CONTENT_PATH_PREFIX: Record<IndexableContentType, string> = {
+  video: "video",
+  game: "game",
+  image: "image",
+  series: "series",
+};
 
 async function fetchWithTimeout(url: string, options: RequestInit, timeout: number): Promise<Response> {
   const controller = new AbortController();
@@ -75,30 +85,39 @@ export async function submitToIndexNow(urls: string | string[]): Promise<boolean
   }
 }
 
-export async function submitVideoToIndexNow(videoId: string): Promise<boolean> {
+/**
+ * 通用内容推送：根据内容类型构造 URL 并提交
+ */
+export async function submitContentToIndexNow(type: IndexableContentType, id: string): Promise<boolean> {
   const config = await getServerConfig();
   const appUrl = config.siteUrl;
   if (!appUrl) return false;
 
-  const videoUrl = `${appUrl}/video/${videoId}`;
-  return submitToIndexNow(videoUrl);
+  const url = `${appUrl}/${CONTENT_PATH_PREFIX[type]}/${id}`;
+  return submitToIndexNow(url);
 }
 
-export async function submitVideosToIndexNow(videoIds: string[]): Promise<{ success: number; failed: number }> {
+/**
+ * 批量推送同一类型内容，自动分批避免单次 URL 数过多
+ */
+export async function submitContentsToIndexNow(
+  type: IndexableContentType,
+  ids: string[],
+): Promise<{ success: number; failed: number }> {
   const config = await getServerConfig();
   const appUrl = config.siteUrl;
-  if (!appUrl || !config.indexNowKey) {
-    return { success: 0, failed: videoIds.length };
+  if (!appUrl || !config.indexNowKey || ids.length === 0) {
+    return { success: 0, failed: ids.length };
   }
 
-  const urls = videoIds.map((id) => `${appUrl}/video/${id}`);
+  const prefix = CONTENT_PATH_PREFIX[type];
+  const urls = ids.map((id) => `${appUrl}/${prefix}/${id}`);
 
-  const batchSize = 10000;
   let success = 0;
   let failed = 0;
 
-  for (let i = 0; i < urls.length; i += batchSize) {
-    const batch = urls.slice(i, i + batchSize);
+  for (let i = 0; i < urls.length; i += BATCH_SIZE) {
+    const batch = urls.slice(i, i + BATCH_SIZE);
     const result = await submitToIndexNow(batch);
     if (result) {
       success += batch.length;
@@ -110,47 +129,41 @@ export async function submitVideosToIndexNow(videoIds: string[]): Promise<{ succ
   return { success, failed };
 }
 
-export async function submitGameToIndexNow(gameId: string): Promise<boolean> {
-  const config = await getServerConfig();
-  const appUrl = config.siteUrl;
-  if (!appUrl) return false;
+// ---------------------------------------------------------------------------
+// 内容类型快捷方法（保持向后兼容）
+// ---------------------------------------------------------------------------
 
-  const gameUrl = `${appUrl}/game/${gameId}`;
-  return submitToIndexNow(gameUrl);
-}
+export const submitVideoToIndexNow = (videoId: string) => submitContentToIndexNow("video", videoId);
+export const submitVideosToIndexNow = (videoIds: string[]) => submitContentsToIndexNow("video", videoIds);
 
-export async function submitGamesToIndexNow(gameIds: string[]): Promise<{ success: number; failed: number }> {
-  const config = await getServerConfig();
-  const appUrl = config.siteUrl;
-  if (!appUrl || !config.indexNowKey) {
-    return { success: 0, failed: gameIds.length };
-  }
+export const submitGameToIndexNow = (gameId: string) => submitContentToIndexNow("game", gameId);
+export const submitGamesToIndexNow = (gameIds: string[]) => submitContentsToIndexNow("game", gameIds);
 
-  const urls = gameIds.map((id) => `${appUrl}/game/${id}`);
+export const submitImagePostToIndexNow = (postId: string) => submitContentToIndexNow("image", postId);
+export const submitImagePostsToIndexNow = (postIds: string[]) => submitContentsToIndexNow("image", postIds);
 
-  const batchSize = 10000;
-  let success = 0;
-  let failed = 0;
+export const submitSeriesToIndexNow = (seriesId: string) => submitContentToIndexNow("series", seriesId);
+export const submitSeriesListToIndexNow = (seriesIds: string[]) => submitContentsToIndexNow("series", seriesIds);
 
-  for (let i = 0; i < urls.length; i += batchSize) {
-    const batch = urls.slice(i, i + batchSize);
-    const result = await submitToIndexNow(batch);
-    if (result) {
-      success += batch.length;
-    } else {
-      failed += batch.length;
-    }
-  }
-
-  return { success, failed };
-}
-
+/**
+ * 提交首页/列表页等站点结构页面
+ */
 export async function submitSitePages(): Promise<boolean> {
   const config = await getServerConfig();
   const appUrl = config.siteUrl;
   if (!appUrl) return false;
 
-  const pages = [appUrl, `${appUrl}/tags`, `${appUrl}/search`];
+  const pages = [
+    appUrl,
+    `${appUrl}/game`,
+    `${appUrl}/image`,
+    `${appUrl}/series`,
+    `${appUrl}/tags`,
+    `${appUrl}/ranking`,
+    `${appUrl}/links`,
+    `${appUrl}/feedback`,
+    `${appUrl}/search`,
+  ];
 
   return submitToIndexNow(pages);
 }

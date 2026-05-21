@@ -4,6 +4,7 @@ import { z } from "zod";
 import { Prisma } from "@/generated/prisma/client";
 import { safeSync } from "@/lib/meilisearch";
 import { syncImagePost, deleteImagePost } from "@/lib/search-sync";
+import { submitImagePostToIndexNow, submitImagePostsToIndexNow } from "@/lib/indexnow";
 
 export const adminImagesRouter = router({
   // ========== 图片管理 ==========
@@ -86,6 +87,10 @@ export const adminImagesRouter = router({
 
       void safeSync(syncImagePost(input.imageId));
 
+      if (input.status === "PUBLISHED") {
+        submitImagePostToIndexNow(input.imageId).catch(() => {});
+      }
+
       return { success: true };
     }),
 
@@ -141,6 +146,10 @@ export const adminImagesRouter = router({
 
       for (const pid of input.imageIds) {
         void safeSync(syncImagePost(pid));
+      }
+
+      if (input.status === "PUBLISHED") {
+        submitImagePostsToIndexNow(input.imageIds).catch(() => {});
       }
 
       return { success: true, count: result.count };

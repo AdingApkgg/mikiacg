@@ -3,6 +3,7 @@ import { TRPCError } from "@trpc/server";
 import { z } from "zod";
 import { Prisma } from "@/generated/prisma/client";
 import { getPublicSiteConfig } from "@/lib/site-config";
+import { submitSeriesToIndexNow } from "@/lib/indexnow";
 
 const SERIES_TYPE_CODE = z
   .string()
@@ -175,10 +176,14 @@ export const adminSeriesRouter = router({
         updateData.brand = data.brand?.trim() || null;
       }
 
-      return ctx.prisma.series.update({
+      const updated = await ctx.prisma.series.update({
         where: { id },
         data: updateData,
       });
+
+      submitSeriesToIndexNow(updated.id).catch(() => {});
+
+      return updated;
     }),
 
   adminDeleteSeries: adminProcedure

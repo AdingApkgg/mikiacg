@@ -3,6 +3,7 @@ import { TRPCError } from "@trpc/server";
 import { Prisma } from "@/generated/prisma/client";
 import { router, publicProcedure, protectedProcedure } from "../trpc";
 import { getPublicSiteConfig } from "@/lib/site-config";
+import { submitSeriesToIndexNow } from "@/lib/indexnow";
 
 /** code 校验：与 series-types.ts 中的规则保持一致 */
 const SERIES_TYPE_CODE = z
@@ -317,6 +318,8 @@ export const seriesRouter = router({
         },
       });
 
+      submitSeriesToIndexNow(series.id).catch(() => {});
+
       return series;
     }),
 
@@ -369,10 +372,14 @@ export const seriesRouter = router({
         data.brand = input.brand?.trim() || null;
       }
 
-      return ctx.prisma.series.update({
+      const updated = await ctx.prisma.series.update({
         where: { id: input.id },
         data,
       });
+
+      submitSeriesToIndexNow(updated.id).catch(() => {});
+
+      return updated;
     }),
 
   // 删除合集
