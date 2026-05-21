@@ -41,8 +41,10 @@ import {
   REPORT_TARGET_TYPES,
   REPORT_TARGET_TYPE_LABELS,
   type TicketCategoryKey,
+  type TicketAttachment,
 } from "@/lib/ticket-schema";
 import { CategoryBadge, StatusBadge, PriorityBadge } from "./_components/badges";
+import { AttachmentUploader } from "./_components/attachment-uploader";
 
 type StatusFilter = "ALL" | (typeof TICKET_STATUSES)[number];
 
@@ -103,6 +105,7 @@ function SubmitCard() {
   const [content, setContent] = useState("");
   const [priority, setPriority] = useState<(typeof TICKET_PRIORITIES)[number]>("NORMAL");
   const [meta, setMeta] = useState<Record<string, string>>({});
+  const [attachments, setAttachments] = useState<TicketAttachment[]>([]);
 
   const createMutation = trpc.ticket.create.useMutation({
     onSuccess: ({ id }) => {
@@ -110,6 +113,7 @@ function SubmitCard() {
       setTitle("");
       setContent("");
       setMeta({});
+      setAttachments([]);
       setPriority("NORMAL");
       utils.ticket.list.invalidate();
       utils.ticket.myStats.invalidate();
@@ -165,6 +169,7 @@ function SubmitCard() {
       content: content.trim(),
       priority,
       metadata,
+      attachments: attachments.length > 0 ? attachments : undefined,
     });
   };
 
@@ -228,6 +233,11 @@ function SubmitCard() {
             rows={5}
           />
           <div className="text-[11px] text-muted-foreground mt-1 text-right">{content.length} / 5000</div>
+        </div>
+
+        <div>
+          <label className="text-xs font-medium text-muted-foreground mb-1.5 block">附件 (可选)</label>
+          <AttachmentUploader attachments={attachments} onChange={setAttachments} />
         </div>
 
         <div>

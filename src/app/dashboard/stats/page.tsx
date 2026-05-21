@@ -28,7 +28,12 @@ import {
   Target,
   ShieldCheck,
   Flame,
+  Inbox,
+  AlertCircle,
+  Clock,
+  ArrowRight,
 } from "lucide-react";
+import Link from "next/link";
 import { MotionPage } from "@/components/motion";
 import {
   ChartContainer,
@@ -900,6 +905,77 @@ function GrowthRadial({ range, onRangeChange }: { range: DateRangeValue; onRange
   );
 }
 
+// ==================== 工单提醒 ====================
+
+function PendingTicketsCard({ canManage }: { canManage: boolean }) {
+  const { data, isLoading } = trpc.admin.stats.useQuery(undefined, {
+    enabled: canManage,
+    staleTime: 60_000,
+  });
+
+  if (!canManage || isLoading || !data) return null;
+  const pending = data.counts.PENDING ?? 0;
+  const waiting = data.counts.WAITING_USER ?? 0;
+  const inProgress = data.counts.IN_PROGRESS ?? 0;
+  const active = pending + waiting + inProgress;
+  if (active === 0) return null;
+
+  return (
+    <Link
+      href="/dashboard/tickets"
+      className="block rounded-xl border bg-card hover:bg-accent/30 transition-colors p-4"
+    >
+      <div className="flex items-center gap-4 flex-wrap">
+        <div className="flex items-center gap-2.5">
+          <div className="p-2 rounded-lg bg-amber-500/10">
+            <Inbox className="h-4 w-4 text-amber-500" />
+          </div>
+          <div>
+            <div className="text-sm font-medium leading-tight">工单提醒</div>
+            <div className="text-xs text-muted-foreground">今日新增 {data.todayCount} 条</div>
+          </div>
+        </div>
+
+        <div className="flex items-center gap-3 ml-auto flex-wrap text-xs">
+          <TicketPill icon={AlertCircle} label="待处理" value={pending} color="amber" />
+          <TicketPill icon={Clock} label="处理中" value={inProgress} color="blue" />
+          <TicketPill icon={AlertCircle} label="等待用户" value={waiting} color="orange" />
+          <span className="inline-flex items-center gap-1 text-muted-foreground hover:text-foreground">
+            查看全部
+            <ArrowRight className="h-3 w-3" />
+          </span>
+        </div>
+      </div>
+    </Link>
+  );
+}
+
+function TicketPill({
+  icon: Icon,
+  label,
+  value,
+  color,
+}: {
+  icon: typeof Inbox;
+  label: string;
+  value: number;
+  color: "amber" | "blue" | "orange";
+}) {
+  if (value === 0) return null;
+  const styles: Record<typeof color, string> = {
+    amber: "bg-amber-500/10 text-amber-700 dark:text-amber-400",
+    blue: "bg-blue-500/10 text-blue-700 dark:text-blue-400",
+    orange: "bg-orange-500/10 text-orange-700 dark:text-orange-400",
+  };
+  return (
+    <span className={`inline-flex items-center gap-1 rounded-md px-2 py-0.5 ${styles[color]}`}>
+      <Icon className="h-3 w-3" />
+      {label}
+      <span className="font-semibold tabular-nums ml-0.5">{value}</span>
+    </span>
+  );
+}
+
 // ==================== 主页面 ====================
 
 export default function StatsPage() {
@@ -914,6 +990,8 @@ export default function StatsPage() {
     dateRangeToApi(revenueRange),
   );
   const { data: zoneHealth, isLoading: zoneHealthLoading } = trpc.admin.getZoneHealth.useQuery();
+  const { data: permissions } = trpc.admin.getMyPermissions.useQuery();
+  const canManageTickets = !!permissions?.scopes.includes("ticket:manage");
 
   const otherStats = [
     { icon: Tag, label: "标签", value: stats?.tagCount ?? 0, color: "text-purple-500" },
@@ -954,6 +1032,13 @@ export default function StatsPage() {
       <MotionPage>
         <EngagementMicro stats={stats} loading={statsLoading} />
       </MotionPage>
+
+      {/* 工单提醒 */}
+      {canManageTickets && (
+        <MotionPage>
+          <PendingTicketsCard canManage={canManageTickets} />
+        </MotionPage>
+      )}
 
       {/* 收入 + 用户增长 */}
       <MotionPage>

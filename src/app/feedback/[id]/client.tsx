@@ -27,6 +27,8 @@ import { ArrowLeft, Loader2, Send, ShieldCheck, Settings, X } from "lucide-react
 import { formatDate, formatRelativeTime } from "@/lib/format";
 import { RESOURCE_REQUEST_TYPE_LABELS, REPORT_TARGET_TYPE_LABELS } from "@/lib/ticket-schema";
 import { CategoryBadge, StatusBadge, PriorityBadge } from "../_components/badges";
+import { AttachmentUploader, AttachmentList } from "../_components/attachment-uploader";
+import type { TicketAttachment } from "@/lib/ticket-schema";
 
 export default function TicketDetailClient({ ticketId }: { ticketId: string }) {
   const { session, isLoading: sessionLoading } = useStableSession();
@@ -45,10 +47,12 @@ export default function TicketDetailClient({ ticketId }: { ticketId: string }) {
   );
 
   const [reply, setReply] = useState("");
+  const [replyAttachments, setReplyAttachments] = useState<TicketAttachment[]>([]);
 
   const replyMutation = trpc.ticket.reply.useMutation({
     onSuccess: () => {
       setReply("");
+      setReplyAttachments([]);
       toast.success("已发送");
       utils.ticket.getById.invalidate({ id: ticketId });
       utils.ticket.list.invalidate();
@@ -129,6 +133,7 @@ export default function TicketDetailClient({ ticketId }: { ticketId: string }) {
         </CardHeader>
         <CardContent>
           <div className="whitespace-pre-wrap text-sm leading-relaxed">{ticket.content}</div>
+          <AttachmentList attachments={ticket.attachments as TicketAttachment[] | null} />
           <MetadataBlock category={ticket.category} metadata={ticket.metadata} />
         </CardContent>
       </Card>
@@ -153,27 +158,31 @@ export default function TicketDetailClient({ ticketId }: { ticketId: string }) {
           )}
 
           {!isClosed && (
-            <div className="pt-2 border-t">
+            <div className="pt-2 border-t space-y-2">
               <Textarea
                 placeholder="输入回复..."
                 value={reply}
                 onChange={(e) => setReply(e.target.value)}
                 maxLength={5000}
                 rows={3}
-                className="mb-2"
               />
+              <AttachmentUploader attachments={replyAttachments} onChange={setReplyAttachments} size="sm" max={4} />
               <div className="flex items-center justify-between gap-2">
                 <span className="text-[11px] text-muted-foreground">{reply.length} / 5000</span>
                 <Button
                   size="sm"
                   onClick={() => {
-                    if (reply.trim().length < 1) {
-                      toast.error("内容不能为空");
+                    if (reply.trim().length < 1 && replyAttachments.length === 0) {
+                      toast.error("请填写内容或添加附件");
                       return;
                     }
-                    replyMutation.mutate({ ticketId, content: reply.trim() });
+                    replyMutation.mutate({
+                      ticketId,
+                      content: reply.trim() || "(仅附件)",
+                      attachments: replyAttachments.length > 0 ? replyAttachments : undefined,
+                    });
                   }}
-                  disabled={replyMutation.isPending || reply.trim().length === 0}
+                  disabled={replyMutation.isPending}
                 >
                   {replyMutation.isPending ? (
                     <Loader2 className="h-4 w-4 animate-spin mr-2" />
@@ -229,6 +238,7 @@ type ReplyData = {
   isSystem: boolean;
   createdAt: Date;
   userId: string;
+  attachments: unknown;
   user: {
     id: string;
     username: string;
@@ -277,6 +287,7 @@ function ReplyBubble({ reply, isSelf, isSystem }: { reply: ReplyData; isSelf: bo
         >
           {reply.content}
         </div>
+        <AttachmentList attachments={reply.attachments as TicketAttachment[] | null} />
       </div>
     </div>
   );

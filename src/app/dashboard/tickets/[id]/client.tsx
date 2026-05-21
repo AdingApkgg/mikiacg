@@ -22,8 +22,30 @@ import {
   AlertDialogTitle,
   AlertDialogTrigger,
 } from "@/components/ui/alert-dialog";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+  DialogTrigger,
+} from "@/components/ui/dialog";
+import { Input } from "@/components/ui/input";
 import { toast } from "sonner";
-import { ArrowLeft, Loader2, Send, ShieldCheck, Settings, Trash2, StickyNote, MessageSquare } from "lucide-react";
+import {
+  ArrowLeft,
+  Loader2,
+  Send,
+  ShieldCheck,
+  Settings,
+  Trash2,
+  StickyNote,
+  MessageSquare,
+  GitMerge,
+  Search as SearchIcon,
+  ExternalLink,
+} from "lucide-react";
 import { formatDate, formatRelativeTime } from "@/lib/format";
 import {
   TICKET_STATUSES,
@@ -32,8 +54,10 @@ import {
   TICKET_PRIORITY_LABELS,
   RESOURCE_REQUEST_TYPE_LABELS,
   REPORT_TARGET_TYPE_LABELS,
+  type TicketAttachment,
 } from "@/lib/ticket-schema";
 import { CategoryBadge, StatusBadge, PriorityBadge } from "@/app/feedback/_components/badges";
+import { AttachmentUploader, AttachmentList } from "@/app/feedback/_components/attachment-uploader";
 
 export default function AdminTicketDetailClient({ ticketId }: { ticketId: string }) {
   const utils = trpc.useUtils();
@@ -44,15 +68,19 @@ export default function AdminTicketDetailClient({ ticketId }: { ticketId: string
   const { data: assignees } = trpc.admin.assigneeOptions.useQuery();
 
   const [reply, setReply] = useState("");
+  const [replyAttachments, setReplyAttachments] = useState<TicketAttachment[]>([]);
   const [internalNote, setInternalNote] = useState("");
+  const [noteAttachments, setNoteAttachments] = useState<TicketAttachment[]>([]);
 
   const replyMutation = trpc.admin.replyTicket.useMutation({
     onSuccess: (_, vars) => {
       if (vars.isInternal) {
         setInternalNote("");
+        setNoteAttachments([]);
         toast.success("内部备注已添加");
       } else {
         setReply("");
+        setReplyAttachments([]);
         toast.success("回复已发送");
       }
       utils.admin.getTicketById.invalidate({ id: ticketId });
@@ -76,6 +104,16 @@ export default function AdminTicketDetailClient({ ticketId }: { ticketId: string
     onSuccess: () => {
       toast.success("已删除");
       window.location.href = "/dashboard/tickets";
+    },
+    onError: (err) => toast.error(err.message),
+  });
+
+  const [mergeOpen, setMergeOpen] = useState(false);
+  const mergeMutation = trpc.admin.mergeTicket.useMutation({
+    onSuccess: ({ targetId }) => {
+      toast.success("已合并");
+      setMergeOpen(false);
+      window.location.href = `/dashboard/tickets/${targetId}`;
     },
     onError: (err) => toast.error(err.message),
   });
@@ -118,6 +156,45 @@ export default function AdminTicketDetailClient({ ticketId }: { ticketId: string
         返回工单列表
       </Link>
 
+      {/* 重复合并提示 */}
+      {ticket.duplicateOf && (
+        <div className="rounded-md border border-amber-500/30 bg-amber-500/5 px-4 py-3 text-sm flex items-center gap-2 flex-wrap">
+          <GitMerge className="h-4 w-4 text-amber-600" />
+          <span>本工单已被标记为重复,已合并至</span>
+          <Link
+            href={`/dashboard/tickets/${ticket.duplicateOf.id}`}
+            className="font-medium text-amber-700 dark:text-amber-400 hover:underline inline-flex items-center gap-1"
+          >
+            {ticket.duplicateOf.title}
+            <ExternalLink className="h-3 w-3" />
+          </Link>
+        </div>
+      )}
+
+      {/* 关联的重复工单 */}
+      {ticket.duplicates && ticket.duplicates.length > 0 && (
+        <div className="rounded-md border bg-card px-4 py-3 text-sm">
+          <div className="flex items-center gap-2 mb-2 text-muted-foreground">
+            <GitMerge className="h-4 w-4" />
+            <span>已合并 {ticket.duplicates.length} 条重复工单</span>
+          </div>
+          <ul className="space-y-1">
+            {ticket.duplicates.map((d) => (
+              <li key={d.id}>
+                <Link
+                  href={`/dashboard/tickets/${d.id}`}
+                  className="text-xs text-muted-foreground hover:text-foreground inline-flex items-center gap-1.5"
+                >
+                  <span className="font-medium">{d.title}</span>
+                  <span>· {d.user.nickname || d.user.username}</span>
+                  <ExternalLink className="h-3 w-3" />
+                </Link>
+              </li>
+            ))}
+          </ul>
+        </div>
+      )}
+
       <div className="grid gap-4 lg:grid-cols-[1fr_280px]">
         <div className="space-y-4 min-w-0">
           <Card>
@@ -135,6 +212,7 @@ export default function AdminTicketDetailClient({ ticketId }: { ticketId: string
             </CardHeader>
             <CardContent>
               <div className="whitespace-pre-wrap text-sm leading-relaxed">{ticket.content}</div>
+              <AttachmentList attachments={ticket.attachments as TicketAttachment[] | null} />
               <MetadataBlock category={ticket.category} metadata={ticket.metadata} />
             </CardContent>
           </Card>
@@ -163,25 +241,35 @@ export default function AdminTicketDetailClient({ ticketId }: { ticketId: string
                   )}
 
                   {ticket.status !== "CLOSED" && (
-                    <div className="pt-2 border-t">
+                    <div className="pt-2 border-t space-y-2">
                       <Textarea
                         placeholder="回复用户..."
                         value={reply}
                         onChange={(e) => setReply(e.target.value)}
                         maxLength={5000}
                         rows={3}
-                        className="mb-2"
+                      />
+                      <AttachmentUploader
+                        attachments={replyAttachments}
+                        onChange={setReplyAttachments}
+                        size="sm"
+                        max={4}
                       />
                       <div className="flex items-center justify-between gap-2">
                         <span className="text-[11px] text-muted-foreground">{reply.length} / 5000</span>
                         <Button
                           size="sm"
                           onClick={() => {
-                            if (reply.trim().length < 1) {
-                              toast.error("内容不能为空");
+                            if (reply.trim().length < 1 && replyAttachments.length === 0) {
+                              toast.error("请填写内容或添加附件");
                               return;
                             }
-                            replyMutation.mutate({ ticketId, content: reply.trim(), isInternal: false });
+                            replyMutation.mutate({
+                              ticketId,
+                              content: reply.trim() || "(仅附件)",
+                              attachments: replyAttachments.length > 0 ? replyAttachments : undefined,
+                              isInternal: false,
+                            });
                           }}
                           disabled={replyMutation.isPending}
                         >
@@ -208,27 +296,28 @@ export default function AdminTicketDetailClient({ ticketId }: { ticketId: string
                     internalReplies.map((r) => <ReplyBubble key={r.id} reply={r} isInternal />)
                   )}
 
-                  <div className="pt-2 border-t">
+                  <div className="pt-2 border-t space-y-2">
                     <Textarea
                       placeholder="仅管理员可见的备注..."
                       value={internalNote}
                       onChange={(e) => setInternalNote(e.target.value)}
                       maxLength={5000}
                       rows={3}
-                      className="mb-2"
                     />
+                    <AttachmentUploader attachments={noteAttachments} onChange={setNoteAttachments} size="sm" max={4} />
                     <div className="flex items-center justify-end">
                       <Button
                         size="sm"
                         variant="secondary"
                         onClick={() => {
-                          if (internalNote.trim().length < 1) {
-                            toast.error("内容不能为空");
+                          if (internalNote.trim().length < 1 && noteAttachments.length === 0) {
+                            toast.error("请填写内容或添加附件");
                             return;
                           }
                           replyMutation.mutate({
                             ticketId,
-                            content: internalNote.trim(),
+                            content: internalNote.trim() || "(仅附件)",
+                            attachments: noteAttachments.length > 0 ? noteAttachments : undefined,
                             isInternal: true,
                           });
                         }}
@@ -359,6 +448,22 @@ export default function AdminTicketDetailClient({ ticketId }: { ticketId: string
                 关闭工单
               </Button>
 
+              {!ticket.duplicateOfId && (
+                <Dialog open={mergeOpen} onOpenChange={setMergeOpen}>
+                  <DialogTrigger asChild>
+                    <Button variant="outline" size="sm" className="w-full justify-start">
+                      <GitMerge className="h-3.5 w-3.5 mr-1.5" />
+                      合并到...
+                    </Button>
+                  </DialogTrigger>
+                  <MergeDialogContent
+                    sourceId={ticket.id}
+                    isPending={mergeMutation.isPending}
+                    onConfirm={(targetId) => mergeMutation.mutate({ sourceId: ticket.id, targetId })}
+                  />
+                </Dialog>
+              )}
+
               <AlertDialog>
                 <AlertDialogTrigger asChild>
                   <Button
@@ -437,6 +542,7 @@ type ReplyData = {
   isInternal: boolean;
   createdAt: Date;
   userId: string;
+  attachments: unknown;
   user: {
     id: string;
     username: string;
@@ -502,6 +608,7 @@ function ReplyBubble({
         >
           {reply.content}
         </div>
+        <AttachmentList attachments={reply.attachments as TicketAttachment[] | null} />
       </div>
     </div>
   );
@@ -546,5 +653,94 @@ function MetadataBlock({ category, metadata }: { category: string; metadata: unk
         </div>
       ))}
     </div>
+  );
+}
+
+// ==================== 合并工单对话框 ====================
+
+function MergeDialogContent({
+  sourceId,
+  isPending,
+  onConfirm,
+}: {
+  sourceId: string;
+  isPending: boolean;
+  onConfirm: (targetId: string) => void;
+}) {
+  const [search, setSearch] = useState("");
+  const [selectedId, setSelectedId] = useState<string | null>(null);
+
+  const { data: results, isLoading } = trpc.admin.searchForMerge.useQuery(
+    { excludeId: sourceId, search: search.trim() },
+    { enabled: search.trim().length >= 1 },
+  );
+
+  return (
+    <DialogContent className="max-w-md">
+      <DialogHeader>
+        <DialogTitle className="flex items-center gap-2">
+          <GitMerge className="h-4 w-4" />
+          合并到其他工单
+        </DialogTitle>
+        <DialogDescription>本工单将被标记为重复并关闭,目标工单会保留完整对话。</DialogDescription>
+      </DialogHeader>
+
+      <div className="space-y-3">
+        <div className="relative">
+          <SearchIcon className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+          <Input
+            placeholder="搜索工单标题或 ID"
+            value={search}
+            onChange={(e) => {
+              setSearch(e.target.value);
+              setSelectedId(null);
+            }}
+            className="pl-9"
+          />
+        </div>
+
+        <div className="max-h-72 overflow-y-auto space-y-1">
+          {search.trim().length === 0 ? (
+            <p className="text-xs text-muted-foreground text-center py-6">输入关键词搜索目标工单</p>
+          ) : isLoading ? (
+            <div className="flex justify-center py-4">
+              <Loader2 className="h-4 w-4 animate-spin text-muted-foreground" />
+            </div>
+          ) : !results || results.length === 0 ? (
+            <p className="text-xs text-muted-foreground text-center py-6">没有匹配的工单</p>
+          ) : (
+            results.map((t) => (
+              <button
+                key={t.id}
+                type="button"
+                onClick={() => setSelectedId(t.id)}
+                className={cn(
+                  "w-full text-left rounded-md border p-2.5 transition-colors",
+                  selectedId === t.id
+                    ? "border-primary bg-primary/5"
+                    : "border-border hover:border-border hover:bg-accent/50",
+                )}
+              >
+                <div className="flex items-center gap-2 mb-1">
+                  <StatusBadge status={t.status} />
+                  <CategoryBadge category={t.category} />
+                </div>
+                <div className="text-sm font-medium line-clamp-1">{t.title}</div>
+                <div className="text-[11px] text-muted-foreground mt-0.5">
+                  #{t.id.slice(-8)} · {t.user.nickname || t.user.username} · {formatDate(t.createdAt, "MM-DD")}
+                </div>
+              </button>
+            ))
+          )}
+        </div>
+      </div>
+
+      <DialogFooter>
+        <Button disabled={!selectedId || isPending} onClick={() => selectedId && onConfirm(selectedId)}>
+          {isPending ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : <GitMerge className="h-4 w-4 mr-2" />}
+          确认合并
+        </Button>
+      </DialogFooter>
+    </DialogContent>
   );
 }

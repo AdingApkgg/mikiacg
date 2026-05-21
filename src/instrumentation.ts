@@ -38,4 +38,8 @@ export async function register() {
   const { startTronMonitor } = await import("@/lib/tron-monitor");
   startTronMonitor();
   console.log(`[${ts()}][Instrumentation] USDT 支付监听已启动`);
+
+  const { startTicketScheduler } = await import("@/lib/ticket-scheduler");
+  startTicketScheduler();
+  console.log(`[${ts()}][Instrumentation] 工单自动关闭调度器已启动`);
 }

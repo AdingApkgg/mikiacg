@@ -36,6 +36,7 @@ import {
   Coins,
   MessageSquare,
   Mail,
+  Inbox,
 } from "lucide-react";
 import { useState, useRef, useEffect, useCallback } from "react";
 import { useRouter } from "next/navigation";
@@ -591,6 +592,12 @@ export function Header({ onMenuClick }: HeaderProps) {
                     <Link href="/history">
                       <History className="mr-2 h-4 w-4" />
                       观看历史
+                    </Link>
+                  </DropdownMenuItem>
+                  <DropdownMenuItem asChild>
+                    <Link href="/feedback">
+                      <Inbox className="mr-2 h-4 w-4" />
+                      反馈与求助
                     </Link>
                   </DropdownMenuItem>
                   {isPrivileged(session.user.role ?? "") && (
