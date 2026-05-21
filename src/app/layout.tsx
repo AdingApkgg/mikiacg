@@ -164,12 +164,19 @@ async function RootProviders({ children }: { children: React.ReactNode }) {
     redirect("/setup");
   }
 
+  // 服务端 UA 嗅探，决定是否需要 SSR 阶段就拉 Telegram SDK。
+  // TG 各端（Android/iOS/macOS/Windows）的 webview UA 都带 `Telegram` 标识，覆盖率足够。
+  // 非 TMA 用户不挂 TmaBootstrap，可彻底规避 next/script 对外部脚本的自动 preload，
+  // 把这 ~50KB 的带宽让给 LCP 候选图。Hash/Proxy 嗅探兜底在客户端 Providers 内。
+  const userAgent = headersList.get("user-agent") ?? "";
+  const initiallyTma = /Telegram/i.test(userAgent);
+
   const siteConfig = await getPublicSiteConfig();
   const themeCSS = generateThemeCSS(siteConfig);
   return (
     <>
       {themeCSS && <style dangerouslySetInnerHTML={{ __html: themeCSS }} />}
-      <Providers siteConfig={siteConfig}>
+      <Providers siteConfig={siteConfig} initiallyTma={initiallyTma}>
         <AppLayout>{children}</AppLayout>
       </Providers>
     </>

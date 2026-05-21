@@ -107,7 +107,9 @@ function VideoCardComponent({ video, index, highlightQuery, watchProgress, rank,
             blurDataURL={video.coverBlurHash}
             title={video.title}
             preset="gridPrimary"
-            priority={index !== undefined && index < 8}
+            // 仅首屏可见的前 2 张抢高优；过多 priority 会触发 next/image 自动 preload，
+            // 导致首页一次性 preload 十几张大图，挤占 LCP 候选的带宽（PSI 实测 LCP 4.8s）。
+            priority={index !== undefined && index < 2}
             className={cn(
               "transition-transform duration-500 ease-[cubic-bezier(0.16,1,0.3,1)] will-change-transform group-hover:scale-105",
               watched && "grayscale opacity-70",

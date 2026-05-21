@@ -1,6 +1,6 @@
 "use client";
 
-import { Component, useState, useEffect, useRef, type ReactNode, type ErrorInfo } from "react";
+import { Component, useState, useEffect, useRef, useSyncExternalStore, type ReactNode, type ErrorInfo } from "react";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { httpBatchLink } from "@trpc/client";
 import { trpc } from "@/lib/trpc";
@@ -205,7 +205,55 @@ function getBaseUrl() {
   return `http://localhost:${process.env.PORT ?? 3000}`;
 }
 
-export function Providers({ children, siteConfig }: { children: React.ReactNode; siteConfig: PublicSiteConfig }) {
+/**
+ * Telegram SDK 条件挂载闸门。
+ *
+ * 非 TMA 用户挂载 TmaBootstrap 会强制下载 ~50KB 的 telegram-web-app.js，
+ * 而 `next/script strategy="afterInteractive"` 还会自动生成 `<link rel=preload>`，
+ * 跟首屏 LCP 图抢带宽。这里两道判定：
+ *   1. 服务端 UA 嗅探（`initiallyTma`，覆盖绝大多数 TG 客户端）
+ *   2. 客户端兜底：URL hash 含 `tgWebApp*` / `window.TelegramWebviewProxy` 存在
+ *      —— 覆盖部分桌面客户端 UA 不含 `Telegram` 标识 / deep link 进入的边缘场景
+ *
+ * 任一命中即挂载 TmaBootstrap + TmaAutoLogin；否则两者都不渲染，
+ * SDK 脚本和 preload 一并消失。
+ */
+// useSyncExternalStore 用的 noop subscribe：hash / TelegramWebviewProxy
+// 在页面生命周期内不会变化，无需订阅事件源。
+const tmaClientSubscribe = () => () => {};
+function tmaClientSnapshot(): boolean {
+  if (typeof window === "undefined") return false;
+  if (window.location.hash.includes("tgWebApp")) return true;
+  const w = window as unknown as { TelegramWebviewProxy?: unknown; TelegramWebview?: unknown };
+  return typeof w.TelegramWebviewProxy !== "undefined" || typeof w.TelegramWebview !== "undefined";
+}
+const tmaServerSnapshot = () => false;
+
+function TmaGate({ initiallyTma }: { initiallyTma: boolean }) {
+  // 客户端二次嗅探：覆盖 UA 没带 "Telegram" 但用 hash 进来的边缘场景。
+  // 用 useSyncExternalStore 而不是 useEffect+setState，避免触发
+  // react-hooks/set-state-in-effect，且天然 hydration-safe。
+  const clientSideTma = useSyncExternalStore(tmaClientSubscribe, tmaClientSnapshot, tmaServerSnapshot);
+  const active = initiallyTma || clientSideTma;
+
+  if (!active) return null;
+  return (
+    <>
+      <TmaBootstrap />
+      <TmaAutoLogin />
+    </>
+  );
+}
+
+export function Providers({
+  children,
+  siteConfig,
+  initiallyTma = false,
+}: {
+  children: React.ReactNode;
+  siteConfig: PublicSiteConfig;
+  initiallyTma?: boolean;
+}) {
   const [queryClient] = useState(
     () =>
       new QueryClient({
@@ -224,6 +272,9 @@ export function Providers({ children, siteConfig }: { children: React.ReactNode;
         httpBatchLink({
           url: `${getBaseUrl()}/api/trpc`,
           transformer: superjson,
+          // 强制所有请求使用 POST：批量操作（如正则编辑预览）传 500 个 ID 时
+          // GET URL 会超过服务器/代理的长度限制，返回 HTML 错误页导致 JSON 解析失败
+          methodOverride: "POST",
         }),
       ],
     }),
@@ -234,8 +285,7 @@ export function Providers({ children, siteConfig }: { children: React.ReactNode;
       <QueryClientProvider client={queryClient}>
         <ThemeProvider attribute="class" defaultTheme="system" enableSystem disableTransitionOnChange>
           <SiteConfigProvider value={siteConfig}>
-            <TmaBootstrap />
-            <TmaAutoLogin />
+            <TmaGate initiallyTma={initiallyTma} />
             <ServiceWorkerRegistration />
             {siteConfig.entrySoundUrl && (
               <EntrySound

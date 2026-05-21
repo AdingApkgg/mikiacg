@@ -88,9 +88,11 @@ function ImagePostCardComponent({
   const thumbPrimary = useThumb("gridPrimary");
   const thumbSecondary = useThumb("gridSecondary");
   const { play } = useSound();
-  // 优先用调用方显式传入的 priority；否则按 `index < 4` 兜底，保持老调用方语义。
-  // 多 section 场景应由父组件控制（参见 image-feed-sections.tsx）。
-  const priority = priorityProp ?? (index !== undefined && index < 4);
+  // 优先用调用方显式传入的 priority；否则按 `index < 2` 兜底。
+  // 之前是 `< 4`，但综合首页同时渲染视频/图集多个 section，每个 section 前 N 张都抢
+  // priority 会触发 next/image 自动 preload 十几张图，挤占 LCP 候选的带宽。
+  // 真正需要更大范围 priority 的 section 由父组件显式传 priorityProp 控制。
+  const priority = priorityProp ?? (index !== undefined && index < 2);
   const { ref: viewportRef, inView } = useInViewOnce<HTMLDivElement>({ disabled: priority });
 
   const imageUrls = (post.images ?? []) as string[];

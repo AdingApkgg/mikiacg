@@ -2,12 +2,21 @@ import { redirect } from "next/navigation";
 import { cookies } from "next/headers";
 import { prisma } from "@/lib/prisma";
 import { cache } from "react";
+import { redis, REDIS_AVAILABLE } from "@/lib/redis";
 import { getPublicSiteConfig } from "@/lib/site-config";
 import { CompositeClient } from "@/components/composite/composite-client";
 import type { Metadata } from "next";
 
 /** 综合页是否隐藏 NSFW 内容的 cookie 名；值 "1" = 隐藏，缺省或其它值 = 展示。 */
 const NSFW_COOKIE = "composite-hide-nsfw";
+
+// 首页聚合数据缓存窗口。综合首页有 7 个并行 Prisma 查询 + 1 个 trending tags
+// 原生 SQL（三路 LEFT JOIN），不缓存时 TTFB 可达 1.5s+。这里两层缓存：
+// - L1：进程内 Map（10s）—— 高频请求快路径，避免每次都打 Redis
+// - L2：Redis（60s）—— 跨进程共享，多机部署也能受益
+// 失效策略：自然 TTL 过期。内容站短时间内容变化对首页推荐影响有限，60s 可接受。
+const HOME_CACHE_TTL_SEC = 60;
+const HOME_MEMORY_TTL_MS = 10_000;
 
 export async function generateMetadata(): Promise<Metadata> {
   const config = await getPublicSiteConfig();
@@ -194,6 +203,94 @@ function serializeGames(games: Awaited<ReturnType<typeof getInitialData>>["games
   }));
 }
 
+/** 首页缓存载荷：所有传给 CompositeClient 的 props，全部已序列化为 JSON 安全结构 */
+interface SerializedHomeData {
+  initialVideos: ReturnType<typeof serializeVideos>;
+  initialImages: ReturnType<typeof serializeImages>;
+  initialGames: ReturnType<typeof serializeGames>;
+  hotVideos: ReturnType<typeof serializeVideos>;
+  hotImages: ReturnType<typeof serializeImages>;
+  hotGames: ReturnType<typeof serializeGames>;
+  trendingTags: { id: string; name: string; slug: string; total: number }[];
+}
+
+/** L1：进程内缓存 + singleflight，挂在 globalThis 上跨 dev 热重载保持 */
+const homeCacheStore = globalThis as unknown as {
+  __homeMemCache?: Map<string, { data: SerializedHomeData; expires: number }>;
+  __homeMemInflight?: Map<string, Promise<SerializedHomeData>>;
+};
+homeCacheStore.__homeMemCache ??= new Map();
+homeCacheStore.__homeMemInflight ??= new Map();
+
+/** 把原始 Prisma 结果序列化为 CompositeClient 直接可用的 props（Date → ISO 字符串等）。 */
+async function fetchAndSerializeHomeData(hideNsfw: boolean): Promise<SerializedHomeData> {
+  const raw = await getInitialData(hideNsfw);
+  return {
+    initialVideos: serializeVideos(raw.videos),
+    initialImages: serializeImages(raw.images),
+    initialGames: serializeGames(raw.games),
+    hotVideos: serializeVideos(raw.hotVideos),
+    hotImages: serializeImages(raw.hotImages),
+    hotGames: serializeGames(raw.hotGames),
+    trendingTags: raw.trendingTags.map((t) => ({
+      id: t.id,
+      name: t.name,
+      slug: t.slug,
+      total: Number(t.total),
+    })),
+  };
+}
+
+/**
+ * 带两层缓存的首页数据获取。命中顺序：L1 进程内 → L2 Redis → DB。
+ * 同进程并发请求通过 inflight Map 合并，避免雪崩。Redis 故障静默降级（仅走 L1 + DB）。
+ */
+async function getCachedHomeData(hideNsfw: boolean): Promise<SerializedHomeData> {
+  const memKey = hideNsfw ? "1" : "0";
+  const redisKey = `home:composite:v1:${memKey}`;
+  const now = Date.now();
+
+  // L1
+  const mem = homeCacheStore.__homeMemCache!.get(memKey);
+  if (mem && mem.expires > now) return mem.data;
+
+  // 同进程 singleflight
+  const inflight = homeCacheStore.__homeMemInflight!.get(memKey);
+  if (inflight) return inflight;
+
+  const promise = (async (): Promise<SerializedHomeData> => {
+    // L2
+    if (REDIS_AVAILABLE) {
+      try {
+        const cached = await redis.get(redisKey);
+        if (cached) {
+          const data = JSON.parse(cached) as SerializedHomeData;
+          homeCacheStore.__homeMemCache!.set(memKey, { data, expires: now + HOME_MEMORY_TTL_MS });
+          return data;
+        }
+      } catch {
+        // 静默降级到 DB
+      }
+    }
+
+    // miss → DB
+    const data = await fetchAndSerializeHomeData(hideNsfw);
+    homeCacheStore.__homeMemCache!.set(memKey, { data, expires: now + HOME_MEMORY_TTL_MS });
+    if (REDIS_AVAILABLE) {
+      // 写 Redis 不阻塞返回（命中失败也不影响主流程）
+      redis.set(redisKey, JSON.stringify(data), "EX", HOME_CACHE_TTL_SEC).catch(() => {});
+    }
+    return data;
+  })();
+
+  homeCacheStore.__homeMemInflight!.set(memKey, promise);
+  try {
+    return await promise;
+  } finally {
+    homeCacheStore.__homeMemInflight!.delete(memKey);
+  }
+}
+
 /**
  * 站点首页 `/` —— 综合分区开启时直接渲染聚合首页；
  * 关闭时按 视频 → 图片 → 游戏 顺序跳到第一个启用的分区。
@@ -210,17 +307,17 @@ export default async function HomePage() {
   const cookieStore = await cookies();
   const hideNsfw = cookieStore.get(NSFW_COOKIE)?.value === "1";
 
-  const { videos, images, games, hotVideos, hotImages, hotGames, trendingTags } = await getInitialData(hideNsfw);
+  const data = await getCachedHomeData(hideNsfw);
 
   return (
     <CompositeClient
-      initialVideos={serializeVideos(videos)}
-      initialImages={serializeImages(images)}
-      initialGames={serializeGames(games)}
-      hotVideos={serializeVideos(hotVideos)}
-      hotImages={serializeImages(hotImages)}
-      hotGames={serializeGames(hotGames)}
-      trendingTags={trendingTags.map((t) => ({ id: t.id, name: t.name, slug: t.slug, total: Number(t.total) }))}
+      initialVideos={data.initialVideos}
+      initialImages={data.initialImages}
+      initialGames={data.initialGames}
+      hotVideos={data.hotVideos}
+      hotImages={data.hotImages}
+      hotGames={data.hotGames}
+      trendingTags={data.trendingTags}
       hideNsfw={hideNsfw}
     />
   );
