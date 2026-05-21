@@ -150,7 +150,7 @@ function ConfigCard() {
                   <FormItem className="flex items-center justify-between rounded-md border p-3">
                     <div className="space-y-0.5">
                       <FormLabel>启用榜单系统</FormLabel>
-                      <FormDescription>关闭后调度器停止，/rankings 页面将返回 404</FormDescription>
+                      <FormDescription>关闭后调度器停止，/ranking 页面将仅保留「热门排行」Tab</FormDescription>
                     </div>
                     <FormControl>
                       <Switch checked={field.value} onCheckedChange={field.onChange} />
