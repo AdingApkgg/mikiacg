@@ -1,12 +1,5 @@
 import { z } from "zod";
 import type { SiteConfig } from "@/generated/prisma/client";
-import {
-  HOME_LAYOUT_PRESET_IDS,
-  LANDING_CARD_IDS,
-  SECTION_MODULE_IDS,
-  mergeHomeLayout,
-  type HomeLayoutConfig,
-} from "@/lib/home-layout";
 import { mergeImageCompressBypassRules, mergeImageCompressProfiles } from "@/lib/image-compress-config";
 import { mergeThumbnailPresets, THUMBNAIL_PRESET_NAMES } from "@/lib/thumbnail-presets";
 import { mergeSeriesTypes } from "@/lib/series-types";
@@ -34,9 +27,6 @@ export const mailSendModeEnum = z.enum(["smtp", "http_api"]);
 export const animationPresetEnum = z.enum(["minimal", "standard", "rich"]);
 export const effectTypeEnum = z.enum(["sakura", "firefly", "snow", "stars", "aurora", "cyber", "none"]);
 export const entrySoundModeEnum = z.enum(["session", "once", "interval"]);
-export const homeLayoutPresetEnum = z.enum([...HOME_LAYOUT_PRESET_IDS, "custom"] as [string, ...string[]]);
-export const landingCardIdEnum = z.enum(LANDING_CARD_IDS as unknown as [string, ...string[]]);
-export const sectionModuleIdEnum = z.enum(SECTION_MODULE_IDS as unknown as [string, ...string[]]);
 
 // ---------------------------------------------------------------------------
 // Per-tab Schemas（严格校验，不使用 .catch()）
@@ -91,39 +81,6 @@ export const themeTabSchema = z.object({
   animationDialog: z.boolean(),
   animationTab: z.boolean(),
   animationPreset: animationPresetEnum,
-});
-
-const landingCardFormSchema = z.object({
-  id: landingCardIdEnum,
-  enabled: z.boolean(),
-  title: z.string().max(40),
-  subtitle: z.string().max(100),
-});
-
-const sectionModuleFormSchema = z.object({
-  id: sectionModuleIdEnum,
-  enabled: z.boolean(),
-});
-
-export const homeLayoutSchema = z.object({
-  preset: homeLayoutPresetEnum,
-  landing: z.object({
-    title: z.string().max(50),
-    subtitle: z.string().max(120),
-    cards: z.array(landingCardFormSchema).length(3),
-  }),
-  section: z.object({
-    modules: z.array(sectionModuleFormSchema).length(4),
-    gridColumns: z.object({
-      mobile: z.union([z.literal(1), z.literal(2)]),
-      desktop: z.union([z.literal(2), z.literal(3), z.literal(4)]),
-    }),
-    adDensity: z.number().int().min(0).max(50),
-  }),
-});
-
-export const layoutTabSchema = z.object({
-  homeLayout: homeLayoutSchema,
 });
 
 export const captchaTabSchema = z.object({
@@ -373,7 +330,6 @@ export const appDownloadTabSchema = z.object({
 export type BasicTabValues = z.infer<typeof basicTabSchema>;
 export type FeaturesTabValues = z.infer<typeof featuresTabSchema>;
 export type ThemeTabValues = z.infer<typeof themeTabSchema>;
-export type LayoutTabValues = z.infer<typeof layoutTabSchema>;
 export type CaptchaTabValues = z.infer<typeof captchaTabSchema>;
 export type EffectsTabValues = z.infer<typeof effectsTabSchema>;
 export type ContentTabValues = z.infer<typeof contentTabSchema>;
@@ -448,12 +404,6 @@ export function pickFeaturesValues(cfg: SiteConfig): FeaturesTabValues {
     usdtOrderTimeoutMin: n(cfg.usdtOrderTimeoutMin, 30),
     usdtMinAmount: (cfg.usdtMinAmount as number) ?? null,
     usdtMaxAmount: (cfg.usdtMaxAmount as number) ?? null,
-  };
-}
-
-export function pickLayoutValues(cfg: SiteConfig): LayoutTabValues {
-  return {
-    homeLayout: mergeHomeLayout(cfg.homeLayout) as HomeLayoutConfig,
   };
 }
 

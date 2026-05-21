@@ -7,7 +7,7 @@ import Link from "next/link";
 import { GameFeedSections } from "@/components/game/game-feed-sections";
 import { AnnouncementBanner } from "@/components/shared/announcement-banner";
 import { Button } from "@/components/ui/button";
-import { Fragment, useState, useEffect, useMemo, useCallback, type ReactNode } from "react";
+import { useState, useEffect, useMemo, useCallback } from "react";
 import { useSearchParams, useRouter, usePathname } from "next/navigation";
 import { usePageParam } from "@/hooks/use-page-param";
 import { Gamepad2 } from "lucide-react";
@@ -24,7 +24,11 @@ import { useInlineAds } from "@/hooks/use-inline-ads";
 import type { Ad } from "@/lib/ads";
 import { useUIStore } from "@/stores/app";
 import { useSiteConfig } from "@/contexts/site-config";
-import { DEFAULT_HOME_LAYOUT, isSectionModuleEnabled, sectionGridClass, type SectionModuleId } from "@/lib/home-layout";
+
+/** 分区页主网格固定列数：移动 2 / lg 3 / xl 4 */
+const SECTION_GRID_CLASS = "grid-cols-2 lg:grid-cols-3 xl:grid-cols-4";
+/** inline 广告密度：每 8 条插入 1 条 */
+const AD_DENSITY = 8;
 
 /** 游戏类型选项 */
 const GAME_TYPE_OPTIONS: { id: string; label: string }[] = [
@@ -173,16 +177,13 @@ export function GameListClient({
     !originalAuthorFilter &&
     !hasExplicitListIntent;
   const adSeed = `game-${page}-${sortBy}-${selectedSlugs.join(",")}-${excludedSlugs.join(",")}-${selectedType}`;
-  const layout = siteConfigCtx?.homeLayout ?? DEFAULT_HOME_LAYOUT;
-  const adDensity = layout.section.adDensity;
-  const gridClass = sectionGridClass(layout.section.gridColumns);
   const { gridItems, pickedAds, hasAds } = useInlineAds({
     items: games,
     seed: adSeed,
-    initialAds: adDensity === 0 ? [] : initialAds,
-    useInitialAds: isFirstPage && initialAds.length > 0 && adDensity > 0,
-    count: adDensity === 0 ? 0 : 4,
-    interval: adDensity === 0 ? 9999 : adDensity,
+    initialAds,
+    useInitialAds: isFirstPage && initialAds.length > 0,
+    count: 4,
+    interval: AD_DENSITY,
   });
 
   const sortOptions = useMemo(() => {
@@ -256,16 +257,14 @@ export function GameListClient({
     return GAME_TYPE_OPTIONS.filter((opt) => opt.id === "" || typeSet.has(opt.id));
   }, [typeStats]);
 
-  const modules: Record<SectionModuleId, ReactNode> = {
-    headerBanner: <HeaderBannerCarousel className="mb-4" />,
-    announcement: (
-      <AnnouncementBanner
-        enabled={siteConfig?.announcementEnabled ?? false}
-        announcement={siteConfig?.announcement ?? null}
-      />
-    ),
-    tagBar: (
-      <>
+  return (
+    <MotionPage direction="none">
+      <div className="px-4 md:px-6 py-4 overflow-x-hidden">
+        <HeaderBannerCarousel className="mb-4" />
+        <AnnouncementBanner
+          enabled={siteConfig?.announcementEnabled ?? false}
+          announcement={siteConfig?.announcement ?? null}
+        />
         <MotionPage>
           <ContentModeHeader current="game" />
         </MotionPage>
@@ -359,86 +358,77 @@ export function GameListClient({
             </CollapsibleTagBar>
           )}
         </MotionPage>
-      </>
-    ),
-    mainGrid: (
-      <section>
-        {viewMode === "authors" ? (
-          <GameAuthorsGrid
-            items={authorItems}
-            isLoading={authorsLoading}
-            page={authorsPage}
-            totalPages={authorsTotalPages}
-            onPageChange={setAuthorsPage}
-            onAuthorClick={() => setViewMode("games")}
-          />
-        ) : isHomeMode ? (
-          <GameFeedSections />
-        ) : (
-          <div
-            key={`${sortBy}-${selectedSlugs.join(",")}-${excludedSlugs.join(",")}-${selectedType}-${page}-${originalAuthorFilter}`}
-          >
-            {isLoading && games.length === 0 ? (
-              <GameGrid games={[]} isLoading columnsClass={gridClass} />
-            ) : hasAds ? (
-              <div className={cn("grid gap-3 sm:gap-4 lg:gap-5", gridClass)}>
-                {gridItems.map((item, index) =>
-                  item.type === "ad" ? (
-                    <AdCard key={`ad-${item.adIndex}`} ad={pickedAds[item.adIndex]} slotId="in-feed" />
-                  ) : (
-                    <GameCard
-                      key={item.data.id}
-                      game={item.data}
-                      index={index}
-                      isFavorited={favoritedSet.has(item.data.id)}
-                    />
-                  ),
-                )}
-              </div>
-            ) : (
-              <GameGrid games={games} isLoading={false} columnsClass={gridClass} favoritedSet={favoritedSet} />
-            )}
 
-            {!isLoading && games.length === 0 && (
-              <div className="text-center py-16">
-                <div className="text-muted-foreground mb-4">
-                  <Gamepad2 className="h-12 w-12 mx-auto mb-4 opacity-50" />
-                  <p className="text-lg font-medium">没有找到游戏</p>
-                  <p className="text-sm mt-1">{hasFilter || selectedType ? "尝试调整筛选条件" : "暂无游戏内容"}</p>
+        <section>
+          {viewMode === "authors" ? (
+            <GameAuthorsGrid
+              items={authorItems}
+              isLoading={authorsLoading}
+              page={authorsPage}
+              totalPages={authorsTotalPages}
+              onPageChange={setAuthorsPage}
+              onAuthorClick={() => setViewMode("games")}
+            />
+          ) : isHomeMode ? (
+            <GameFeedSections />
+          ) : (
+            <div
+              key={`${sortBy}-${selectedSlugs.join(",")}-${excludedSlugs.join(",")}-${selectedType}-${page}-${originalAuthorFilter}`}
+            >
+              {isLoading && games.length === 0 ? (
+                <GameGrid games={[]} isLoading columnsClass={SECTION_GRID_CLASS} />
+              ) : hasAds ? (
+                <div className={cn("grid gap-3 sm:gap-4 lg:gap-5", SECTION_GRID_CLASS)}>
+                  {gridItems.map((item, index) =>
+                    item.type === "ad" ? (
+                      <AdCard key={`ad-${item.adIndex}`} ad={pickedAds[item.adIndex]} slotId="in-feed" />
+                    ) : (
+                      <GameCard
+                        key={item.data.id}
+                        game={item.data}
+                        index={index}
+                        isFavorited={favoritedSet.has(item.data.id)}
+                      />
+                    ),
+                  )}
                 </div>
-                {(hasFilter || selectedType) && (
-                  <Button
-                    variant="outline"
-                    onClick={() => {
-                      clearAll();
-                      setSelectedType("");
-                    }}
-                    className="mt-4"
-                  >
-                    清除筛选
-                  </Button>
-                )}
-              </div>
-            )}
-          </div>
-        )}
+              ) : (
+                <GameGrid
+                  games={games}
+                  isLoading={false}
+                  columnsClass={SECTION_GRID_CLASS}
+                  favoritedSet={favoritedSet}
+                />
+              )}
 
-        {!isHomeMode && (
-          <Pagination currentPage={page} totalPages={totalPages} onPageChange={setPage} className="mt-8" />
-        )}
-      </section>
-    ),
-  };
+              {!isLoading && games.length === 0 && (
+                <div className="text-center py-16">
+                  <div className="text-muted-foreground mb-4">
+                    <Gamepad2 className="h-12 w-12 mx-auto mb-4 opacity-50" />
+                    <p className="text-lg font-medium">没有找到游戏</p>
+                    <p className="text-sm mt-1">{hasFilter || selectedType ? "尝试调整筛选条件" : "暂无游戏内容"}</p>
+                  </div>
+                  {(hasFilter || selectedType) && (
+                    <Button
+                      variant="outline"
+                      onClick={() => {
+                        clearAll();
+                        setSelectedType("");
+                      }}
+                      className="mt-4"
+                    >
+                      清除筛选
+                    </Button>
+                  )}
+                </div>
+              )}
+            </div>
+          )}
 
-  return (
-    <MotionPage direction="none">
-      <div className="px-4 md:px-6 py-4 overflow-x-hidden">
-        {layout.section.modules.map((m) => {
-          if (!isSectionModuleEnabled(layout, m.id)) return null;
-          const node = modules[m.id];
-          if (!node) return null;
-          return <Fragment key={m.id}>{node}</Fragment>;
-        })}
+          {!isHomeMode && (
+            <Pagination currentPage={page} totalPages={totalPages} onPageChange={setPage} className="mt-8" />
+          )}
+        </section>
       </div>
     </MotionPage>
   );

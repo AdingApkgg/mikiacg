@@ -47,7 +47,6 @@ import {
   Eye,
   ExternalLink,
   ImageIcon,
-  Layout,
   Smartphone,
 } from "lucide-react";
 import { toast } from "@/lib/toast-with-sound";
@@ -56,7 +55,6 @@ const TabBasic = lazy(() => import("./_components/tab-basic").then((m) => ({ def
 const TabFeatures = lazy(() => import("./_components/tab-features").then((m) => ({ default: m.TabFeatures })));
 const TabContent = lazy(() => import("./_components/tab-content").then((m) => ({ default: m.TabContent })));
 const TabTheme = lazy(() => import("./_components/tab-theme").then((m) => ({ default: m.TabTheme })));
-const TabLayout = lazy(() => import("./_components/tab-layout").then((m) => ({ default: m.TabLayout })));
 const TabEffects = lazy(() => import("./_components/tab-effects").then((m) => ({ default: m.TabEffects })));
 const TabPages = lazy(() => import("./_components/tab-pages").then((m) => ({ default: m.TabPages })));
 const TabFooter = lazy(() => import("./_components/tab-footer").then((m) => ({ default: m.TabFooter })));
@@ -264,9 +262,6 @@ export default function AdminSettingsPage() {
             <TabsTrigger value="theme" className="justify-start gap-2 px-3 h-8 text-[13px]">
               <Palette className="h-3.5 w-3.5" /> 样式
             </TabsTrigger>
-            <TabsTrigger value="layout" className="justify-start gap-2 px-3 h-8 text-[13px]">
-              <Layout className="h-3.5 w-3.5" /> 布局
-            </TabsTrigger>
             <TabsTrigger value="effects" className="justify-start gap-2 px-3 h-8 text-[13px]">
               <Sparkles className="h-3.5 w-3.5" /> 视觉效果
             </TabsTrigger>
@@ -331,7 +326,6 @@ export default function AdminSettingsPage() {
               <SelectGroup>
                 <SelectLabel>外观</SelectLabel>
                 <SelectItem value="theme">样式</SelectItem>
-                <SelectItem value="layout">布局</SelectItem>
                 <SelectItem value="effects">视觉效果</SelectItem>
               </SelectGroup>
               <SelectSeparator />
@@ -388,10 +382,6 @@ export default function AdminSettingsPage() {
 
             <TabsContent value="theme">
               <TabTheme config={config} />
-            </TabsContent>
-
-            <TabsContent value="layout">
-              <TabLayout config={config} />
             </TabsContent>
 
             <TabsContent value="effects">

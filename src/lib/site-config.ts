@@ -1,6 +1,5 @@
 import { prisma } from "@/lib/prisma";
 import type { Ad } from "@/lib/ads";
-import { mergeHomeLayout, type HomeLayoutConfig } from "@/lib/home-layout";
 import { mergeThumbnailPresets, type ThumbnailPresets } from "@/lib/thumbnail-presets";
 import { mergeSeriesTypes, type SeriesTypeOption } from "@/lib/series-types";
 
@@ -114,8 +113,6 @@ export interface PublicSiteConfig {
   coverProxyThumbEnabled: boolean;
   /** 前端缩略图档位（6 档语义预设，合并缺省值后永远完整） */
   thumbnailPresets: ThumbnailPresets;
-  /** 首页与分区页布局（落地页卡片、分区模块顺序、列数、广告密度） */
-  homeLayout: HomeLayoutConfig;
   /** APP 下载推荐弹窗 */
   appDownloadPopup: {
     enabled: boolean;
@@ -296,7 +293,6 @@ function toPublic(c: Record<string, unknown>): PublicSiteConfig {
     redirectDisclaimer: (c.redirectDisclaimer as string) ?? null,
     coverProxyThumbEnabled: typeof c.coverProxyThumbEnabled === "boolean" ? c.coverProxyThumbEnabled : true,
     thumbnailPresets: mergeThumbnailPresets(c.thumbnailPresets),
-    homeLayout: mergeHomeLayout(c.homeLayout),
     appDownloadPopup: {
       enabled: (c.appDownloadPopupEnabled as boolean) ?? false,
       title: (c.appDownloadPopupTitle as string) ?? null,

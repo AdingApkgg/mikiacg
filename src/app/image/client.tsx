@@ -6,7 +6,7 @@ import { ImageFeedSections } from "@/components/image/image-feed-sections";
 import { ImageMasonry } from "@/components/image/image-masonry";
 import { AnnouncementBanner } from "@/components/shared/announcement-banner";
 import { Button } from "@/components/ui/button";
-import { Fragment, useState, useEffect, useMemo, useCallback, type ReactNode } from "react";
+import { useState, useEffect, useMemo, useCallback } from "react";
 import { useSearchParams } from "next/navigation";
 import { usePageParam } from "@/hooks/use-page-param";
 import { Images } from "lucide-react";
@@ -23,7 +23,9 @@ import { HeaderBannerCarousel } from "@/components/ads/header-banner";
 import { useInlineAds } from "@/hooks/use-inline-ads";
 import { useUIStore } from "@/stores/app";
 import { useSiteConfig } from "@/contexts/site-config";
-import { DEFAULT_HOME_LAYOUT, isSectionModuleEnabled, type SectionModuleId } from "@/lib/home-layout";
+
+/** inline 广告密度：每 8 条插入 1 条 */
+const AD_DENSITY = 8;
 
 // 骨架屏伪随机高度（基于 index 稳定），让瀑布流更接近真实图片节奏
 const SKELETON_RATIOS = ["3 / 4", "4 / 5", "1 / 1", "2 / 3", "5 / 7", "4 / 3"];
@@ -140,14 +142,12 @@ export function ImageListClient({ initialTags, initialPosts }: ImageListClientPr
    */
   const isHomeMode = page === 1 && !hasFilter && sortBy === "latest" && timeRange === "all" && !hasExplicitListIntent;
   const adSeed = `image-${page}-${sortBy}-${selectedSlugs.join(",")}-${excludedSlugs.join(",")}`;
-  const layout = siteConfigCtx?.homeLayout ?? DEFAULT_HOME_LAYOUT;
-  const adDensity = layout.section.adDensity;
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const { gridItems, pickedAds, hasAds } = useInlineAds<any>({
     items: posts,
     seed: adSeed,
-    count: adDensity === 0 ? 0 : 4,
-    interval: adDensity === 0 ? 9999 : adDensity,
+    count: 4,
+    interval: AD_DENSITY,
   });
 
   const sortOptions = useMemo(() => {
@@ -206,104 +206,89 @@ export function ImageListClient({ initialTags, initialPosts }: ImageListClientPr
     [posts, favoritedSet],
   );
 
-  const modules: Record<SectionModuleId, ReactNode> = {
-    headerBanner: <HeaderBannerCarousel className="mb-4" />,
-    announcement: (
-      <AnnouncementBanner
-        enabled={siteConfigCtx?.announcementEnabled ?? false}
-        announcement={siteConfigCtx?.announcement ?? null}
-      />
-    ),
-    tagBar: (
-      <MotionPage>
-        <ContentModeHeader current="image" />
-        {sortOptions.length > 0 && (
-          <SectionTabs<SortBy>
-            className="mb-3"
-            tabs={sortOptions as SectionTabItem<SortBy>[]}
-            value={sortBy}
-            onChange={(id) => {
-              setSortBy(id);
-              setPage(1);
-            }}
-          />
-        )}
-        {initialTags.length > 0 && (
-          <CollapsibleTagBar className="mb-6">
-            {initialTags.map((tag) => (
-              <button
-                key={tag.id}
-                onClick={() => {
-                  setPage(1);
-                  toggleTag(tag.slug);
-                }}
-                onContextMenu={(e) => {
-                  e.preventDefault();
-                  setPage(1);
-                  toggleExclude(tag.slug);
-                }}
-                className={cn(
-                  "shrink-0 px-3 py-1.5 rounded-lg text-sm font-medium transition-colors whitespace-nowrap",
-                  isSelected(tag.slug) && "bg-foreground text-background",
-                  isExcluded(tag.slug) && "bg-destructive/20 text-destructive line-through",
-                  !isSelected(tag.slug) && !isExcluded(tag.slug) && "bg-muted hover:bg-muted/80 text-foreground",
-                )}
-                title="左键选择，右键排除"
-              >
-                {tag.name}
-              </button>
-            ))}
-          </CollapsibleTagBar>
-        )}
-      </MotionPage>
-    ),
-    mainGrid: (
-      <section>
-        {isHomeMode ? (
-          <ImageFeedSections />
-        ) : (
-          <div key={`${sortBy}-${selectedSlugs.join(",")}-${excludedSlugs.join(",")}-${page}`}>
-            {showSkeleton ? (
-              <ImageMasonry items={skeletonItems} />
-            ) : hasAds ? (
-              <ImageMasonry items={adGridItems} />
-            ) : (
-              <ImageMasonry items={postItems} />
-            )}
-
-            {!isLoading && !isFetching && posts.length === 0 && (
-              <div className="text-center py-16">
-                <div className="text-muted-foreground mb-4">
-                  <Images className="h-12 w-12 mx-auto mb-4 opacity-50" />
-                  <p className="text-lg font-medium">没有找到图片</p>
-                  <p className="text-sm mt-1">{hasFilter ? "尝试调整标签筛选条件" : "暂无图片内容"}</p>
-                </div>
-                {hasFilter && (
-                  <Button variant="outline" onClick={clearAll} className="mt-4">
-                    清除筛选
-                  </Button>
-                )}
-              </div>
-            )}
-          </div>
-        )}
-
-        {!isHomeMode && (
-          <Pagination currentPage={page} totalPages={totalPages} onPageChange={handlePageChange} className="mt-8" />
-        )}
-      </section>
-    ),
-  };
-
   return (
     <MotionPage direction="none">
       <div className="px-4 md:px-6 py-4 overflow-x-hidden">
-        {layout.section.modules.map((m) => {
-          if (!isSectionModuleEnabled(layout, m.id)) return null;
-          const node = modules[m.id];
-          if (!node) return null;
-          return <Fragment key={m.id}>{node}</Fragment>;
-        })}
+        <HeaderBannerCarousel className="mb-4" />
+        <AnnouncementBanner
+          enabled={siteConfigCtx?.announcementEnabled ?? false}
+          announcement={siteConfigCtx?.announcement ?? null}
+        />
+        <MotionPage>
+          <ContentModeHeader current="image" />
+          {sortOptions.length > 0 && (
+            <SectionTabs<SortBy>
+              className="mb-3"
+              tabs={sortOptions as SectionTabItem<SortBy>[]}
+              value={sortBy}
+              onChange={(id) => {
+                setSortBy(id);
+                setPage(1);
+              }}
+            />
+          )}
+          {initialTags.length > 0 && (
+            <CollapsibleTagBar className="mb-6">
+              {initialTags.map((tag) => (
+                <button
+                  key={tag.id}
+                  onClick={() => {
+                    setPage(1);
+                    toggleTag(tag.slug);
+                  }}
+                  onContextMenu={(e) => {
+                    e.preventDefault();
+                    setPage(1);
+                    toggleExclude(tag.slug);
+                  }}
+                  className={cn(
+                    "shrink-0 px-3 py-1.5 rounded-lg text-sm font-medium transition-colors whitespace-nowrap",
+                    isSelected(tag.slug) && "bg-foreground text-background",
+                    isExcluded(tag.slug) && "bg-destructive/20 text-destructive line-through",
+                    !isSelected(tag.slug) && !isExcluded(tag.slug) && "bg-muted hover:bg-muted/80 text-foreground",
+                  )}
+                  title="左键选择，右键排除"
+                >
+                  {tag.name}
+                </button>
+              ))}
+            </CollapsibleTagBar>
+          )}
+        </MotionPage>
+        <section>
+          {isHomeMode ? (
+            <ImageFeedSections />
+          ) : (
+            <div key={`${sortBy}-${selectedSlugs.join(",")}-${excludedSlugs.join(",")}-${page}`}>
+              {showSkeleton ? (
+                <ImageMasonry items={skeletonItems} />
+              ) : hasAds ? (
+                <ImageMasonry items={adGridItems} />
+              ) : (
+                <ImageMasonry items={postItems} />
+              )}
+
+              {!isLoading && !isFetching && posts.length === 0 && (
+                <div className="text-center py-16">
+                  <div className="text-muted-foreground mb-4">
+                    <Images className="h-12 w-12 mx-auto mb-4 opacity-50" />
+                    <p className="text-lg font-medium">没有找到图片</p>
+                    <p className="text-sm mt-1">{hasFilter ? "尝试调整标签筛选条件" : "暂无图片内容"}</p>
+                  </div>
+                  {hasFilter && (
+                    <Button variant="outline" onClick={clearAll} className="mt-4">
+                      清除筛选
+                    </Button>
+                  )}
+                </div>
+              )}
+            </div>
+          )}
+
+          {!isHomeMode && (
+            <Pagination currentPage={page} totalPages={totalPages} onPageChange={handlePageChange} className="mt-8" />
+          )}
+        </section>
       </div>
     </MotionPage>
   );

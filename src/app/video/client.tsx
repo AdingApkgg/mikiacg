@@ -28,8 +28,11 @@ import { useInlineAds } from "@/hooks/use-inline-ads";
 import type { Ad } from "@/lib/ads";
 import { useUIStore } from "@/stores/app";
 import { useSiteConfig } from "@/contexts/site-config";
-import { Fragment, type ReactNode } from "react";
-import { DEFAULT_HOME_LAYOUT, isSectionModuleEnabled, sectionGridClass, type SectionModuleId } from "@/lib/home-layout";
+
+/** 分区页主网格固定列数：移动 2 / lg 3 / xl 4 */
+const SECTION_GRID_CLASS = "grid-cols-2 lg:grid-cols-3 xl:grid-cols-4";
+/** inline 广告密度：每 8 条插入 1 条 */
+const AD_DENSITY = 8;
 
 type ViewMode = "videos" | "authors";
 type SortBy = "latest" | "views" | "likes" | "titleAsc" | "titleDesc";
@@ -192,18 +195,15 @@ export default function VideoListClient({
     timeRange === "all" &&
     !hasExplicitListIntent;
   const adSeed = `${videoPage}-${sortBy}-${selectedSlugs.join(",")}-${excludedSlugs.join(",")}-${authorFilter}`;
-  const layout = siteConfigCtx?.homeLayout ?? DEFAULT_HOME_LAYOUT;
-  const adDensity = layout.section.adDensity;
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const { gridItems, pickedAds, hasAds } = useInlineAds<any>({
     items: videos,
     seed: adSeed,
-    initialAds: adDensity === 0 ? [] : initialAds,
-    useInitialAds: isFirstPage && initialAds.length > 0 && adDensity > 0,
-    count: adDensity === 0 ? 0 : 4,
-    interval: adDensity === 0 ? 9999 : adDensity,
+    initialAds,
+    useInitialAds: isFirstPage && initialAds.length > 0,
+    count: 4,
+    interval: AD_DENSITY,
   });
-  const gridClass = sectionGridClass(layout.section.gridColumns);
 
   // 视图模式选项
   const viewModeOptions: { id: ViewMode; label: string }[] = [
@@ -269,25 +269,45 @@ export default function VideoListClient({
     [viewMode, toggleExclude, setVideoPage],
   );
 
-  const modules: Record<SectionModuleId, ReactNode> = {
-    headerBanner: <HeaderBannerCarousel className="mb-4" />,
-    announcement: (
-      <AnnouncementBanner
-        enabled={siteConfig?.announcementEnabled ?? false}
-        announcement={siteConfig?.announcement ?? null}
-      />
-    ),
-    tagBar: (
-      <MotionPage>
-        <ContentModeHeader current="video" />
-        {viewMode === "videos" && sortOptions.length > 0 && (
-          <SectionTabs<SortBy>
-            className="mb-3"
-            tabs={sortOptions as SectionTabItem<SortBy>[]}
-            value={sortBy}
-            onChange={handleSortClick}
-            trailing={
-              <div className="flex items-center gap-1 rounded-full bg-muted/60 p-0.5">
+  return (
+    <MotionPage direction="none">
+      <div className="px-4 md:px-6 py-4 overflow-x-hidden">
+        <HeaderBannerCarousel className="mb-4" />
+        <AnnouncementBanner
+          enabled={siteConfig?.announcementEnabled ?? false}
+          announcement={siteConfig?.announcement ?? null}
+        />
+        <MotionPage>
+          <ContentModeHeader current="video" />
+          {viewMode === "videos" && sortOptions.length > 0 && (
+            <SectionTabs<SortBy>
+              className="mb-3"
+              tabs={sortOptions as SectionTabItem<SortBy>[]}
+              value={sortBy}
+              onChange={handleSortClick}
+              trailing={
+                <div className="flex items-center gap-1 rounded-full bg-muted/60 p-0.5">
+                  {viewModeOptions.map((option) => (
+                    <button
+                      key={option.id}
+                      onClick={() => handleViewModeClick(option.id)}
+                      className={cn(
+                        "px-2.5 py-1 text-xs font-medium rounded-full transition-colors",
+                        viewMode === option.id
+                          ? "bg-background text-foreground shadow-sm"
+                          : "text-muted-foreground hover:text-foreground",
+                      )}
+                    >
+                      {option.label}
+                    </button>
+                  ))}
+                </div>
+              }
+            />
+          )}
+          {viewMode === "authors" && (
+            <div className="mb-3 border-b border-border/60 pb-2">
+              <div className="flex items-center gap-1 rounded-full bg-muted/60 p-0.5 w-fit">
                 {viewModeOptions.map((option) => (
                   <button
                     key={option.id}
@@ -303,244 +323,209 @@ export default function VideoListClient({
                   </button>
                 ))}
               </div>
-            }
-          />
-        )}
-        {viewMode === "authors" && (
-          <div className="mb-3 border-b border-border/60 pb-2">
-            <div className="flex items-center gap-1 rounded-full bg-muted/60 p-0.5 w-fit">
-              {viewModeOptions.map((option) => (
+            </div>
+          )}
+
+          {/* 当前正在按某位原作者筛选时显示横幅 */}
+          {viewMode === "videos" && authorFilter && (
+            <div className="mb-4 flex items-center gap-2 rounded-2xl bg-primary/8 border border-primary/20 px-4 py-2.5">
+              <User2 className="h-4 w-4 text-primary shrink-0" />
+              <span className="text-sm flex-1 min-w-0 truncate">
+                正在按原作者筛选：<strong className="font-semibold">{authorFilter}</strong>
+              </span>
+              <button
+                type="button"
+                onClick={handleClearAuthorFilter}
+                className="shrink-0 rounded-full px-2.5 py-1 text-xs font-medium text-primary hover:bg-primary/15 transition-colors inline-flex items-center gap-1"
+              >
+                <X className="h-3 w-3" />
+                清除
+              </button>
+            </div>
+          )}
+          {viewMode === "videos" && initialTags.length > 0 && (
+            <CollapsibleTagBar className="mb-6">
+              {initialTags.map((tag) => (
                 <button
-                  key={option.id}
-                  onClick={() => handleViewModeClick(option.id)}
+                  key={tag.id}
+                  onClick={() => handleTagClick(tag.slug)}
+                  onContextMenu={(e) => handleTagRightClick(e, tag.slug)}
                   className={cn(
-                    "px-2.5 py-1 text-xs font-medium rounded-full transition-colors",
-                    viewMode === option.id
-                      ? "bg-background text-foreground shadow-sm"
-                      : "text-muted-foreground hover:text-foreground",
+                    "shrink-0 px-3.5 py-1.5 rounded-full text-sm font-medium transition-colors whitespace-nowrap border",
+                    isSelected(tag.slug) && "bg-primary text-primary-foreground border-primary",
+                    isExcluded(tag.slug) && "bg-destructive/15 text-destructive line-through border-destructive/30",
+                    !isSelected(tag.slug) &&
+                      !isExcluded(tag.slug) &&
+                      "bg-card hover:bg-accent text-foreground border-border",
                   )}
+                  title="左键选择，右键排除"
                 >
-                  {option.label}
+                  {tag.name}
                 </button>
               ))}
-            </div>
-          </div>
-        )}
-
-        {/* 当前正在按某位原作者筛选时显示横幅 */}
-        {viewMode === "videos" && authorFilter && (
-          <div className="mb-4 flex items-center gap-2 rounded-2xl bg-primary/8 border border-primary/20 px-4 py-2.5">
-            <User2 className="h-4 w-4 text-primary shrink-0" />
-            <span className="text-sm flex-1 min-w-0 truncate">
-              正在按原作者筛选：<strong className="font-semibold">{authorFilter}</strong>
-            </span>
-            <button
-              type="button"
-              onClick={handleClearAuthorFilter}
-              className="shrink-0 rounded-full px-2.5 py-1 text-xs font-medium text-primary hover:bg-primary/15 transition-colors inline-flex items-center gap-1"
-            >
-              <X className="h-3 w-3" />
-              清除
-            </button>
-          </div>
-        )}
-        {viewMode === "videos" && initialTags.length > 0 && (
-          <CollapsibleTagBar className="mb-6">
-            {initialTags.map((tag) => (
-              <button
-                key={tag.id}
-                onClick={() => handleTagClick(tag.slug)}
-                onContextMenu={(e) => handleTagRightClick(e, tag.slug)}
-                className={cn(
-                  "shrink-0 px-3.5 py-1.5 rounded-full text-sm font-medium transition-colors whitespace-nowrap border",
-                  isSelected(tag.slug) && "bg-primary text-primary-foreground border-primary",
-                  isExcluded(tag.slug) && "bg-destructive/15 text-destructive line-through border-destructive/30",
-                  !isSelected(tag.slug) &&
-                    !isExcluded(tag.slug) &&
-                    "bg-card hover:bg-accent text-foreground border-border",
-                )}
-                title="左键选择，右键排除"
-              >
-                {tag.name}
-              </button>
-            ))}
-          </CollapsibleTagBar>
-        )}
-      </MotionPage>
-    ),
-    mainGrid: (
-      <section>
-        {isHomeMode ? (
-          // 首页模式：分区 Feed
-          <VideoFeedSections />
-        ) : viewMode === "videos" ? (
-          // 视频网格
-          <>
-            <div key={`${sortBy}-${selectedSlugs.join(",")}-${excludedSlugs.join(",")}-${videoPage}`}>
-              {videoLoading && videos.length === 0 ? (
-                <VideoGrid videos={[]} isLoading columnsClass={gridClass} />
-              ) : hasAds ? (
-                <div className={cn("grid gap-3 sm:gap-4 lg:gap-5", gridClass)}>
-                  {gridItems.map((item, index) =>
-                    item.type === "ad" ? (
-                      <AdCard key={`ad-${item.adIndex}`} ad={pickedAds[item.adIndex]} slotId="in-feed" />
-                    ) : (
-                      <VideoCard
-                        key={item.data.id}
-                        video={item.data}
-                        index={index}
-                        watchProgress={progressMap?.[item.data.id]}
-                        isFavorited={favoritedSet.has(item.data.id)}
-                      />
-                    ),
-                  )}
-                </div>
-              ) : (
-                <VideoGrid
-                  videos={videos}
-                  isLoading={false}
-                  columnsClass={gridClass}
-                  progressMap={progressMap}
-                  favoritedSet={favoritedSet}
-                />
-              )}
-
-              {/* 无结果提示 */}
-              {!videoLoading && videos.length === 0 && (
-                <div className="text-center py-16">
-                  <div className="text-muted-foreground mb-4">
-                    <p className="text-lg font-medium">没有找到视频</p>
-                    <p className="text-sm mt-1">{hasFilter ? "尝试调整标签筛选条件" : "暂无视频内容"}</p>
+            </CollapsibleTagBar>
+          )}
+        </MotionPage>
+        <section>
+          {isHomeMode ? (
+            // 首页模式：分区 Feed
+            <VideoFeedSections />
+          ) : viewMode === "videos" ? (
+            // 视频网格
+            <>
+              <div key={`${sortBy}-${selectedSlugs.join(",")}-${excludedSlugs.join(",")}-${videoPage}`}>
+                {videoLoading && videos.length === 0 ? (
+                  <VideoGrid videos={[]} isLoading columnsClass={SECTION_GRID_CLASS} />
+                ) : hasAds ? (
+                  <div className={cn("grid gap-3 sm:gap-4 lg:gap-5", SECTION_GRID_CLASS)}>
+                    {gridItems.map((item, index) =>
+                      item.type === "ad" ? (
+                        <AdCard key={`ad-${item.adIndex}`} ad={pickedAds[item.adIndex]} slotId="in-feed" />
+                      ) : (
+                        <VideoCard
+                          key={item.data.id}
+                          video={item.data}
+                          index={index}
+                          watchProgress={progressMap?.[item.data.id]}
+                          isFavorited={favoritedSet.has(item.data.id)}
+                        />
+                      ),
+                    )}
                   </div>
-                  {hasFilter && (
-                    <Button variant="outline" onClick={clearAll} className="mt-4">
-                      清除筛选
-                    </Button>
-                  )}
-                </div>
-              )}
-            </div>
+                ) : (
+                  <VideoGrid
+                    videos={videos}
+                    isLoading={false}
+                    columnsClass={SECTION_GRID_CLASS}
+                    progressMap={progressMap}
+                    favoritedSet={favoritedSet}
+                  />
+                )}
 
-            {/* 分页器 */}
-            <Pagination
-              currentPage={videoPage}
-              totalPages={videoTotalPages}
-              onPageChange={setVideoPage}
-              className="mt-8"
-            />
-          </>
-        ) : (
-          // 原作者聚合网格：按 extraInfo.author 分组，点击进入该作者作品筛选
-          <>
-            <div className="grid grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
-              {authorsLoading && authorItems.length === 0
-                ? // 加载骨架屏
-                  Array.from({ length: 8 }).map((_, i) => (
-                    <Card key={i} className="overflow-hidden">
-                      <Skeleton className="aspect-video w-full" />
-                      <CardContent className="p-3 space-y-2">
-                        <Skeleton className="h-5 w-3/4" />
-                        <Skeleton className="h-4 w-1/2" />
-                      </CardContent>
-                    </Card>
-                  ))
-                : authorItems.map((a) => (
-                    <Link
-                      key={a.author}
-                      href={`/video?author=${encodeURIComponent(a.author)}`}
-                      onClick={() => setViewMode("videos")}
-                    >
-                      <Card className="overflow-hidden group hover:shadow-lg transition-all duration-200 hover:-translate-y-1">
-                        {/* 作者代表作 2×2 网格预览 */}
-                        <div className="relative aspect-video bg-muted">
-                          {a.previewVideos.length > 0 ? (
-                            <div className="grid grid-cols-2 grid-rows-2 h-full">
-                              {[0, 1, 2, 3].map((idx) => {
-                                const video = a.previewVideos[idx];
-                                return (
-                                  <div key={idx} className="relative overflow-hidden">
-                                    {video ? (
-                                      // eslint-disable-next-line @next/next/no-img-element
-                                      <img
-                                        src={sideListCover(video.id, video.coverUrl)}
-                                        alt={video.title}
-                                        className="w-full h-full object-cover"
-                                      />
-                                    ) : (
-                                      <div className="w-full h-full bg-muted flex items-center justify-center">
-                                        <Play className="w-6 h-6 text-muted-foreground/50" />
-                                      </div>
-                                    )}
-                                  </div>
-                                );
-                              })}
-                            </div>
-                          ) : (
-                            <div className="w-full h-full flex items-center justify-center">
-                              <User2 className="w-12 h-12 text-muted-foreground/30" />
-                            </div>
-                          )}
+                {/* 无结果提示 */}
+                {!videoLoading && videos.length === 0 && (
+                  <div className="text-center py-16">
+                    <div className="text-muted-foreground mb-4">
+                      <p className="text-lg font-medium">没有找到视频</p>
+                      <p className="text-sm mt-1">{hasFilter ? "尝试调整标签筛选条件" : "暂无视频内容"}</p>
+                    </div>
+                    {hasFilter && (
+                      <Button variant="outline" onClick={clearAll} className="mt-4">
+                        清除筛选
+                      </Button>
+                    )}
+                  </div>
+                )}
+              </div>
 
-                          {/* 视频数徽章 */}
-                          <Badge className="absolute bottom-2 right-2 bg-black/70 hover:bg-black/70 text-white">
-                            {a.videoCount} 个作品
-                          </Badge>
-
-                          {/* 悬停遮罩 */}
-                          <div className="absolute inset-0 bg-black/0 group-hover:bg-black/20 transition-colors flex items-center justify-center">
-                            <Play className="w-12 h-12 text-white opacity-0 group-hover:opacity-100 transition-opacity" />
-                          </div>
-                        </div>
-
-                        <CardContent className="p-3">
-                          <h3 className="font-medium line-clamp-1 group-hover:text-primary transition-colors flex items-center gap-1.5">
-                            <User2 className="h-3.5 w-3.5 shrink-0 text-muted-foreground" />
-                            <span className="truncate">{a.author}</span>
-                          </h3>
-                          <div className="flex items-center gap-2 mt-1.5 text-xs text-muted-foreground">
-                            <span>{a.videoCount} 个作品</span>
-                            <span>·</span>
-                            <span>{a.totalViews.toLocaleString()} 播放</span>
-                          </div>
+              {/* 分页器 */}
+              <Pagination
+                currentPage={videoPage}
+                totalPages={videoTotalPages}
+                onPageChange={setVideoPage}
+                className="mt-8"
+              />
+            </>
+          ) : (
+            // 原作者聚合网格：按 extraInfo.author 分组，点击进入该作者作品筛选
+            <>
+              <div className="grid grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
+                {authorsLoading && authorItems.length === 0
+                  ? // 加载骨架屏
+                    Array.from({ length: 8 }).map((_, i) => (
+                      <Card key={i} className="overflow-hidden">
+                        <Skeleton className="aspect-video w-full" />
+                        <CardContent className="p-3 space-y-2">
+                          <Skeleton className="h-5 w-3/4" />
+                          <Skeleton className="h-4 w-1/2" />
                         </CardContent>
                       </Card>
-                    </Link>
-                  ))}
-            </div>
+                    ))
+                  : authorItems.map((a) => (
+                      <Link
+                        key={a.author}
+                        href={`/video?author=${encodeURIComponent(a.author)}`}
+                        onClick={() => setViewMode("videos")}
+                      >
+                        <Card className="overflow-hidden group hover:shadow-lg transition-all duration-200 hover:-translate-y-1">
+                          {/* 作者代表作 2×2 网格预览 */}
+                          <div className="relative aspect-video bg-muted">
+                            {a.previewVideos.length > 0 ? (
+                              <div className="grid grid-cols-2 grid-rows-2 h-full">
+                                {[0, 1, 2, 3].map((idx) => {
+                                  const video = a.previewVideos[idx];
+                                  return (
+                                    <div key={idx} className="relative overflow-hidden">
+                                      {video ? (
+                                        // eslint-disable-next-line @next/next/no-img-element
+                                        <img
+                                          src={sideListCover(video.id, video.coverUrl)}
+                                          alt={video.title}
+                                          className="w-full h-full object-cover"
+                                        />
+                                      ) : (
+                                        <div className="w-full h-full bg-muted flex items-center justify-center">
+                                          <Play className="w-6 h-6 text-muted-foreground/50" />
+                                        </div>
+                                      )}
+                                    </div>
+                                  );
+                                })}
+                              </div>
+                            ) : (
+                              <div className="w-full h-full flex items-center justify-center">
+                                <User2 className="w-12 h-12 text-muted-foreground/30" />
+                              </div>
+                            )}
 
-            {/* 无结果提示 */}
-            {!authorsLoading && authorItems.length === 0 && (
-              <div className="text-center py-16">
-                <div className="text-muted-foreground mb-4">
-                  <Layers className="h-12 w-12 mx-auto mb-4 opacity-50" />
-                  <p className="text-lg font-medium">暂无原作者数据</p>
-                  <p className="text-sm mt-1">投稿时填写「原作者」后，将自动出现在此</p>
-                </div>
+                            {/* 视频数徽章 */}
+                            <Badge className="absolute bottom-2 right-2 bg-black/70 hover:bg-black/70 text-white">
+                              {a.videoCount} 个作品
+                            </Badge>
+
+                            {/* 悬停遮罩 */}
+                            <div className="absolute inset-0 bg-black/0 group-hover:bg-black/20 transition-colors flex items-center justify-center">
+                              <Play className="w-12 h-12 text-white opacity-0 group-hover:opacity-100 transition-opacity" />
+                            </div>
+                          </div>
+
+                          <CardContent className="p-3">
+                            <h3 className="font-medium line-clamp-1 group-hover:text-primary transition-colors flex items-center gap-1.5">
+                              <User2 className="h-3.5 w-3.5 shrink-0 text-muted-foreground" />
+                              <span className="truncate">{a.author}</span>
+                            </h3>
+                            <div className="flex items-center gap-2 mt-1.5 text-xs text-muted-foreground">
+                              <span>{a.videoCount} 个作品</span>
+                              <span>·</span>
+                              <span>{a.totalViews.toLocaleString()} 播放</span>
+                            </div>
+                          </CardContent>
+                        </Card>
+                      </Link>
+                    ))}
               </div>
-            )}
 
-            {/* 分页器 */}
-            <Pagination
-              currentPage={authorsPage}
-              totalPages={authorsTotalPages}
-              onPageChange={setAuthorsPage}
-              className="mt-8"
-            />
-          </>
-        )}
-      </section>
-    ),
-  };
+              {/* 无结果提示 */}
+              {!authorsLoading && authorItems.length === 0 && (
+                <div className="text-center py-16">
+                  <div className="text-muted-foreground mb-4">
+                    <Layers className="h-12 w-12 mx-auto mb-4 opacity-50" />
+                    <p className="text-lg font-medium">暂无原作者数据</p>
+                    <p className="text-sm mt-1">投稿时填写「原作者」后，将自动出现在此</p>
+                  </div>
+                </div>
+              )}
 
-  return (
-    <MotionPage direction="none">
-      <div className="px-4 md:px-6 py-4 overflow-x-hidden">
-        {layout.section.modules.map((m) => {
-          if (!isSectionModuleEnabled(layout, m.id)) return null;
-          const node = modules[m.id];
-          if (!node) return null;
-          return <Fragment key={m.id}>{node}</Fragment>;
-        })}
+              {/* 分页器 */}
+              <Pagination
+                currentPage={authorsPage}
+                totalPages={authorsTotalPages}
+                onPageChange={setAuthorsPage}
+                className="mt-8"
+              />
+            </>
+          )}
+        </section>
       </div>
     </MotionPage>
   );
