@@ -22,8 +22,8 @@ export const COMPOSITE_ANCHOR_ITEMS: AnchorItem[] = [
   { id: "hero", label: "本月热门", icon: Flame },
   { id: "mixed-hot", label: "综合热门", icon: Sparkles },
   { id: "latest-video", label: "最新视频", icon: Play },
-  { id: "latest-image", label: "最新图集", icon: Images },
   { id: "latest-game", label: "最新游戏", icon: Gamepad2 },
+  { id: "latest-image", label: "最新图集", icon: Images },
   { id: "ranking", label: "本月排行", icon: Trophy },
 ];
 

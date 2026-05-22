@@ -39,7 +39,7 @@ export async function generateMetadata(): Promise<Metadata> {
 
 // 综合页用到的全部查询参数集中在这里，方便后续按需调整窗口期 / 每段条数
 const HOT_WINDOW_DAYS = 30;
-const LATEST_VIDEO_COUNT = 12;
+const LATEST_VIDEO_COUNT = 8;
 const LATEST_IMAGE_COUNT = 8;
 const LATEST_GAME_COUNT = 8;
 const WEEKLY_TOP_COUNT = 10;
@@ -66,7 +66,7 @@ const getInitialData = cache(async (hideNsfw: boolean) => {
   const gameInclude = videoInclude;
 
   const [videos, images, games, hotVideos, hotImages, hotGames] = await Promise.all([
-    // 最新视频（横向滚动）
+    // 最新视频（两行网格）
     cfg.sectionVideoEnabled
       ? prisma.video.findMany({
           take: LATEST_VIDEO_COUNT,
@@ -210,7 +210,7 @@ async function fetchAndSerializeHomeData(hideNsfw: boolean): Promise<SerializedH
  */
 async function getCachedHomeData(hideNsfw: boolean): Promise<SerializedHomeData> {
   const memKey = hideNsfw ? "1" : "0";
-  const redisKey = `home:composite:v2:${memKey}`;
+  const redisKey = `home:composite:v3:${memKey}`;
   const now = Date.now();
 
   // L1

@@ -37,4 +37,10 @@ describe("CompositeAnchorNav", () => {
   it("默认锚点不包含标签入口", () => {
     expect(COMPOSITE_ANCHOR_ITEMS.map((item) => item.id)).not.toContain("tags");
   });
+
+  it("默认锚点中最新游戏排在最新图集前面", () => {
+    const ids = COMPOSITE_ANCHOR_ITEMS.map((item) => item.id);
+
+    expect(ids.indexOf("latest-game")).toBeLessThan(ids.indexOf("latest-image"));
+  });
 });

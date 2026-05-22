@@ -8,7 +8,6 @@ import { AnnouncementBanner } from "@/components/shared/announcement-banner";
 import { AdCard } from "@/components/ads/ad-card";
 import { useRandomAds } from "@/hooks/use-ads";
 import { resolveSlotPosition } from "@/lib/ads";
-import { HorizontalScroller } from "@/components/shared/horizontal-scroller";
 import { useUIStore } from "@/stores/app";
 import { useSiteConfig } from "@/contexts/site-config";
 import { VideoCard } from "@/components/video/video-card";
@@ -25,6 +24,8 @@ type Video = Parameters<typeof VideoCard>[0]["video"];
 type ImagePost = Omit<Parameters<typeof ImagePostCard>[0]["post"], "images"> & { images: string[] };
 type Game = Parameters<typeof GameCard>[0]["game"];
 
+const LATEST_VIDEO_DISPLAY_COUNT = 8;
+
 interface CompositeClientProps {
   initialVideos: Video[];
   initialImages: ImagePost[];
@@ -39,9 +40,9 @@ interface CompositeClientProps {
  *  1. Banner + 公告
  *  2. Hero 推荐（本月热门 #1 三类各一张）
  *  3. 综合热门（跨视频/图集/游戏混合 grid，跳过 hero 已用的 #1）
- *  4. 最新视频（横向滚动）
- *  5. 最新图集（瀑布流）
- *  6. 最新游戏（网格）
+ *  4. 最新视频（两行网格）
+ *  5. 最新游戏（网格）
+ *  6. 最新图集（瀑布流）
  *  7. 本月排行（3 列 mini Top10）
  *
  * 关闭单一分区时该类数据为空，对应 section 自动隐藏。
@@ -64,6 +65,7 @@ export function CompositeClient({
   const videoEnabled = cfg?.sectionVideoEnabled !== false;
   const imageEnabled = cfg?.sectionImageEnabled !== false;
   const gameEnabled = cfg?.sectionGameEnabled !== false;
+  const latestVideos = initialVideos.slice(0, LATEST_VIDEO_DISPLAY_COUNT);
 
   // 锚点条按实际渲染的 section 过滤，避免点击跳到不存在的位置
   const renderedAnchors: AnchorItem[] = COMPOSITE_ANCHOR_ITEMS.filter((a) => {
@@ -79,7 +81,7 @@ export function CompositeClient({
         (imageEnabled && hotImages.length > 1) ||
         (gameEnabled && hotGames.length > 1)
       );
-    if (a.id === "latest-video") return videoEnabled && initialVideos.length > 0;
+    if (a.id === "latest-video") return videoEnabled && latestVideos.length > 0;
     if (a.id === "latest-image") return imageEnabled && initialImages.length > 0;
     if (a.id === "latest-game") return gameEnabled && initialGames.length > 0;
     if (a.id === "ranking")
@@ -119,14 +121,26 @@ export function CompositeClient({
 
           <CompositeInlineAds seed="composite-mid" count={3} />
 
-          {videoEnabled && initialVideos.length > 0 && (
+          {videoEnabled && latestVideos.length > 0 && (
             <section id="latest-video" className="scroll-mt-32">
               <SectionHeader title="最新视频" icon={Play} iconClass="text-rose-500" more="/video">
-                <HorizontalScroller
-                  items={initialVideos}
-                  itemWidthClass="w-[260px] sm:w-[280px]"
-                  renderItem={(v, i) => <VideoCard video={v} index={i} />}
-                />
+                <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-3 sm:gap-4 lg:gap-5">
+                  {latestVideos.map((v, i) => (
+                    <VideoCard key={v.id} video={v} index={i} />
+                  ))}
+                </div>
+              </SectionHeader>
+            </section>
+          )}
+
+          {gameEnabled && initialGames.length > 0 && (
+            <section id="latest-game" className="scroll-mt-32">
+              <SectionHeader title="最新游戏" icon={Gamepad2} iconClass="text-emerald-500" more="/game">
+                <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-3 sm:gap-4 lg:gap-5">
+                  {initialGames.map((g, i) => (
+                    <GameCard key={g.id} game={g} index={i} />
+                  ))}
+                </div>
               </SectionHeader>
             </section>
           )}
@@ -140,18 +154,6 @@ export function CompositeClient({
                     node: <ImagePostCard post={p} index={i} variant="masonry" />,
                   }))}
                 />
-              </SectionHeader>
-            </section>
-          )}
-
-          {gameEnabled && initialGames.length > 0 && (
-            <section id="latest-game" className="scroll-mt-32">
-              <SectionHeader title="最新游戏" icon={Gamepad2} iconClass="text-emerald-500" more="/game">
-                <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-3 sm:gap-4 lg:gap-5">
-                  {initialGames.map((g, i) => (
-                    <GameCard key={g.id} game={g} index={i} />
-                  ))}
-                </div>
               </SectionHeader>
             </section>
           )}

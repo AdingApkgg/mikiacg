@@ -36,6 +36,9 @@ pnpm-debug.log*
 coverage
 .nyc_output
 
+# Local database
+data/pglite-dev/
+
 # Uploads
 uploads/*
 !uploads/.gitkeep

@@ -35,6 +35,7 @@ const GAME_TYPE_OPTIONS: { id: string; label: string }[] = [
   { id: "ADV", label: "ADV" },
   { id: "ACT", label: "ACT" },
   { id: "AVG", label: "AVG" },
+  { id: "VN", label: "VN" },
   { id: "STG", label: "STG" },
   { id: "PZL", label: "PZL" },
   { id: "FTG", label: "FTG" },
