@@ -39,16 +39,7 @@ const getInitialData = cache(async () => {
           ? { title: "desc" as const }
           : { createdAt: "desc" as const };
 
-  const [tags, games, typeStats, siteConfig] = await Promise.all([
-    // 获取热门游戏标签
-    prisma.tag.findMany({
-      where: {
-        games: { some: { game: { status: "PUBLISHED" } } },
-      },
-      take: 30,
-      orderBy: { games: { _count: "desc" } },
-      select: { id: true, name: true, slug: true },
-    }),
+  const [games, typeStats, siteConfig] = await Promise.all([
     // 获取首屏游戏（排序跟随站点配置的默认排序）
     prisma.game.findMany({
       take: 20,
@@ -87,7 +78,6 @@ const getInitialData = cache(async () => {
   const initialAds = fullConfig.adsEnabled ? pickWeightedRandomAds(rawAds, 4, resolveSlotPosition("in-feed")) : [];
 
   return {
-    tags,
     games,
     siteConfig,
     initialAds,
@@ -119,14 +109,13 @@ function serializeGames(games: Awaited<ReturnType<typeof getInitialData>>["games
 export default async function GameListPage() {
   const fullSiteConfig = await getPublicSiteConfig();
   if (!fullSiteConfig.sectionGameEnabled) notFound();
-  const { tags, games, typeStats, siteConfig, initialAds } = await getInitialData();
+  const { games, typeStats, siteConfig, initialAds } = await getInitialData();
   const serializedGames = serializeGames(games);
 
   return (
     <>
       <GameListJsonLd games={serializedGames} baseUrl={fullSiteConfig.siteUrl} />
       <GameListClient
-        initialTags={tags}
         initialGames={serializedGames}
         typeStats={typeStats}
         siteConfig={siteConfig}

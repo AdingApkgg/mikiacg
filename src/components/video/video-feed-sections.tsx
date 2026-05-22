@@ -1,16 +1,15 @@
 "use client";
 
 import Link from "next/link";
-import { ArrowRight, Sparkles, Flame, Trophy, Crown, Hash } from "lucide-react";
+import { ArrowRight, Sparkles, Flame, Trophy, Crown } from "lucide-react";
 import { trpc } from "@/lib/trpc";
 import { VideoCard } from "./video-card";
 import { Skeleton } from "@/components/ui/skeleton";
-import { HorizontalScroller } from "@/components/shared/horizontal-scroller";
 import { cn } from "@/lib/utils";
 
 /**
  * 视频列表「首页模式」分区 Feed —— 多个 section 上下排列，每个 section 用不同 layout：
- * - 「最新上传」横向滚动（一行能看 8-15 张）
+ * - 「最新发布」4 列网格（最多 8 张，桌面优先 4 × 2）
  * - 「本日热门」标准 4 列网格
  * - 「本周排行」Top 1 hero（冠军大图 + 6 张其他）
  *
@@ -19,7 +18,7 @@ import { cn } from "@/lib/utils";
 
 type SortBy = "latest" | "views" | "likes" | "titleAsc" | "titleDesc";
 type TimeRange = "all" | "today" | "week" | "month";
-type Layout = "grid" | "horizontal" | "hero";
+type Layout = "grid" | "hero";
 
 interface SectionDef {
   id: string;
@@ -47,7 +46,7 @@ const SECTIONS: SectionDef[] = [
     iconClass: "text-sky-500",
     sortBy: "latest",
     moreParams: "?sortBy=latest",
-    layout: "horizontal",
+    layout: "grid",
   },
   {
     id: "trending",
@@ -78,69 +77,17 @@ export function VideoFeedSections({ className }: VideoFeedSectionsProps) {
   return (
     <div className={cn("space-y-10", className)}>
       <FeedSection section={SECTIONS[0]} />
-      {/* 在「最新上传」之后插入「按标签浏览」快速入口 */}
-      <TagBrowseSection />
       <FeedSection section={SECTIONS[1]} />
       <FeedSection section={SECTIONS[2]} />
     </div>
   );
 }
 
-/**
- * 「按标签浏览」section：横排热门标签 chip，点击跳到 tag 筛选。
- * 参考 hanime1.me 在 section feed 中穿插的分类入口。
- */
-function TagBrowseSection() {
-  const { data: tags, isLoading } = trpc.tag.popular.useQuery({ limit: 16, type: "video" }, { staleTime: 5 * 60_000 });
-
-  return (
-    <section>
-      <header className="mb-3 flex items-end justify-between gap-3">
-        <div className="flex items-center gap-2">
-          <Hash className="h-5 w-5 text-violet-500" />
-          <h2 className="text-lg sm:text-xl font-semibold tracking-tight">按标签浏览</h2>
-        </div>
-        <Link
-          href="/tags"
-          className="inline-flex items-center gap-1 text-sm text-muted-foreground hover:text-primary transition-colors"
-        >
-          全部标签
-          <ArrowRight className="h-4 w-4" />
-        </Link>
-      </header>
-
-      {isLoading && !tags ? (
-        <div className="flex flex-wrap gap-2">
-          {Array.from({ length: 12 }).map((_, i) => (
-            <Skeleton key={i} className="h-9 w-20 rounded-full" />
-          ))}
-        </div>
-      ) : tags && tags.length > 0 ? (
-        <div className="flex flex-wrap gap-2">
-          {tags.map((tag) => (
-            <Link
-              key={tag.id}
-              href={`/video?tags=${encodeURIComponent(tag.slug)}`}
-              className="inline-flex items-center gap-1 rounded-full bg-card border border-border px-3.5 py-1.5 text-sm font-medium text-foreground hover:bg-accent hover:border-primary/40 hover:text-primary transition-colors"
-            >
-              <Hash className="h-3.5 w-3.5 opacity-50" />
-              {tag.name}
-            </Link>
-          ))}
-        </div>
-      ) : (
-        <div className="text-sm text-muted-foreground py-6 text-center">暂无热门标签</div>
-      )}
-    </section>
-  );
-}
-
 function FeedSection({ section }: { section: SectionDef }) {
   // 不同 layout 拉的数量不一样：
-  // - horizontal 一次拉 12 张，用户可以左右翻
   // - grid 拉 8 张（4 列 × 2 行）
   // - hero 拉 7 张（冠军大图 1 + 网格 6）
-  const limit = section.layout === "horizontal" ? 12 : section.layout === "hero" ? 7 : 8;
+  const limit = section.layout === "hero" ? 7 : 8;
 
   const { data, isLoading } = trpc.video.list.useQuery(
     { limit, page: 1, sortBy: section.sortBy, timeRange: section.timeRange ?? "all" },
@@ -167,18 +114,10 @@ function FeedSection({ section }: { section: SectionDef }) {
         <SectionSkeleton layout={section.layout} count={limit} />
       ) : videos.length === 0 ? (
         <div className="text-sm text-muted-foreground py-8 text-center">暂无内容</div>
-      ) : section.layout === "horizontal" ? (
-        <HorizontalScroller
-          items={videos}
-          itemWidthClass="w-[260px] sm:w-[300px]"
-          renderItem={(v, i) => (
-            <VideoCard video={v} index={i} watchProgress={progressMap?.[v.id]} isFavorited={favoritedSet.has(v.id)} />
-          )}
-        />
       ) : section.layout === "hero" ? (
         <HeroLayout videos={videos} progressMap={progressMap} favoritedSet={favoritedSet} showRank={section.showRank} />
       ) : (
-        <div className="grid grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-3 sm:gap-4 lg:gap-5">
+        <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-3 sm:gap-4 lg:gap-5">
           {videos.map((v, i) => (
             <VideoCard
               key={v.id}
@@ -272,19 +211,6 @@ function HeroLayout({
 
 /** Section 加载骨架 */
 function SectionSkeleton({ layout, count }: { layout: Layout; count: number }) {
-  if (layout === "horizontal") {
-    return (
-      <div className="flex gap-3 sm:gap-4 -mx-4 px-4 md:-mx-6 md:px-6 overflow-hidden">
-        {Array.from({ length: count }).map((_, i) => (
-          <div key={i} className="shrink-0 w-[260px] sm:w-[300px] space-y-2">
-            <Skeleton className="aspect-video w-full rounded-2xl" />
-            <Skeleton className="h-4 w-full" />
-            <Skeleton className="h-3 w-2/3" />
-          </div>
-        ))}
-      </div>
-    );
-  }
   if (layout === "hero") {
     return (
       <div className="grid gap-3 sm:gap-4 lg:gap-5 lg:grid-cols-3">
@@ -305,7 +231,7 @@ function SectionSkeleton({ layout, count }: { layout: Layout; count: number }) {
     );
   }
   return (
-    <div className="grid grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-3 sm:gap-4 lg:gap-5">
+    <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-3 sm:gap-4 lg:gap-5">
       {Array.from({ length: count }).map((_, i) => (
         <div key={i} className="space-y-2">
           <Skeleton className="aspect-video w-full rounded-2xl" />

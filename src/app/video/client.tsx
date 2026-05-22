@@ -11,10 +11,8 @@ import { usePageParam } from "@/hooks/use-page-param";
 import { X, Play, User2, Layers } from "lucide-react";
 import { MotionPage } from "@/components/motion";
 import { cn } from "@/lib/utils";
-import { CollapsibleTagBar } from "@/components/ui/collapsible-tag-bar";
 import { AnnouncementBanner } from "@/components/shared/announcement-banner";
 import { SectionTabs, type SectionTabItem } from "@/components/shared/section-tabs";
-import { ContentModeHeader } from "@/components/shared/content-mode-header";
 import { useTagFilter } from "@/hooks/use-tag-filter";
 import Link from "next/link";
 import { Card, CardContent } from "@/components/ui/card";
@@ -45,12 +43,6 @@ const ALL_SORT_OPTIONS: { id: SortBy; label: string }[] = [
   { id: "titleDesc", label: "标题 Z→A" },
 ];
 
-interface Tag {
-  id: string;
-  name: string;
-  slug: string;
-}
-
 interface Video {
   id: string;
   title: string;
@@ -70,7 +62,6 @@ interface Video {
 }
 
 interface VideoListClientProps {
-  initialTags: Tag[];
   initialVideos: Video[];
   siteConfig: {
     announcement: string | null;
@@ -80,8 +71,61 @@ interface VideoListClientProps {
   initialAds?: Ad[];
 }
 
+export function VideoViewModeHeader({
+  viewMode,
+  viewModeOptions,
+  sortOptions,
+  sortBy,
+  onSortChange,
+  onViewModeChange,
+}: {
+  viewMode: ViewMode;
+  viewModeOptions: { id: ViewMode; label: string }[];
+  sortOptions: SectionTabItem<SortBy>[];
+  sortBy: SortBy;
+  onSortChange: (id: SortBy) => void;
+  onViewModeChange: (id: ViewMode) => void;
+}) {
+  const toggle = (
+    <div data-testid="video-view-mode-toggle" className="flex items-center gap-1 rounded-full bg-muted/60 p-0.5">
+      {viewModeOptions.map((option) => (
+        <button
+          key={option.id}
+          type="button"
+          onClick={() => onViewModeChange(option.id)}
+          className={cn(
+            "px-2.5 py-1 text-xs font-medium rounded-full transition-colors",
+            viewMode === option.id
+              ? "bg-background text-foreground shadow-sm"
+              : "text-muted-foreground hover:text-foreground",
+          )}
+        >
+          {option.label}
+        </button>
+      ))}
+    </div>
+  );
+
+  if (viewMode === "videos" && sortOptions.length > 0) {
+    return (
+      <SectionTabs<SortBy>
+        className="mb-3"
+        tabs={sortOptions}
+        value={sortBy}
+        onChange={onSortChange}
+        trailing={toggle}
+      />
+    );
+  }
+
+  return (
+    <div data-testid="video-view-mode-header" className="mb-3 flex items-end justify-end border-b border-border/60 pb-1.5">
+      {toggle}
+    </div>
+  );
+}
+
 export default function VideoListClient({
-  initialTags,
   initialVideos,
   siteConfig,
   initialAds = [],
@@ -119,8 +163,7 @@ export default function VideoListClient({
   // URL 显式带了 sortBy 或 timeRange 参数 → 用户从「查看更多」过来，
   // 即使值跟默认一致也要展开成完整列表 (不再回到首页模式)
   const hasExplicitListIntent = urlSortBy !== null || urlTimeRangeRaw !== null;
-  const { selectedSlugs, excludedSlugs, toggleTag, toggleExclude, clearAll, isSelected, isExcluded, hasFilter } =
-    useTagFilter();
+  const { selectedSlugs, excludedSlugs, clearAll, hasFilter } = useTagFilter();
   const [videoPage, setVideoPage] = usePageParam("page");
   const [authorsPage, setAuthorsPage] = usePageParam("ap");
 
@@ -250,25 +293,6 @@ export default function VideoListClient({
     [setVideoPage],
   );
 
-  const handleTagClick = useCallback(
-    (slug: string) => {
-      if (viewMode === "authors") return;
-      setVideoPage(1);
-      toggleTag(slug);
-    },
-    [viewMode, toggleTag, setVideoPage],
-  );
-
-  const handleTagRightClick = useCallback(
-    (e: React.MouseEvent, slug: string) => {
-      e.preventDefault();
-      if (viewMode === "authors") return;
-      setVideoPage(1);
-      toggleExclude(slug);
-    },
-    [viewMode, toggleExclude, setVideoPage],
-  );
-
   return (
     <MotionPage direction="none">
       <div className="px-4 md:px-6 py-4 overflow-x-hidden">
@@ -278,53 +302,14 @@ export default function VideoListClient({
           announcement={siteConfig?.announcement ?? null}
         />
         <MotionPage>
-          <ContentModeHeader current="video" />
-          {viewMode === "videos" && sortOptions.length > 0 && (
-            <SectionTabs<SortBy>
-              className="mb-3"
-              tabs={sortOptions as SectionTabItem<SortBy>[]}
-              value={sortBy}
-              onChange={handleSortClick}
-              trailing={
-                <div className="flex items-center gap-1 rounded-full bg-muted/60 p-0.5">
-                  {viewModeOptions.map((option) => (
-                    <button
-                      key={option.id}
-                      onClick={() => handleViewModeClick(option.id)}
-                      className={cn(
-                        "px-2.5 py-1 text-xs font-medium rounded-full transition-colors",
-                        viewMode === option.id
-                          ? "bg-background text-foreground shadow-sm"
-                          : "text-muted-foreground hover:text-foreground",
-                      )}
-                    >
-                      {option.label}
-                    </button>
-                  ))}
-                </div>
-              }
-            />
-          )}
-          {viewMode === "authors" && (
-            <div className="mb-3 border-b border-border/60 pb-2">
-              <div className="flex items-center gap-1 rounded-full bg-muted/60 p-0.5 w-fit">
-                {viewModeOptions.map((option) => (
-                  <button
-                    key={option.id}
-                    onClick={() => handleViewModeClick(option.id)}
-                    className={cn(
-                      "px-2.5 py-1 text-xs font-medium rounded-full transition-colors",
-                      viewMode === option.id
-                        ? "bg-background text-foreground shadow-sm"
-                        : "text-muted-foreground hover:text-foreground",
-                    )}
-                  >
-                    {option.label}
-                  </button>
-                ))}
-              </div>
-            </div>
-          )}
+          <VideoViewModeHeader
+            viewMode={viewMode}
+            viewModeOptions={viewModeOptions}
+            sortOptions={sortOptions as SectionTabItem<SortBy>[]}
+            sortBy={sortBy}
+            onSortChange={handleSortClick}
+            onViewModeChange={handleViewModeClick}
+          />
 
           {/* 当前正在按某位原作者筛选时显示横幅 */}
           {viewMode === "videos" && authorFilter && (
@@ -342,28 +327,6 @@ export default function VideoListClient({
                 清除
               </button>
             </div>
-          )}
-          {viewMode === "videos" && initialTags.length > 0 && (
-            <CollapsibleTagBar className="mb-6">
-              {initialTags.map((tag) => (
-                <button
-                  key={tag.id}
-                  onClick={() => handleTagClick(tag.slug)}
-                  onContextMenu={(e) => handleTagRightClick(e, tag.slug)}
-                  className={cn(
-                    "shrink-0 px-3.5 py-1.5 rounded-full text-sm font-medium transition-colors whitespace-nowrap border",
-                    isSelected(tag.slug) && "bg-primary text-primary-foreground border-primary",
-                    isExcluded(tag.slug) && "bg-destructive/15 text-destructive line-through border-destructive/30",
-                    !isSelected(tag.slug) &&
-                      !isExcluded(tag.slug) &&
-                      "bg-card hover:bg-accent text-foreground border-border",
-                  )}
-                  title="左键选择，右键排除"
-                >
-                  {tag.name}
-                </button>
-              ))}
-            </CollapsibleTagBar>
           )}
         </MotionPage>
         <section>

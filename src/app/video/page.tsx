@@ -41,17 +41,7 @@ const getInitialData = cache(async () => {
           ? { title: "desc" as const }
           : { createdAt: "desc" as const };
 
-  const [tags, videos, siteConfig] = await Promise.all([
-    // 获取热门标签
-    prisma.tag.findMany({
-      take: 30,
-      orderBy: { videos: { _count: "desc" } },
-      select: {
-        id: true,
-        name: true,
-        slug: true,
-      },
-    }),
+  const [videos, siteConfig] = await Promise.all([
     // 获取首屏视频（排序跟随站点配置的默认排序）
     prisma.video.findMany({
       take: 20,
@@ -80,7 +70,7 @@ const getInitialData = cache(async () => {
   const ads = parseSponsorAds(fullConfig.sponsorAds);
   const initialAds = fullConfig.adsEnabled ? pickWeightedRandomAds(ads, 4, resolveSlotPosition("in-feed")) : [];
 
-  return { tags, videos, siteConfig, initialAds };
+  return { videos, siteConfig, initialAds };
 });
 
 // 序列化视频数据
@@ -102,7 +92,7 @@ function serializeVideos(videos: Awaited<ReturnType<typeof getInitialData>>["vid
 export default async function VideoListPage() {
   const fullSiteConfig = await getPublicSiteConfig();
   if (!fullSiteConfig.sectionVideoEnabled) notFound();
-  const { tags, videos, siteConfig, initialAds } = await getInitialData();
+  const { videos, siteConfig, initialAds } = await getInitialData();
   const serializedVideos = serializeVideos(videos);
 
   const description = fullSiteConfig.siteDescription || `${fullSiteConfig.siteName} ACGN 内容平台`;
@@ -123,12 +113,7 @@ export default async function VideoListPage() {
       />
       <VideoListJsonLd videos={serializedVideos} baseUrl={fullSiteConfig.siteUrl} />
 
-      <VideoListClient
-        initialTags={tags}
-        initialVideos={serializedVideos}
-        siteConfig={siteConfig}
-        initialAds={initialAds}
-      />
+      <VideoListClient initialVideos={serializedVideos} siteConfig={siteConfig} initialAds={initialAds} />
     </>
   );
 }

@@ -11,10 +11,7 @@ import { useSearchParams } from "next/navigation";
 import { usePageParam } from "@/hooks/use-page-param";
 import { Images } from "lucide-react";
 import { MotionPage } from "@/components/motion";
-import { cn } from "@/lib/utils";
-import { CollapsibleTagBar } from "@/components/ui/collapsible-tag-bar";
 import { SectionTabs, type SectionTabItem } from "@/components/shared/section-tabs";
-import { ContentModeHeader } from "@/components/shared/content-mode-header";
 import { useTagFilter } from "@/hooks/use-tag-filter";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Pagination } from "@/components/ui/pagination";
@@ -40,12 +37,6 @@ const ALL_SORT_OPTIONS: { id: SortBy; label: string }[] = [
   { id: "titleDesc", label: "标题 Z→A" },
 ];
 
-interface Tag {
-  id: string;
-  name: string;
-  slug: string;
-}
-
 interface ImagePost {
   id: string;
   title: string;
@@ -63,11 +54,10 @@ interface ImagePost {
 }
 
 interface ImageListClientProps {
-  initialTags: Tag[];
   initialPosts: ImagePost[];
 }
 
-export function ImageListClient({ initialTags, initialPosts }: ImageListClientProps) {
+export function ImageListClient({ initialPosts }: ImageListClientProps) {
   const setContentMode = useUIStore((s) => s.setContentMode);
   const siteConfigCtx = useSiteConfig();
   const searchParams = useSearchParams();
@@ -92,8 +82,7 @@ export function ImageListClient({ initialTags, initialPosts }: ImageListClientPr
     : "all";
   // URL 显式带了 sortBy 或 timeRange → 用户从「查看更多」过来，强制脱出首页模式
   const hasExplicitListIntent = urlSortBy !== null || urlTimeRangeRaw !== null;
-  const { selectedSlugs, excludedSlugs, toggleTag, toggleExclude, clearAll, isSelected, isExcluded, hasFilter } =
-    useTagFilter();
+  const { selectedSlugs, excludedSlugs, clearAll, hasFilter } = useTagFilter();
   const [page, setPage] = usePageParam();
 
   // 不再使用 placeholderData：翻页 / 切换排序 / 切换筛选时立即清空旧内容 → 显示骨架屏，
@@ -215,7 +204,6 @@ export function ImageListClient({ initialTags, initialPosts }: ImageListClientPr
           announcement={siteConfigCtx?.announcement ?? null}
         />
         <MotionPage>
-          <ContentModeHeader current="image" />
           {sortOptions.length > 0 && (
             <SectionTabs<SortBy>
               className="mb-3"
@@ -226,33 +214,6 @@ export function ImageListClient({ initialTags, initialPosts }: ImageListClientPr
                 setPage(1);
               }}
             />
-          )}
-          {initialTags.length > 0 && (
-            <CollapsibleTagBar className="mb-6">
-              {initialTags.map((tag) => (
-                <button
-                  key={tag.id}
-                  onClick={() => {
-                    setPage(1);
-                    toggleTag(tag.slug);
-                  }}
-                  onContextMenu={(e) => {
-                    e.preventDefault();
-                    setPage(1);
-                    toggleExclude(tag.slug);
-                  }}
-                  className={cn(
-                    "shrink-0 px-3 py-1.5 rounded-lg text-sm font-medium transition-colors whitespace-nowrap",
-                    isSelected(tag.slug) && "bg-foreground text-background",
-                    isExcluded(tag.slug) && "bg-destructive/20 text-destructive line-through",
-                    !isSelected(tag.slug) && !isExcluded(tag.slug) && "bg-muted hover:bg-muted/80 text-foreground",
-                  )}
-                  title="左键选择，右键排除"
-                >
-                  {tag.name}
-                </button>
-              ))}
-            </CollapsibleTagBar>
           )}
         </MotionPage>
         <section>

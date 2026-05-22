@@ -36,7 +36,7 @@ function shouldHideSidebar(pathname: string): boolean {
   return noSidebarPaths.some((path) => pathname.startsWith(path));
 }
 
-export function AppLayout({ children }: { children: React.ReactNode }) {
+export function AppLayout({ children, initialHideNsfw = false }: { children: React.ReactNode; initialHideNsfw?: boolean }) {
   const pathname = usePathname();
   const mounted = useIsMounted();
   const { showHelp, setShowHelp } = useKeyboardShortcuts();
@@ -117,7 +117,14 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
 
         <div className="flex flex-1">
           {/* 桌面端侧边栏 */}
-          {showSidebar && <Sidebar collapsed={!isExpanded} onToggle={toggleSidebar} overlay={useOverlayMode} />}
+          {showSidebar && (
+            <Sidebar
+              collapsed={!isExpanded}
+              onToggle={toggleSidebar}
+              overlay={useOverlayMode}
+              initialHideNsfw={initialHideNsfw}
+            />
+          )}
 
           {/* 主内容区 */}
           <main
@@ -147,7 +154,9 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
         </div>
 
         {/* 移动端底部导航栏；TMA 环境也保留（侧边栏已隐藏） */}
-        {(isTMA || showSidebar) && !isOverlayMode && !isNoSidebarPage && <BottomNav />}
+        {(isTMA || showSidebar) && !isOverlayMode && !isNoSidebarPage && (
+          <BottomNav initialHideNsfw={initialHideNsfw} />
+        )}
 
         {/* 全局命令面板 */}
         <CommandPalette />

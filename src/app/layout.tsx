@@ -12,7 +12,7 @@ import { getPublicSiteConfig } from "@/lib/site-config";
 import { generateThemeCSS } from "@/lib/theme-styles";
 import { isSetupComplete } from "@/lib/setup";
 import { redirect } from "next/navigation";
-import { headers } from "next/headers";
+import { cookies, headers } from "next/headers";
 import { GtmNoscript } from "@/components/analytics-scripts";
 
 export async function generateMetadata(): Promise<Metadata> {
@@ -172,12 +172,14 @@ async function RootProviders({ children }: { children: React.ReactNode }) {
   const initiallyTma = /Telegram/i.test(userAgent);
 
   const siteConfig = await getPublicSiteConfig();
+  const cookieStore = await cookies();
+  const initialHideNsfw = cookieStore.get("composite-hide-nsfw")?.value === "1";
   const themeCSS = generateThemeCSS(siteConfig);
   return (
     <>
       {themeCSS && <style dangerouslySetInnerHTML={{ __html: themeCSS }} />}
       <Providers siteConfig={siteConfig} initiallyTma={initiallyTma}>
-        <AppLayout>{children}</AppLayout>
+        <AppLayout initialHideNsfw={initialHideNsfw}>{children}</AppLayout>
       </Providers>
     </>
   );

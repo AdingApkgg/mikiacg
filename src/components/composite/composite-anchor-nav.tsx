@@ -1,7 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useRef, useState } from "react";
-import { Flame, Hash, Sparkles, Play, Images, Gamepad2, Trophy, type LucideIcon } from "lucide-react";
+import { Flame, Sparkles, Play, Images, Gamepad2, Trophy, type LucideIcon } from "lucide-react";
 import { cn } from "@/lib/utils";
 
 export interface AnchorItem {
@@ -20,7 +20,6 @@ interface CompositeAnchorNavProps {
 /** 常用锚点定义（id 必须跟 page 上的 section id 对齐） */
 export const COMPOSITE_ANCHOR_ITEMS: AnchorItem[] = [
   { id: "hero", label: "本月热门", icon: Flame },
-  { id: "tags", label: "标签", icon: Hash },
   { id: "mixed-hot", label: "综合热门", icon: Sparkles },
   { id: "latest-video", label: "最新视频", icon: Play },
   { id: "latest-image", label: "最新图集", icon: Images },
@@ -85,6 +84,8 @@ export function CompositeAnchorNav({ items, topOffset = 56, className }: Composi
     },
     [topOffset],
   );
+
+  if (items.length === 0) return null;
 
   return (
     <div

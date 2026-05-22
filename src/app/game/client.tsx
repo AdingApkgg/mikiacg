@@ -13,9 +13,7 @@ import { usePageParam } from "@/hooks/use-page-param";
 import { Gamepad2 } from "lucide-react";
 import { MotionPage } from "@/components/motion";
 import { cn } from "@/lib/utils";
-import { CollapsibleTagBar } from "@/components/ui/collapsible-tag-bar";
 import { SectionTabs, type SectionTabItem } from "@/components/shared/section-tabs";
-import { ContentModeHeader } from "@/components/shared/content-mode-header";
 import { useTagFilter } from "@/hooks/use-tag-filter";
 import { Pagination } from "@/components/ui/pagination";
 import { AdCard } from "@/components/ads/ad-card";
@@ -54,19 +52,12 @@ const ALL_SORT_OPTIONS: { id: SortBy; label: string }[] = [
   { id: "titleDesc", label: "标题 Z→A" },
 ];
 
-interface Tag {
-  id: string;
-  name: string;
-  slug: string;
-}
-
 interface TypeStat {
   type: string;
   count: number;
 }
 
 interface GameListClientProps {
-  initialTags: Tag[];
   initialGames: GameCardData[];
   typeStats: TypeStat[];
   siteConfig: {
@@ -78,7 +69,6 @@ interface GameListClientProps {
 }
 
 export function GameListClient({
-  initialTags,
   initialGames,
   typeStats,
   siteConfig,
@@ -113,8 +103,7 @@ export function GameListClient({
     : "all";
   // URL 显式带了 sortBy 或 timeRange → 用户从「查看更多」过来，强制脱出首页模式
   const hasExplicitListIntent = urlSortBy !== null || urlTimeRangeRaw !== null;
-  const { selectedSlugs, excludedSlugs, toggleTag, toggleExclude, clearAll, isSelected, isExcluded, hasFilter } =
-    useTagFilter();
+  const { selectedSlugs, excludedSlugs, clearAll, hasFilter } = useTagFilter();
   const [selectedType, setSelectedType] = useState<string>("");
   const [viewMode, setViewMode] = useState<"games" | "authors">("games");
   const [page, setPage] = usePageParam();
@@ -226,23 +215,6 @@ export function GameListClient({
     [setPage],
   );
 
-  const handleTagClick = useCallback(
-    (slug: string) => {
-      setPage(1);
-      toggleTag(slug);
-    },
-    [toggleTag, setPage],
-  );
-
-  const handleTagRightClick = useCallback(
-    (e: React.MouseEvent, slug: string) => {
-      e.preventDefault();
-      setPage(1);
-      toggleExclude(slug);
-    },
-    [toggleExclude, setPage],
-  );
-
   const handleTypeClick = useCallback(
     (type: string) => {
       setSelectedType(type);
@@ -256,6 +228,7 @@ export function GameListClient({
     const typeSet = new Set(typeStats.map((s) => s.type));
     return GAME_TYPE_OPTIONS.filter((opt) => opt.id === "" || typeSet.has(opt.id));
   }, [typeStats]);
+  const showGameTypeFilter = viewMode === "games" && !isHomeMode && availableTypes.length > 1;
 
   return (
     <MotionPage direction="none">
@@ -265,32 +238,30 @@ export function GameListClient({
           enabled={siteConfig?.announcementEnabled ?? false}
           announcement={siteConfig?.announcement ?? null}
         />
-        <MotionPage>
-          <ContentModeHeader current="game" />
-        </MotionPage>
-
-        <MotionPage>
-          <div className="flex flex-wrap gap-2 mb-4">
-            {availableTypes.map((opt) => {
-              const stat = typeStats.find((s) => s.type === opt.id);
-              return (
-                <button
-                  key={opt.id}
-                  onClick={() => handleTypeClick(opt.id)}
-                  className={cn(
-                    "shrink-0 px-3 py-1.5 rounded-lg text-sm font-medium transition-colors whitespace-nowrap",
-                    selectedType === opt.id
-                      ? "bg-primary text-primary-foreground"
-                      : "bg-muted hover:bg-muted/80 text-foreground",
-                  )}
-                >
-                  {opt.label}
-                  {stat && <span className="ml-1 text-xs opacity-70">({stat.count})</span>}
-                </button>
-              );
-            })}
-          </div>
-        </MotionPage>
+        {showGameTypeFilter && (
+          <MotionPage>
+            <div className="flex flex-wrap gap-2 mb-4">
+              {availableTypes.map((opt) => {
+                const stat = typeStats.find((s) => s.type === opt.id);
+                return (
+                  <button
+                    key={opt.id}
+                    onClick={() => handleTypeClick(opt.id)}
+                    className={cn(
+                      "shrink-0 px-3 py-1.5 rounded-lg text-sm font-medium transition-colors whitespace-nowrap",
+                      selectedType === opt.id
+                        ? "bg-primary text-primary-foreground"
+                        : "bg-muted hover:bg-muted/80 text-foreground",
+                    )}
+                  >
+                    {opt.label}
+                    {stat && <span className="ml-1 text-xs opacity-70">({stat.count})</span>}
+                  </button>
+                );
+              })}
+            </div>
+          </MotionPage>
+        )}
 
         <MotionPage>
           {sortOptions.length > 0 && (
@@ -337,26 +308,6 @@ export function GameListClient({
             </div>
           )}
 
-          {viewMode === "games" && initialTags.length > 0 && (
-            <CollapsibleTagBar className="mb-6">
-              {initialTags.map((tag) => (
-                <button
-                  key={tag.id}
-                  onClick={() => handleTagClick(tag.slug)}
-                  onContextMenu={(e) => handleTagRightClick(e, tag.slug)}
-                  className={cn(
-                    "shrink-0 px-3 py-1.5 rounded-lg text-sm font-medium transition-colors whitespace-nowrap",
-                    isSelected(tag.slug) && "bg-foreground text-background",
-                    isExcluded(tag.slug) && "bg-destructive/20 text-destructive line-through",
-                    !isSelected(tag.slug) && !isExcluded(tag.slug) && "bg-muted hover:bg-muted/80 text-foreground",
-                  )}
-                  title="左键选择，右键排除"
-                >
-                  {tag.name}
-                </button>
-              ))}
-            </CollapsibleTagBar>
-          )}
         </MotionPage>
 
         <section>
