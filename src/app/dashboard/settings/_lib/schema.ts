@@ -16,7 +16,7 @@ const n = (v: unknown, fallback: number): number => (v as number) ?? fallback;
 const b = (v: unknown, fallback: boolean): boolean => (v as boolean) ?? fallback;
 const imageSortOptions = (v: unknown): string => {
   const raw = s(v).trim();
-  return !raw || raw === "latest,views" ? "latest,views,likes" : raw;
+  return raw || "latest,views,likes";
 };
 
 // ---------------------------------------------------------------------------

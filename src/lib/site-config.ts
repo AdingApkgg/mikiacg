@@ -175,7 +175,7 @@ function stripTrailingSlash(url: string): string {
 
 function normalizeImageSortOptions(value: unknown): string {
   const raw = typeof value === "string" ? value.trim() : "";
-  return !raw || raw === "latest,views" ? "latest,views,likes" : raw;
+  return raw || "latest,views,likes";
 }
 
 function toPublic(c: Record<string, unknown>): PublicSiteConfig {
@@ -194,7 +194,7 @@ function toPublic(c: Record<string, unknown>): PublicSiteConfig {
 
   return {
     siteName: (c.siteName as string) || "ACGN Site",
-    siteUrl: stripTrailingSlash((c.siteUrl as string) || process.env.NEXT_PUBLIC_APP_URL || "http://localhost:3000"),
+    siteUrl: stripTrailingSlash((c.siteUrl as string) || process.env.NEXT_PUBLIC_APP_URL || "http://localhost:4000"),
     siteDescription: (c.siteDescription as string) ?? null,
     siteLogo: (c.siteLogo as string) ?? null,
     siteFavicon: (c.siteFavicon as string) ?? null,

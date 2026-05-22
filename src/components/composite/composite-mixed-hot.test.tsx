@@ -43,10 +43,8 @@ vi.mock("@/hooks/use-sound", () => ({
 }));
 
 vi.mock("@/hooks/use-thumb", () => ({
-  useThumb:
-    (preset: string) =>
-    (src: string, override?: { h?: number }) =>
-      `${src}?preset=${preset}${override?.h !== undefined ? `&h=${override.h}` : ""}`,
+  useThumb: (preset: string) => (src: string, override?: { h?: number }) =>
+    `${src}?preset=${preset}${override?.h !== undefined ? `&h=${override.h}` : ""}`,
 }));
 
 vi.mock("@/hooks/use-in-view-once", () => ({

@@ -28,7 +28,6 @@ const SKELETON_RATIOS = ["3 / 4", "4 / 5", "1 / 1", "2 / 3", "5 / 7", "4 / 3"];
 
 type SortBy = "latest" | "views" | "likes" | "titleAsc" | "titleDesc";
 const DEFAULT_IMAGE_SORT_OPTIONS = "latest,views,likes";
-const LEGACY_IMAGE_SORT_OPTIONS = "latest,views";
 
 const ALL_SORT_OPTIONS: { id: SortBy; label: string }[] = [
   { id: "latest", label: "最新" },
@@ -61,7 +60,7 @@ interface ImageListClientProps {
 
 function getEnabledSortOptions(rawOptions: string | null | undefined): SortBy[] {
   const normalized = rawOptions?.trim();
-  const options = !normalized || normalized === LEGACY_IMAGE_SORT_OPTIONS ? DEFAULT_IMAGE_SORT_OPTIONS : normalized;
+  const options = normalized || DEFAULT_IMAGE_SORT_OPTIONS;
   return options
     .split(",")
     .map((s) => s.trim())

@@ -36,7 +36,13 @@ function shouldHideSidebar(pathname: string): boolean {
   return noSidebarPaths.some((path) => pathname.startsWith(path));
 }
 
-export function AppLayout({ children, initialHideNsfw = false }: { children: React.ReactNode; initialHideNsfw?: boolean }) {
+export function AppLayout({
+  children,
+  initialHideNsfw = false,
+}: {
+  children: React.ReactNode;
+  initialHideNsfw?: boolean;
+}) {
   const pathname = usePathname();
   const mounted = useIsMounted();
   const { showHelp, setShowHelp } = useKeyboardShortcuts();

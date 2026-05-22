@@ -316,12 +316,7 @@ export function SidebarContent({
   );
 }
 
-export function Sidebar({
-  collapsed,
-  onToggle,
-  overlay = false,
-  initialHideNsfw = false,
-}: SidebarProps) {
+export function Sidebar({ collapsed, onToggle, overlay = false, initialHideNsfw = false }: SidebarProps) {
   return (
     <>
       {/* 遮罩层 - 覆盖模式展开时显示 */}

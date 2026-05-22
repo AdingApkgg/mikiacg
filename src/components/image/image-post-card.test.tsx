@@ -35,10 +35,8 @@ vi.mock("@/hooks/use-sound", () => ({
 }));
 
 vi.mock("@/hooks/use-thumb", () => ({
-  useThumb:
-    (preset: string) =>
-    (src: string, override?: { h?: number }) =>
-      `${src}?preset=${preset}${override?.h !== undefined ? `&h=${override.h}` : ""}`,
+  useThumb: (preset: string) => (src: string, override?: { h?: number }) =>
+    `${src}?preset=${preset}${override?.h !== undefined ? `&h=${override.h}` : ""}`,
 }));
 
 vi.mock("@/hooks/use-in-view-once", () => ({
@@ -113,9 +111,7 @@ describe("ImagePostCard", () => {
   it("单图默认卡片不显示多图数量徽章", async () => {
     const { ImagePostCard } = await import("./image-post-card");
 
-    const html = renderToStaticMarkup(
-      <ImagePostCard post={{ ...basePost, images: ["/only.jpg"], isNsfw: false }} />,
-    );
+    const html = renderToStaticMarkup(<ImagePostCard post={{ ...basePost, images: ["/only.jpg"], isNsfw: false }} />);
 
     expect(html).toContain("aspect-video");
     expect(html).toContain('src="/only.jpg?preset=gridPrimary"');

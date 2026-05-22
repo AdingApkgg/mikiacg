@@ -85,9 +85,7 @@ export function CompositeNsfwToggle({
       <Icon className={cn("h-[22px] w-[22px] shrink-0", current ? "stroke-[2.5px]" : "stroke-[1.5px]")} />
       <label htmlFor={switchId} className="flex min-w-0 flex-1 cursor-pointer flex-col">
         <span className="truncate font-medium">{current ? "隐藏 NSFW" : "显示全部"}</span>
-        <span className="truncate text-xs text-muted-foreground">
-          {current ? "仅显示普通内容" : "包含 NSFW 内容"}
-        </span>
+        <span className="truncate text-xs text-muted-foreground">{current ? "仅显示普通内容" : "包含 NSFW 内容"}</span>
       </label>
       <Switch
         id={switchId}

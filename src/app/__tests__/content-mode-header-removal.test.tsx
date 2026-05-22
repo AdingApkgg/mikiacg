@@ -207,26 +207,6 @@ vi.mock("@/components/video/video-card", () => ({
   VideoCard: ({ video }: { video: { title: string } }) => <article>{video.title}</article>,
 }));
 
-vi.mock("@/components/video/video-feed-sections", () => ({
-  VideoFeedSections: () => (
-    <section data-testid="video-feed">
-      <h2>最新发布</h2>
-      <h2>热门视频</h2>
-      <h2>高赞排行</h2>
-    </section>
-  ),
-}));
-
-vi.mock("@/components/image/image-feed-sections", () => ({
-  ImageFeedSections: () => (
-    <section data-testid="image-feed">
-      <h2>最新发布</h2>
-      <h2>热门图集</h2>
-      <h2>高赞排行</h2>
-    </section>
-  ),
-}));
-
 vi.mock("@/components/image/image-masonry", () => ({
   ImageMasonry: ({ items }: { items: { key: string; node: React.ReactNode }[] }) => (
     <div data-testid="image-masonry">
@@ -557,15 +537,15 @@ describe("front content pages", () => {
     expect(gameHtml).not.toContain("上一轮最新游戏");
   });
 
-  it("/image 排序选项缺省或旧默认配置时包含高赞", async () => {
+  it("/image 保留已保存排序选项，仅缺省配置时回退到包含高赞的默认值", async () => {
     mocks.siteConfig.imageSortOptions = "latest,views";
     mocks.pathname = "/image";
     const { ImageListClient } = await import("../image/client");
-    const legacyDefaultHtml = renderToStaticMarkup(<ImageListClient initialPosts={[]} />);
+    const savedOptionsHtml = renderToStaticMarkup(<ImageListClient initialPosts={[]} />);
 
-    expect(legacyDefaultHtml).toContain("最新");
-    expect(legacyDefaultHtml).toContain("热门");
-    expect(legacyDefaultHtml).toContain("高赞");
+    expect(savedOptionsHtml).toContain("最新");
+    expect(savedOptionsHtml).toContain("热门");
+    expect(savedOptionsHtml).not.toContain("高赞");
 
     mocks.siteConfig.imageSortOptions = undefined as unknown as string;
     const missingConfigHtml = renderToStaticMarkup(<ImageListClient initialPosts={[]} />);

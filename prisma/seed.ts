@@ -1193,7 +1193,12 @@ async function main() {
       .filter((u) => USERS_DATA.find((d) => d.username === u.username)?.canUpload)
       .map((u) => u.id);
 
-    async function resolveDemoVideoId(desiredId: string, seedKey: string, title: string, index: number): Promise<string> {
+    async function resolveDemoVideoId(
+      desiredId: string,
+      seedKey: string,
+      title: string,
+      index: number,
+    ): Promise<string> {
       const existing = await prisma.video.findUnique({
         where: { id: desiredId },
         select: { id: true, title: true, videoUrl: true, extraInfo: true },
@@ -1220,7 +1225,12 @@ async function main() {
       throw new Error(`无法为演示视频分配安全 ID: ${title}`);
     }
 
-    async function resolveDemoGameId(desiredId: string, seedKey: string, title: string, index: number): Promise<string> {
+    async function resolveDemoGameId(
+      desiredId: string,
+      seedKey: string,
+      title: string,
+      index: number,
+    ): Promise<string> {
       const existing = await prisma.game.findUnique({
         where: { id: desiredId },
         select: { id: true, title: true, description: true, extraInfo: true },
@@ -1247,11 +1257,7 @@ async function main() {
       throw new Error(`无法为演示游戏分配安全 ID: ${title}`);
     }
 
-    async function resolveDemoImagePostId(
-      desiredId: string,
-      title: string,
-      index: number,
-    ): Promise<string> {
+    async function resolveDemoImagePostId(desiredId: string, title: string, index: number): Promise<string> {
       const existing = await prisma.imagePost.findUnique({
         where: { id: desiredId },
         select: { id: true, title: true, description: true },
@@ -1431,7 +1437,10 @@ async function main() {
         originalAuthor: i % 2 === 0 ? "Demo Circle" : "Sample Studio",
         fileSize: `${300 + ((i * 137) % 2800)} MB`,
         platforms,
-        screenshots: Array.from({ length: 4 }, (_, idx) => `https://picsum.photos/seed/game-${seedKey}-${idx}/1280/720`),
+        screenshots: Array.from(
+          { length: 4 },
+          (_, idx) => `https://picsum.photos/seed/game-${seedKey}-${idx}/1280/720`,
+        ),
         keywords: g.tags,
         notices: [{ type: "info", content: "本内容为本地开发演示数据。" }],
       };
