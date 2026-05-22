@@ -194,7 +194,7 @@ function toPublic(c: Record<string, unknown>): PublicSiteConfig {
 
   return {
     siteName: (c.siteName as string) || "ACGN Site",
-    siteUrl: stripTrailingSlash((c.siteUrl as string) || process.env.NEXT_PUBLIC_APP_URL || "http://localhost:4000"),
+    siteUrl: stripTrailingSlash((c.siteUrl as string) || process.env.NEXT_PUBLIC_APP_URL || "http://localhost:3000"),
     siteDescription: (c.siteDescription as string) ?? null,
     siteLogo: (c.siteLogo as string) ?? null,
     siteFavicon: (c.siteFavicon as string) ?? null,

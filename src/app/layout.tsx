@@ -32,7 +32,7 @@ export async function generateMetadata(): Promise<Metadata> {
   try {
     metadataBase = new URL(baseUrl);
   } catch {
-    metadataBase = new URL(process.env.NEXT_PUBLIC_APP_URL || "http://localhost:4000");
+    metadataBase = new URL(process.env.NEXT_PUBLIC_APP_URL || "http://localhost:3000");
   }
 
   return {
