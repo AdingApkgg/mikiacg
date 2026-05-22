@@ -28,15 +28,19 @@ export async function generateMetadata(): Promise<Metadata> {
 const getInitialData = cache(async () => {
   const fullConfig = await getPublicSiteConfig();
 
-  const sortKey = fullConfig.imageDefaultSort;
+  const sortKey = ["latest", "views", "likes", "titleAsc", "titleDesc"].includes(fullConfig.imageDefaultSort)
+    ? fullConfig.imageDefaultSort
+    : "latest";
   const orderBy =
     sortKey === "views"
       ? { views: "desc" as const }
-      : sortKey === "titleAsc"
-        ? { title: "asc" as const }
-        : sortKey === "titleDesc"
-          ? { title: "desc" as const }
-          : { createdAt: "desc" as const };
+      : sortKey === "likes"
+        ? { likes: { _count: "desc" as const } }
+        : sortKey === "titleAsc"
+          ? { title: "asc" as const }
+          : sortKey === "titleDesc"
+            ? { title: "desc" as const }
+            : { createdAt: "desc" as const };
 
   const posts = await prisma.imagePost.findMany({
     take: 20,
@@ -52,7 +56,7 @@ const getInitialData = cache(async () => {
     },
   });
 
-  return { posts };
+  return { posts, initialSortBy: sortKey };
 });
 
 function serializePosts(posts: Awaited<ReturnType<typeof getInitialData>>["posts"]) {
@@ -71,13 +75,13 @@ function serializePosts(posts: Awaited<ReturnType<typeof getInitialData>>["posts
 export default async function ImageListPage() {
   const config = await getPublicSiteConfig();
   if (!config.sectionImageEnabled) notFound();
-  const { posts } = await getInitialData();
+  const { posts, initialSortBy } = await getInitialData();
   const serializedPosts = serializePosts(posts);
 
   return (
     <>
       <ImageListJsonLd posts={serializedPosts} baseUrl={config.siteUrl} />
-      <ImageListClient initialPosts={serializedPosts} />
+      <ImageListClient initialPosts={serializedPosts} initialSortBy={initialSortBy} />
     </>
   );
 }

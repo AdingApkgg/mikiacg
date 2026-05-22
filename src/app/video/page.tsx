@@ -31,15 +31,19 @@ export async function generateMetadata(): Promise<Metadata> {
 const getInitialData = cache(async () => {
   const fullConfig = await getPublicSiteConfig();
 
-  const sortKey = fullConfig.videoDefaultSort;
+  const sortKey = ["latest", "views", "likes", "titleAsc", "titleDesc"].includes(fullConfig.videoDefaultSort)
+    ? fullConfig.videoDefaultSort
+    : "latest";
   const orderBy =
     sortKey === "views"
       ? { views: "desc" as const }
-      : sortKey === "titleAsc"
-        ? { title: "asc" as const }
-        : sortKey === "titleDesc"
-          ? { title: "desc" as const }
-          : { createdAt: "desc" as const };
+      : sortKey === "likes"
+        ? { likes: { _count: "desc" as const } }
+        : sortKey === "titleAsc"
+          ? { title: "asc" as const }
+          : sortKey === "titleDesc"
+            ? { title: "desc" as const }
+            : { createdAt: "desc" as const };
 
   const [videos, siteConfig] = await Promise.all([
     // 获取首屏视频（排序跟随站点配置的默认排序）
@@ -70,7 +74,7 @@ const getInitialData = cache(async () => {
   const ads = parseSponsorAds(fullConfig.sponsorAds);
   const initialAds = fullConfig.adsEnabled ? pickWeightedRandomAds(ads, 4, resolveSlotPosition("in-feed")) : [];
 
-  return { videos, siteConfig, initialAds };
+  return { videos, siteConfig, initialAds, initialSortBy: sortKey };
 });
 
 // 序列化视频数据
@@ -92,7 +96,7 @@ function serializeVideos(videos: Awaited<ReturnType<typeof getInitialData>>["vid
 export default async function VideoListPage() {
   const fullSiteConfig = await getPublicSiteConfig();
   if (!fullSiteConfig.sectionVideoEnabled) notFound();
-  const { videos, siteConfig, initialAds } = await getInitialData();
+  const { videos, siteConfig, initialAds, initialSortBy } = await getInitialData();
   const serializedVideos = serializeVideos(videos);
 
   const description = fullSiteConfig.siteDescription || `${fullSiteConfig.siteName} ACGN 内容平台`;
@@ -113,7 +117,12 @@ export default async function VideoListPage() {
       />
       <VideoListJsonLd videos={serializedVideos} baseUrl={fullSiteConfig.siteUrl} />
 
-      <VideoListClient initialVideos={serializedVideos} siteConfig={siteConfig} initialAds={initialAds} />
+      <VideoListClient
+        initialVideos={serializedVideos}
+        initialSortBy={initialSortBy}
+        siteConfig={siteConfig}
+        initialAds={initialAds}
+      />
     </>
   );
 }

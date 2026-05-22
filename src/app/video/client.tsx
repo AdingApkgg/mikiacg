@@ -3,7 +3,6 @@
 import { trpc } from "@/lib/trpc";
 import { VideoGrid } from "@/components/video/video-grid";
 import { VideoCard } from "@/components/video/video-card";
-import { VideoFeedSections } from "@/components/video/video-feed-sections";
 import { Button } from "@/components/ui/button";
 import { useState, useEffect, useMemo, useCallback } from "react";
 import { useSearchParams, useRouter, usePathname } from "next/navigation";
@@ -63,6 +62,7 @@ interface Video {
 
 interface VideoListClientProps {
   initialVideos: Video[];
+  initialSortBy?: string;
   siteConfig: {
     announcement: string | null;
     announcementEnabled: boolean;
@@ -126,7 +126,10 @@ export function VideoViewModeHeader({
   }
 
   return (
-    <div data-testid="video-view-mode-header" className="mb-3 flex items-end justify-end border-b border-border/60 pb-1.5">
+    <div
+      data-testid="video-view-mode-header"
+      className="mb-3 flex items-end justify-end border-b border-border/60 pb-1.5"
+    >
       {toggle}
     </div>
   );
@@ -134,6 +137,7 @@ export function VideoViewModeHeader({
 
 export default function VideoListClient({
   initialVideos,
+  initialSortBy,
   siteConfig,
   initialAds = [],
 }: VideoListClientProps) {
@@ -167,14 +171,16 @@ export default function VideoListClient({
   const timeRange: "all" | "today" | "week" | "month" = ["all", "today", "week", "month"].includes(urlTimeRange)
     ? urlTimeRange
     : "all";
-  // URL 显式带了 sortBy 或 timeRange 参数 → 用户从「查看更多」过来，
-  // 即使值跟默认一致也要展开成完整列表 (不再回到首页模式)
-  const hasExplicitListIntent = urlSortBy !== null || urlTimeRangeRaw !== null;
   const { selectedSlugs, excludedSlugs, clearAll, hasFilter } = useTagFilter();
   const [videoPage, setVideoPage] = usePageParam("page");
   const [authorsPage, setAuthorsPage] = usePageParam("ap");
 
-  const { data: videoData, isLoading: videoLoading } = trpc.video.list.useQuery(
+  const {
+    data: videoData,
+    isLoading: videoLoading,
+    isFetching: videoFetching,
+    isPlaceholderData: videoPlaceholderData = false,
+  } = trpc.video.list.useQuery(
     {
       limit: 20,
       page: videoPage,
@@ -186,7 +192,6 @@ export default function VideoListClient({
     },
     {
       enabled: viewMode === "videos",
-      placeholderData: (prev) => prev,
     },
   );
 
@@ -195,18 +200,27 @@ export default function VideoListClient({
     { limit: 12, page: authorsPage, sortBy: "videoCount" },
     {
       enabled: viewMode === "authors",
-      placeholderData: (prev) => prev,
     },
   );
 
   // 数据（用 useMemo 稳定引用，避免下游 useMemo 依赖在每次渲染时变化）。
-  // 仅在无筛选 (无 tag、无原作者) 的首页 SSR 场景使用 initialVideos 占位，
-  // 否则等待 client query 返回。
+  // 仅在当前列表条件与服务端首屏 initialVideos 条件一致时使用 SSR 占位，
+  // 否则等待 client query 返回，避免热门/高赞页先闪出最新内容。
+  const canUseInitialVideos =
+    videoPage === 1 &&
+    !hasFilter &&
+    !authorFilter &&
+    timeRange === "all" &&
+    sortBy === (initialSortBy ?? siteConfigCtx?.videoDefaultSort ?? "latest");
+
+  const currentVideoData = videoPlaceholderData ? undefined : videoData;
   const videos = useMemo(
-    () => videoData?.videos ?? (videoPage === 1 && !hasFilter && !authorFilter ? initialVideos : []),
-    [videoData?.videos, videoPage, hasFilter, authorFilter, initialVideos],
+    () => currentVideoData?.videos ?? (canUseInitialVideos ? initialVideos : []),
+    [currentVideoData?.videos, canUseInitialVideos, initialVideos],
   );
-  const videoTotalPages = videoData?.totalPages ?? 1;
+  const videoTotalPages = currentVideoData?.totalPages ?? 1;
+  const videoPending = videoLoading || videoFetching || videoPlaceholderData;
+  const showVideoSkeleton = videoPending && videos.length === 0;
   const authorItems = authorsData?.items ?? [];
   const authorsTotalPages = authorsData?.totalPages ?? 1;
 
@@ -231,19 +245,6 @@ export default function VideoListClient({
   const favoritedSet = useMemo(() => new Set(favoritedData?.favoritedIds ?? []), [favoritedData?.favoritedIds]);
 
   const isFirstPage = videoPage === 1 && !hasFilter && !authorFilter;
-  /**
-   * 「首页模式」判定：用户进入 /video 没做任何筛选时，主区域改为分区 Feed
-   * (最新 / 本日热门 / 本周排行)，参考 hanime1.me。一旦用户切排序、加 tag、
-   * 选作者或翻页，就回退到普通网格。
-   */
-  const isHomeMode =
-    viewMode === "videos" &&
-    videoPage === 1 &&
-    !hasFilter &&
-    !authorFilter &&
-    sortBy === "latest" &&
-    timeRange === "all" &&
-    !hasExplicitListIntent;
   const adSeed = `${videoPage}-${sortBy}-${selectedSlugs.join(",")}-${excludedSlugs.join(",")}-${authorFilter}`;
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const { gridItems, pickedAds, hasAds } = useInlineAds<any>({
@@ -337,14 +338,11 @@ export default function VideoListClient({
           )}
         </MotionPage>
         <section>
-          {isHomeMode ? (
-            // 首页模式：分区 Feed
-            <VideoFeedSections />
-          ) : viewMode === "videos" ? (
+          {viewMode === "videos" ? (
             // 视频网格
             <>
               <div key={`${sortBy}-${selectedSlugs.join(",")}-${excludedSlugs.join(",")}-${videoPage}`}>
-                {videoLoading && videos.length === 0 ? (
+                {showVideoSkeleton ? (
                   <VideoGrid videos={[]} isLoading columnsClass={SECTION_GRID_CLASS} />
                 ) : hasAds ? (
                   <div className={cn("grid gap-3 sm:gap-4 lg:gap-5", SECTION_GRID_CLASS)}>
@@ -373,7 +371,7 @@ export default function VideoListClient({
                 )}
 
                 {/* 无结果提示 */}
-                {!videoLoading && videos.length === 0 && (
+                {!videoPending && videos.length === 0 && (
                   <div className="text-center py-16">
                     <div className="text-muted-foreground mb-4">
                       <p className="text-lg font-medium">没有找到视频</p>

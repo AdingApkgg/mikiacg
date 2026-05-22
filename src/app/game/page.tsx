@@ -29,15 +29,19 @@ export async function generateMetadata(): Promise<Metadata> {
 const getInitialData = cache(async () => {
   const fullConfig = await getPublicSiteConfig();
 
-  const sortKey = fullConfig.gameDefaultSort;
+  const sortKey = ["latest", "views", "likes", "titleAsc", "titleDesc"].includes(fullConfig.gameDefaultSort)
+    ? fullConfig.gameDefaultSort
+    : "latest";
   const orderBy =
     sortKey === "views"
       ? { views: "desc" as const }
-      : sortKey === "titleAsc"
-        ? { title: "asc" as const }
-        : sortKey === "titleDesc"
-          ? { title: "desc" as const }
-          : { createdAt: "desc" as const };
+      : sortKey === "likes"
+        ? { likes: { _count: "desc" as const } }
+        : sortKey === "titleAsc"
+          ? { title: "asc" as const }
+          : sortKey === "titleDesc"
+            ? { title: "desc" as const }
+            : { createdAt: "desc" as const };
 
   const [games, typeStats, siteConfig] = await Promise.all([
     // 获取首屏游戏（排序跟随站点配置的默认排序）
@@ -79,6 +83,7 @@ const getInitialData = cache(async () => {
 
   return {
     games,
+    initialSortBy: sortKey,
     siteConfig,
     initialAds,
     typeStats: typeStats.map((s) => ({
@@ -109,7 +114,7 @@ function serializeGames(games: Awaited<ReturnType<typeof getInitialData>>["games
 export default async function GameListPage() {
   const fullSiteConfig = await getPublicSiteConfig();
   if (!fullSiteConfig.sectionGameEnabled) notFound();
-  const { games, typeStats, siteConfig, initialAds } = await getInitialData();
+  const { games, typeStats, siteConfig, initialAds, initialSortBy } = await getInitialData();
   const serializedGames = serializeGames(games);
 
   return (
@@ -117,6 +122,7 @@ export default async function GameListPage() {
       <GameListJsonLd games={serializedGames} baseUrl={fullSiteConfig.siteUrl} />
       <GameListClient
         initialGames={serializedGames}
+        initialSortBy={initialSortBy}
         typeStats={typeStats}
         siteConfig={siteConfig}
         initialAds={initialAds}

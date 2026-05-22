@@ -173,6 +173,11 @@ function stripTrailingSlash(url: string): string {
   return url.replace(/\/+$/, "");
 }
 
+function normalizeImageSortOptions(value: unknown): string {
+  const raw = typeof value === "string" ? value.trim() : "";
+  return !raw || raw === "latest,views" ? "latest,views,likes" : raw;
+}
+
 function toPublic(c: Record<string, unknown>): PublicSiteConfig {
   const oauthProviders: string[] = [];
   for (const k of OAUTH_KEYS) {
@@ -265,7 +270,7 @@ function toPublic(c: Record<string, unknown>): PublicSiteConfig {
     sectionGameEnabled: (c.sectionGameEnabled as boolean) ?? true,
     videoSortOptions: (c.videoSortOptions as string) ?? "latest,views,likes",
     gameSortOptions: (c.gameSortOptions as string) ?? "latest,views,likes",
-    imageSortOptions: (c.imageSortOptions as string) ?? "latest,views",
+    imageSortOptions: normalizeImageSortOptions(c.imageSortOptions),
     videoDefaultSort: (c.videoDefaultSort as string) ?? "latest",
     gameDefaultSort: (c.gameDefaultSort as string) ?? "latest",
     imageDefaultSort: (c.imageDefaultSort as string) ?? "latest",

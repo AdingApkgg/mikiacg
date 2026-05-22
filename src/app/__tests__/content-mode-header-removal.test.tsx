@@ -2,7 +2,17 @@ import { renderToStaticMarkup } from "react-dom/server";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 const mocks = vi.hoisted(() => ({
-  searchParams: new URLSearchParams("sortBy=views"),
+  defaultSiteConfig: {
+    announcement: null,
+    announcementEnabled: false,
+    videoSortOptions: "latest,views,likes",
+    videoDefaultSort: "latest",
+    imageSortOptions: "latest,views,likes",
+    imageDefaultSort: "latest",
+    gameSortOptions: "latest,views,likes",
+    gameDefaultSort: "latest",
+  },
+  searchParams: new URLSearchParams(""),
   router: { push: vi.fn(), replace: vi.fn(), refresh: vi.fn() },
   pathname: "/video",
   setPage: vi.fn(),
@@ -21,6 +31,9 @@ const mocks = vi.hoisted(() => ({
     gameSortOptions: "latest,views,likes",
     gameDefaultSort: "latest",
   },
+  videoListInputs: [] as unknown[],
+  imageListInputs: [] as unknown[],
+  gameListInputs: [] as unknown[],
   videoListResult: {
     data: {
       videos: [
@@ -38,6 +51,8 @@ const mocks = vi.hoisted(() => ({
       totalPages: 1,
     },
     isLoading: false,
+    isFetching: false,
+    isPlaceholderData: false,
   },
   imageListResult: {
     data: {
@@ -65,12 +80,15 @@ const mocks = vi.hoisted(() => ({
           coverUrl: null,
           views: 10,
           createdAt: "2026-01-01T00:00:00.000Z",
+          uploader: { id: "user-1", username: "uploader", nickname: null, avatar: null },
           _count: { likes: 1 },
         },
       ],
       totalPages: 1,
     },
     isLoading: false,
+    isFetching: false,
+    isPlaceholderData: false,
   },
 }));
 
@@ -83,17 +101,32 @@ vi.mock("next/navigation", () => ({
 vi.mock("@/lib/trpc", () => ({
   trpc: {
     video: {
-      list: { useQuery: () => mocks.videoListResult },
+      list: {
+        useQuery: (input: unknown) => {
+          mocks.videoListInputs.push(input);
+          return mocks.videoListResult;
+        },
+      },
       listAuthors: { useQuery: () => ({ data: { items: [], totalPages: 1 }, isLoading: false }) },
       progressMap: { useQuery: () => ({ data: { progressByVideoId: {} } }) },
       favoritedMap: { useQuery: () => ({ data: { favoritedIds: [] } }) },
     },
     image: {
-      list: { useQuery: () => mocks.imageListResult },
+      list: {
+        useQuery: (input: unknown) => {
+          mocks.imageListInputs.push(input);
+          return mocks.imageListResult;
+        },
+      },
       favoritedMap: { useQuery: () => ({ data: { favoritedIds: [] } }) },
     },
     game: {
-      list: { useQuery: () => mocks.gameListResult },
+      list: {
+        useQuery: (input: unknown) => {
+          mocks.gameListInputs.push(input);
+          return mocks.gameListResult;
+        },
+      },
       listAuthors: { useQuery: () => ({ data: { items: [], totalPages: 1 }, isLoading: false }) },
       favoritedMap: { useQuery: () => ({ data: { favoritedIds: [] } }) },
     },
@@ -175,15 +208,33 @@ vi.mock("@/components/video/video-card", () => ({
 }));
 
 vi.mock("@/components/video/video-feed-sections", () => ({
-  VideoFeedSections: () => <section data-testid="video-feed" />,
+  VideoFeedSections: () => (
+    <section data-testid="video-feed">
+      <h2>最新发布</h2>
+      <h2>热门视频</h2>
+      <h2>高赞排行</h2>
+    </section>
+  ),
 }));
 
 vi.mock("@/components/image/image-feed-sections", () => ({
-  ImageFeedSections: () => <section data-testid="image-feed" />,
+  ImageFeedSections: () => (
+    <section data-testid="image-feed">
+      <h2>最新发布</h2>
+      <h2>热门图集</h2>
+      <h2>高赞排行</h2>
+    </section>
+  ),
 }));
 
 vi.mock("@/components/image/image-masonry", () => ({
-  ImageMasonry: () => <div data-testid="image-masonry" />,
+  ImageMasonry: ({ items }: { items: { key: string; node: React.ReactNode }[] }) => (
+    <div data-testid="image-masonry">
+      {items.map((item) => (
+        <div key={item.key}>{item.node}</div>
+      ))}
+    </div>
+  ),
 }));
 
 vi.mock("@/components/image/image-post-card", () => ({
@@ -201,45 +252,117 @@ vi.mock("@/components/game/game-card", () => ({
 }));
 
 vi.mock("@/components/game/game-feed-sections", () => ({
-  GameFeedSections: () => <section data-testid="game-feed" />,
+  GameFeedSections: () => (
+    <section data-testid="game-feed">
+      <h2>最新上架</h2>
+      <h2>热门游戏</h2>
+      <h2>高赞排行</h2>
+    </section>
+  ),
 }));
+
+const FEED_SECTION_TITLES = ["最新发布", "最新上架", "热门视频", "热门图集", "热门游戏", "高赞排行"];
+
+function expectNoRepeatedFeedSections(html: string) {
+  expect(html).not.toContain('data-testid="video-feed"');
+  expect(html).not.toContain('data-testid="image-feed"');
+  expect(html).not.toContain('data-testid="game-feed"');
+  for (const title of FEED_SECTION_TITLES) {
+    expect(html).not.toContain(title);
+  }
+}
 
 describe("front content pages", () => {
   beforeEach(() => {
-    mocks.searchParams = new URLSearchParams("sortBy=views");
+    mocks.searchParams = new URLSearchParams("");
     mocks.pathname = "/video";
+    mocks.siteConfig = { ...mocks.defaultSiteConfig };
+    mocks.videoListInputs = [];
+    mocks.imageListInputs = [];
+    mocks.gameListInputs = [];
+    mocks.videoListResult = {
+      data: {
+        videos: [
+          {
+            id: "video-1",
+            title: "测试视频",
+            coverUrl: null,
+            duration: 60,
+            views: 10,
+            createdAt: "2026-01-01T00:00:00.000Z",
+            uploader: { id: "user-1", username: "uploader", nickname: null, avatar: null },
+            _count: { likes: 1 },
+          },
+        ],
+        totalPages: 1,
+      },
+      isLoading: false,
+      isFetching: false,
+      isPlaceholderData: false,
+    };
+    mocks.imageListResult = {
+      data: {
+        posts: [
+          {
+            id: "image-1",
+            title: "测试图片",
+            images: ["/image.jpg"],
+            views: 10,
+            createdAt: "2026-01-01T00:00:00.000Z",
+            uploader: { id: "user-1", username: "uploader", nickname: null, avatar: null },
+          },
+        ],
+        totalPages: 1,
+      },
+      isLoading: false,
+      isFetching: false,
+    };
+    mocks.gameListResult = {
+      data: {
+        games: [
+          {
+            id: "game-1",
+            title: "测试游戏",
+            coverUrl: null,
+            views: 10,
+            createdAt: "2026-01-01T00:00:00.000Z",
+            uploader: { id: "user-1", username: "uploader", nickname: null, avatar: null },
+            _count: { likes: 1 },
+          },
+        ],
+        totalPages: 1,
+      },
+      isLoading: false,
+      isFetching: false,
+      isPlaceholderData: false,
+    };
     vi.clearAllMocks();
   });
 
-  it("/video 不再渲染内容分区切换条和标签筛选栏，列表仍存在", async () => {
+  it("/video 默认页只渲染 VideoGrid 单一列表，不渲染重复 Feed section", async () => {
     const { default: VideoListClient } = await import("../video/client");
     const html = renderToStaticMarkup(
-      <VideoListClient
-        initialVideos={[]}
-        siteConfig={{ announcement: null, announcementEnabled: false }}
-      />,
+      <VideoListClient initialVideos={[]} siteConfig={{ announcement: null, announcementEnabled: false }} />,
     );
 
-    expect(html).not.toContain('role="tablist"');
-    expect(html).not.toContain('aria-label="内容分区"');
-    expect(html).not.toContain('data-testid="tag-bar"');
-    expect(html).toContain("热门");
+    expectNoRepeatedFeedSections(html);
+    expect(html).toContain('data-testid="video-grid"');
     expect(html).toContain("测试视频");
+    expect(mocks.videoListInputs.at(-1)).toMatchObject({ sortBy: "latest" });
   });
 
-  it("/image 不再渲染内容分区切换条和标签筛选栏，列表仍存在", async () => {
+  it("/image 默认页只渲染 ImageMasonry 单一列表，不渲染重复 Feed section", async () => {
     mocks.pathname = "/image";
     const { ImageListClient } = await import("../image/client");
     const html = renderToStaticMarkup(<ImageListClient initialPosts={[]} />);
 
-    expect(html).not.toContain('role="tablist"');
-    expect(html).not.toContain('aria-label="内容分区"');
-    expect(html).not.toContain('data-testid="tag-bar"');
-    expect(html).toContain("热门");
+    expectNoRepeatedFeedSections(html);
     expect(html).toContain('data-testid="image-masonry"');
+    expect(html).toContain("测试图片");
+    expect(mocks.imageListInputs.at(-1)).toMatchObject({ sortBy: "latest" });
   });
 
-  it("/game 不再渲染内容分区切换条和标签筛选栏，列表仍存在", async () => {
+  it("/game 默认页只渲染 GameGrid 单一列表，不渲染重复 Feed section", async () => {
     mocks.pathname = "/game";
     const { GameListClient } = await import("../game/client");
     const html = renderToStaticMarkup(
@@ -250,11 +373,203 @@ describe("front content pages", () => {
       />,
     );
 
-    expect(html).not.toContain('role="tablist"');
-    expect(html).not.toContain('aria-label="内容分区"');
-    expect(html).not.toContain('data-testid="tag-bar"');
-    expect(html).toContain("SLG");
+    expectNoRepeatedFeedSections(html);
+    expect(html).toContain('data-testid="game-grid"');
     expect(html).toContain("测试游戏");
+    expect(mocks.gameListInputs.at(-1)).toMatchObject({ sortBy: "latest" });
+  });
+
+  it("URL sortBy 参数仍控制 /video、/image、/game 的单一列表查询", async () => {
+    const { default: VideoListClient } = await import("../video/client");
+    const { ImageListClient } = await import("../image/client");
+    const { GameListClient } = await import("../game/client");
+
+    mocks.searchParams = new URLSearchParams("sortBy=views");
+    mocks.pathname = "/video";
+    const videoHtml = renderToStaticMarkup(
+      <VideoListClient initialVideos={[]} siteConfig={{ announcement: null, announcementEnabled: false }} />,
+    );
+    expectNoRepeatedFeedSections(videoHtml);
+    expect(mocks.videoListInputs.at(-1)).toMatchObject({ sortBy: "views" });
+
+    mocks.searchParams = new URLSearchParams("sortBy=likes");
+    mocks.pathname = "/image";
+    const imageHtml = renderToStaticMarkup(<ImageListClient initialPosts={[]} />);
+    expectNoRepeatedFeedSections(imageHtml);
+    expect(mocks.imageListInputs.at(-1)).toMatchObject({ sortBy: "likes" });
+
+    mocks.searchParams = new URLSearchParams("sortBy=views");
+    mocks.pathname = "/game";
+    const gameHtml = renderToStaticMarkup(
+      <GameListClient
+        initialGames={[]}
+        typeStats={[{ type: "SLG", count: 1 }]}
+        siteConfig={{ announcement: null, announcementEnabled: false }}
+      />,
+    );
+    expectNoRepeatedFeedSections(gameHtml);
+    expect(mocks.gameListInputs.at(-1)).toMatchObject({ sortBy: "views" });
+  });
+
+  it("URL sortBy=views/likes 且 query loading 时不渲染错误的 initial 数据", async () => {
+    const { default: VideoListClient } = await import("../video/client");
+    const { ImageListClient } = await import("../image/client");
+    const { GameListClient } = await import("../game/client");
+
+    mocks.videoListResult = {
+      data: undefined as never,
+      isLoading: true,
+      isFetching: true,
+      isPlaceholderData: false,
+    };
+    mocks.searchParams = new URLSearchParams("sortBy=views");
+    mocks.pathname = "/video";
+    const videoHtml = renderToStaticMarkup(
+      <VideoListClient
+        initialVideos={[
+          {
+            id: "initial-video",
+            title: "错误初始视频",
+            coverUrl: null,
+            duration: 60,
+            views: 1,
+            createdAt: "2026-01-01T00:00:00.000Z",
+            uploader: { id: "user-1", username: "uploader", nickname: null, avatar: null },
+            _count: { likes: 1 },
+          },
+        ]}
+        siteConfig={{ announcement: null, announcementEnabled: false }}
+      />,
+    );
+    expect(videoHtml).toContain('data-testid="video-grid"');
+    expect(videoHtml).not.toContain("错误初始视频");
+
+    mocks.imageListResult = { data: undefined as never, isLoading: true, isFetching: true };
+    mocks.searchParams = new URLSearchParams("sortBy=likes");
+    mocks.pathname = "/image";
+    const imageHtml = renderToStaticMarkup(
+      <ImageListClient
+        initialPosts={[
+          {
+            id: "initial-image",
+            title: "错误初始图片",
+            images: ["/image.jpg"],
+            views: 1,
+            createdAt: "2026-01-01T00:00:00.000Z",
+            uploader: { id: "user-1", username: "uploader", nickname: null, avatar: null },
+          },
+        ]}
+      />,
+    );
+    expect(imageHtml).toContain('data-testid="image-masonry"');
+    expect(imageHtml).not.toContain("错误初始图片");
+
+    mocks.gameListResult = {
+      data: undefined as never,
+      isLoading: true,
+      isFetching: true,
+      isPlaceholderData: false,
+    };
+    mocks.searchParams = new URLSearchParams("sortBy=views");
+    mocks.pathname = "/game";
+    const gameHtml = renderToStaticMarkup(
+      <GameListClient
+        initialGames={[
+          {
+            id: "initial-game",
+            title: "错误初始游戏",
+            coverUrl: null,
+            views: 1,
+            createdAt: "2026-01-01T00:00:00.000Z",
+            uploader: { id: "user-1", username: "uploader", nickname: null, avatar: null },
+            _count: { likes: 1 },
+          },
+        ]}
+        typeStats={[{ type: "SLG", count: 1 }]}
+        siteConfig={{ announcement: null, announcementEnabled: false }}
+      />,
+    );
+    expect(gameHtml).toContain('data-testid="game-grid"');
+    expect(gameHtml).not.toContain("错误初始游戏");
+  });
+
+  it("/video 和 /game 排序切换请求未完成前不渲染上一轮 latest 占位数据", async () => {
+    const { default: VideoListClient } = await import("../video/client");
+    const { GameListClient } = await import("../game/client");
+
+    mocks.videoListResult = {
+      data: {
+        videos: [
+          {
+            id: "old-latest-video",
+            title: "上一轮最新视频",
+            coverUrl: null,
+            duration: 60,
+            views: 1,
+            createdAt: "2026-01-01T00:00:00.000Z",
+            uploader: { id: "user-1", username: "uploader", nickname: null, avatar: null },
+            _count: { likes: 1 },
+          },
+        ],
+        totalPages: 1,
+      },
+      isLoading: false,
+      isFetching: true,
+      isPlaceholderData: true,
+    };
+    mocks.searchParams = new URLSearchParams("sortBy=views");
+    mocks.pathname = "/video";
+    const videoHtml = renderToStaticMarkup(
+      <VideoListClient initialVideos={[]} siteConfig={{ announcement: null, announcementEnabled: false }} />,
+    );
+    expect(videoHtml).toContain('data-testid="video-grid"');
+    expect(videoHtml).not.toContain("上一轮最新视频");
+
+    mocks.gameListResult = {
+      data: {
+        games: [
+          {
+            id: "old-latest-game",
+            title: "上一轮最新游戏",
+            coverUrl: null,
+            views: 1,
+            createdAt: "2026-01-01T00:00:00.000Z",
+            uploader: { id: "user-1", username: "uploader", nickname: null, avatar: null },
+            _count: { likes: 1 },
+          },
+        ],
+        totalPages: 1,
+      },
+      isLoading: false,
+      isFetching: true,
+      isPlaceholderData: true,
+    };
+    mocks.searchParams = new URLSearchParams("sortBy=likes");
+    mocks.pathname = "/game";
+    const gameHtml = renderToStaticMarkup(
+      <GameListClient
+        initialGames={[]}
+        typeStats={[{ type: "SLG", count: 1 }]}
+        siteConfig={{ announcement: null, announcementEnabled: false }}
+      />,
+    );
+    expect(gameHtml).toContain('data-testid="game-grid"');
+    expect(gameHtml).not.toContain("上一轮最新游戏");
+  });
+
+  it("/image 排序选项缺省或旧默认配置时包含高赞", async () => {
+    mocks.siteConfig.imageSortOptions = "latest,views";
+    mocks.pathname = "/image";
+    const { ImageListClient } = await import("../image/client");
+    const legacyDefaultHtml = renderToStaticMarkup(<ImageListClient initialPosts={[]} />);
+
+    expect(legacyDefaultHtml).toContain("最新");
+    expect(legacyDefaultHtml).toContain("热门");
+    expect(legacyDefaultHtml).toContain("高赞");
+
+    mocks.siteConfig.imageSortOptions = undefined as unknown as string;
+    const missingConfigHtml = renderToStaticMarkup(<ImageListClient initialPosts={[]} />);
+    expect(missingConfigHtml).toContain("高赞");
   });
 
   it("/video 作者模式下视频/作者切换控件仍右对齐", async () => {
@@ -318,7 +633,7 @@ describe("front content pages", () => {
     expect(html).toContain(longAuthor);
   });
 
-  it("/game 首页模式不渲染游戏类型筛选行", async () => {
+  it("/game 默认列表模式保留游戏类型筛选行和作品/作者切换", async () => {
     mocks.searchParams = new URLSearchParams("");
     mocks.pathname = "/game";
     const { GameListClient } = await import("../game/client");
@@ -330,13 +645,15 @@ describe("front content pages", () => {
       />,
     );
 
-    expect(html).toContain('data-testid="game-feed"');
-    expect(html).not.toContain("SLG");
-    expect(html).not.toContain("全部");
+    expectNoRepeatedFeedSections(html);
+    expect(html).toContain("全部");
+    expect(html).toContain("SLG");
+    expect(html).toContain("作品");
+    expect(html).toContain("作者");
   });
 
-  it("/game?sortBy=latest 列表模式渲染游戏类型筛选行", async () => {
-    mocks.searchParams = new URLSearchParams("sortBy=latest");
+  it("/game?sortBy=likes 列表模式仍渲染游戏类型筛选行", async () => {
+    mocks.searchParams = new URLSearchParams("sortBy=likes");
     mocks.pathname = "/game";
     const { GameListClient } = await import("../game/client");
     const html = renderToStaticMarkup(
@@ -347,13 +664,14 @@ describe("front content pages", () => {
       />,
     );
 
-    expect(html).not.toContain('data-testid="game-feed"');
+    expectNoRepeatedFeedSections(html);
     expect(html).toContain("全部");
     expect(html).toContain("SLG");
+    expect(mocks.gameListInputs.at(-1)).toMatchObject({ sortBy: "likes" });
   });
 
   it("游戏类型只有全部时不渲染孤立筛选行", async () => {
-    mocks.searchParams = new URLSearchParams("sortBy=latest");
+    mocks.searchParams = new URLSearchParams("");
     mocks.pathname = "/game";
     const { GameListClient } = await import("../game/client");
     const html = renderToStaticMarkup(
@@ -364,6 +682,7 @@ describe("front content pages", () => {
       />,
     );
 
+    expectNoRepeatedFeedSections(html);
     expect(html).not.toContain("全部");
   });
 });
