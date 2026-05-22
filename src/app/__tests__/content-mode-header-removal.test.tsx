@@ -282,6 +282,42 @@ describe("front content pages", () => {
     expect(html).toContain("作者");
   });
 
+  it("/video 作者网格约束长作者名和长预览标题，不撑宽页面", async () => {
+    const { VideoAuthorsGrid } = await import("../video/client");
+    const longAuthor =
+      "very-long-author-name-with-url-like-text-https-example-com-path-segment-that-should-not-expand-the-card";
+    const html = renderToStaticMarkup(
+      <VideoAuthorsGrid
+        items={[
+          {
+            author: longAuthor,
+            videoCount: 123456,
+            totalViews: 9876543210,
+            previewVideos: [
+              {
+                id: "video-long",
+                coverUrl: null,
+                title:
+                  "very-long-video-title-with-url-like-text-https-example-com-video-title-that-should-not-expand-preview",
+              },
+            ],
+          },
+        ]}
+        isLoading={false}
+        page={1}
+        totalPages={1}
+        onPageChange={vi.fn()}
+        onAuthorClick={vi.fn()}
+        coverSrc={(id) => `/cover/${id}.jpg`}
+      />,
+    );
+
+    expect(html).toContain("w-full min-w-0 max-w-full");
+    expect(html).toContain("block min-w-0 w-full max-w-full overflow-hidden");
+    expect(html).toContain("min-w-0 flex-1 truncate break-all");
+    expect(html).toContain(longAuthor);
+  });
+
   it("/game 首页模式不渲染游戏类型筛选行", async () => {
     mocks.searchParams = new URLSearchParams("");
     mocks.pathname = "/game";

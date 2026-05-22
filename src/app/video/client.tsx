@@ -71,6 +71,13 @@ interface VideoListClientProps {
   initialAds?: Ad[];
 }
 
+interface VideoAuthorItem {
+  author: string;
+  videoCount: number;
+  totalViews: number;
+  previewVideos: { id: string; coverUrl: string | null; title: string }[];
+}
+
 export function VideoViewModeHeader({
   viewMode,
   viewModeOptions,
@@ -391,105 +398,125 @@ export default function VideoListClient({
             </>
           ) : (
             // 原作者聚合网格：按 extraInfo.author 分组，点击进入该作者作品筛选
-            <>
-              <div className="grid grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
-                {authorsLoading && authorItems.length === 0
-                  ? // 加载骨架屏
-                    Array.from({ length: 8 }).map((_, i) => (
-                      <Card key={i} className="overflow-hidden">
-                        <Skeleton className="aspect-video w-full" />
-                        <CardContent className="p-3 space-y-2">
-                          <Skeleton className="h-5 w-3/4" />
-                          <Skeleton className="h-4 w-1/2" />
-                        </CardContent>
-                      </Card>
-                    ))
-                  : authorItems.map((a) => (
-                      <Link
-                        key={a.author}
-                        href={`/video?author=${encodeURIComponent(a.author)}`}
-                        onClick={() => setViewMode("videos")}
-                      >
-                        <Card className="overflow-hidden group hover:shadow-lg transition-all duration-200 hover:-translate-y-1">
-                          {/* 作者代表作 2×2 网格预览 */}
-                          <div className="relative aspect-video bg-muted">
-                            {a.previewVideos.length > 0 ? (
-                              <div className="grid grid-cols-2 grid-rows-2 h-full">
-                                {[0, 1, 2, 3].map((idx) => {
-                                  const video = a.previewVideos[idx];
-                                  return (
-                                    <div key={idx} className="relative overflow-hidden">
-                                      {video ? (
-                                        // eslint-disable-next-line @next/next/no-img-element
-                                        <img
-                                          src={sideListCover(video.id, video.coverUrl)}
-                                          alt={video.title}
-                                          className="w-full h-full object-cover"
-                                        />
-                                      ) : (
-                                        <div className="w-full h-full bg-muted flex items-center justify-center">
-                                          <Play className="w-6 h-6 text-muted-foreground/50" />
-                                        </div>
-                                      )}
-                                    </div>
-                                  );
-                                })}
-                              </div>
-                            ) : (
-                              <div className="w-full h-full flex items-center justify-center">
-                                <User2 className="w-12 h-12 text-muted-foreground/30" />
-                              </div>
-                            )}
-
-                            {/* 视频数徽章 */}
-                            <Badge className="absolute bottom-2 right-2 bg-black/70 hover:bg-black/70 text-white">
-                              {a.videoCount} 个作品
-                            </Badge>
-
-                            {/* 悬停遮罩 */}
-                            <div className="absolute inset-0 bg-black/0 group-hover:bg-black/20 transition-colors flex items-center justify-center">
-                              <Play className="w-12 h-12 text-white opacity-0 group-hover:opacity-100 transition-opacity" />
-                            </div>
-                          </div>
-
-                          <CardContent className="p-3">
-                            <h3 className="font-medium line-clamp-1 group-hover:text-primary transition-colors flex items-center gap-1.5">
-                              <User2 className="h-3.5 w-3.5 shrink-0 text-muted-foreground" />
-                              <span className="truncate">{a.author}</span>
-                            </h3>
-                            <div className="flex items-center gap-2 mt-1.5 text-xs text-muted-foreground">
-                              <span>{a.videoCount} 个作品</span>
-                              <span>·</span>
-                              <span>{a.totalViews.toLocaleString()} 播放</span>
-                            </div>
-                          </CardContent>
-                        </Card>
-                      </Link>
-                    ))}
-              </div>
-
-              {/* 无结果提示 */}
-              {!authorsLoading && authorItems.length === 0 && (
-                <div className="text-center py-16">
-                  <div className="text-muted-foreground mb-4">
-                    <Layers className="h-12 w-12 mx-auto mb-4 opacity-50" />
-                    <p className="text-lg font-medium">暂无原作者数据</p>
-                    <p className="text-sm mt-1">投稿时填写「原作者」后，将自动出现在此</p>
-                  </div>
-                </div>
-              )}
-
-              {/* 分页器 */}
-              <Pagination
-                currentPage={authorsPage}
-                totalPages={authorsTotalPages}
-                onPageChange={setAuthorsPage}
-                className="mt-8"
-              />
-            </>
+            <VideoAuthorsGrid
+              items={authorItems}
+              isLoading={authorsLoading}
+              page={authorsPage}
+              totalPages={authorsTotalPages}
+              onPageChange={setAuthorsPage}
+              onAuthorClick={() => setViewMode("videos")}
+              coverSrc={sideListCover}
+            />
           )}
         </section>
       </div>
     </MotionPage>
+  );
+}
+
+export function VideoAuthorsGrid({
+  items,
+  isLoading,
+  page,
+  totalPages,
+  onPageChange,
+  onAuthorClick,
+  coverSrc,
+}: {
+  items: VideoAuthorItem[];
+  isLoading: boolean;
+  page: number;
+  totalPages: number;
+  onPageChange: (n: number) => void;
+  onAuthorClick: () => void;
+  coverSrc: (videoId: string, coverUrl: string | null | undefined) => string;
+}) {
+  return (
+    <>
+      <div className="grid w-full min-w-0 max-w-full grid-cols-2 gap-4 overflow-hidden lg:grid-cols-3 xl:grid-cols-4">
+        {isLoading && items.length === 0
+          ? Array.from({ length: 8 }).map((_, i) => (
+              <Card key={i} className="min-w-0 max-w-full overflow-hidden">
+                <Skeleton className="aspect-video w-full" />
+                <CardContent className="min-w-0 p-3 space-y-2 overflow-hidden">
+                  <Skeleton className="h-5 w-3/4" />
+                  <Skeleton className="h-4 w-1/2" />
+                </CardContent>
+              </Card>
+            ))
+          : items.map((a) => (
+              <Link
+                key={a.author}
+                href={`/video?author=${encodeURIComponent(a.author)}`}
+                onClick={onAuthorClick}
+                className="block min-w-0 w-full max-w-full overflow-hidden"
+              >
+                <Card className="min-w-0 w-full max-w-full overflow-hidden group hover:shadow-lg transition-all duration-200 hover:-translate-y-1">
+                  <div className="relative aspect-video min-w-0 w-full max-w-full overflow-hidden bg-muted">
+                    {a.previewVideos.length > 0 ? (
+                      <div className="grid h-full min-w-0 w-full max-w-full grid-cols-2 grid-rows-2 overflow-hidden">
+                        {[0, 1, 2, 3].map((idx) => {
+                          const video = a.previewVideos[idx];
+                          return (
+                            <div key={idx} className="relative min-w-0 overflow-hidden">
+                              {video ? (
+                                // eslint-disable-next-line @next/next/no-img-element
+                                <img
+                                  src={coverSrc(video.id, video.coverUrl)}
+                                  alt={video.title}
+                                  className="h-full w-full max-w-full object-cover"
+                                />
+                              ) : (
+                                <div className="flex h-full w-full items-center justify-center bg-muted">
+                                  <Play className="w-6 h-6 text-muted-foreground/50" />
+                                </div>
+                              )}
+                            </div>
+                          );
+                        })}
+                      </div>
+                    ) : (
+                      <div className="flex h-full w-full items-center justify-center">
+                        <User2 className="w-12 h-12 text-muted-foreground/30" />
+                      </div>
+                    )}
+
+                    <Badge className="absolute bottom-2 right-2 max-w-[calc(100%-1rem)] truncate bg-black/70 hover:bg-black/70 text-white">
+                      {a.videoCount} 个作品
+                    </Badge>
+
+                    <div className="absolute inset-0 flex items-center justify-center bg-black/0 transition-colors group-hover:bg-black/20">
+                      <Play className="w-12 h-12 text-white opacity-0 transition-opacity group-hover:opacity-100" />
+                    </div>
+                  </div>
+
+                  <CardContent className="min-w-0 w-full max-w-full overflow-hidden p-3">
+                    <h3 className="flex min-w-0 max-w-full items-center gap-1.5 font-medium transition-colors group-hover:text-primary">
+                      <User2 className="h-3.5 w-3.5 shrink-0 text-muted-foreground" />
+                      <span className="min-w-0 flex-1 truncate break-all">{a.author}</span>
+                    </h3>
+                    <div className="mt-1.5 flex min-w-0 max-w-full items-center gap-2 overflow-hidden text-xs text-muted-foreground">
+                      <span className="shrink-0">{a.videoCount} 个作品</span>
+                      <span className="shrink-0">·</span>
+                      <span className="min-w-0 truncate">{a.totalViews.toLocaleString()} 播放</span>
+                    </div>
+                  </CardContent>
+                </Card>
+              </Link>
+            ))}
+      </div>
+
+      {!isLoading && items.length === 0 && (
+        <div className="text-center py-16">
+          <div className="text-muted-foreground mb-4">
+            <Layers className="h-12 w-12 mx-auto mb-4 opacity-50" />
+            <p className="text-lg font-medium">暂无原作者数据</p>
+            <p className="text-sm mt-1">投稿时填写「原作者」后，将自动出现在此</p>
+          </div>
+        </div>
+      )}
+
+      <Pagination currentPage={page} totalPages={totalPages} onPageChange={onPageChange} className="mt-8" />
+    </>
   );
 }

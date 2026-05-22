@@ -68,6 +68,7 @@ export function PageTransition({ children }: PageTransitionProps) {
   return (
     <m.div
       key={transitionKey}
+      className="w-full min-w-0 max-w-full overflow-x-hidden"
       initial={isMounted ? { opacity: 0, y: 20 } : false}
       animate={{
         opacity: 1,
