@@ -15,8 +15,9 @@ export const isSetupComplete = cache(async (): Promise<boolean> => {
       },
       300 * 1000,
     );
-  } catch {
-    return false;
+  } catch (error) {
+    console.error("[setup] Failed to check setup status", error);
+    throw error;
   }
 });
 

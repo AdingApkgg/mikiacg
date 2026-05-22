@@ -173,6 +173,11 @@ function stripTrailingSlash(url: string): string {
   return url.replace(/\/+$/, "");
 }
 
+function normalizeImageSortOptions(value: unknown): string {
+  const raw = typeof value === "string" ? value.trim() : "";
+  return raw || "latest,views,likes";
+}
+
 function toPublic(c: Record<string, unknown>): PublicSiteConfig {
   const oauthProviders: string[] = [];
   for (const k of OAUTH_KEYS) {
@@ -189,7 +194,7 @@ function toPublic(c: Record<string, unknown>): PublicSiteConfig {
 
   return {
     siteName: (c.siteName as string) || "ACGN Site",
-    siteUrl: stripTrailingSlash((c.siteUrl as string) || process.env.NEXT_PUBLIC_APP_URL || "http://localhost:3000"),
+    siteUrl: stripTrailingSlash((c.siteUrl as string) || process.env.NEXT_PUBLIC_APP_URL || "http://localhost:4000"),
     siteDescription: (c.siteDescription as string) ?? null,
     siteLogo: (c.siteLogo as string) ?? null,
     siteFavicon: (c.siteFavicon as string) ?? null,
@@ -265,7 +270,7 @@ function toPublic(c: Record<string, unknown>): PublicSiteConfig {
     sectionGameEnabled: (c.sectionGameEnabled as boolean) ?? true,
     videoSortOptions: (c.videoSortOptions as string) ?? "latest,views,likes",
     gameSortOptions: (c.gameSortOptions as string) ?? "latest,views,likes",
-    imageSortOptions: (c.imageSortOptions as string) ?? "latest,views",
+    imageSortOptions: normalizeImageSortOptions(c.imageSortOptions),
     videoDefaultSort: (c.videoDefaultSort as string) ?? "latest",
     gameDefaultSort: (c.gameDefaultSort as string) ?? "latest",
     imageDefaultSort: (c.imageDefaultSort as string) ?? "latest",

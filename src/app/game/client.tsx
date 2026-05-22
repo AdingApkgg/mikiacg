@@ -4,7 +4,6 @@ import { trpc } from "@/lib/trpc";
 import { GameGrid } from "@/components/game/game-grid";
 import { GameCard, type GameCardData } from "@/components/game/game-card";
 import Link from "next/link";
-import { GameFeedSections } from "@/components/game/game-feed-sections";
 import { AnnouncementBanner } from "@/components/shared/announcement-banner";
 import { Button } from "@/components/ui/button";
 import { useState, useEffect, useMemo, useCallback } from "react";
@@ -13,9 +12,7 @@ import { usePageParam } from "@/hooks/use-page-param";
 import { Gamepad2 } from "lucide-react";
 import { MotionPage } from "@/components/motion";
 import { cn } from "@/lib/utils";
-import { CollapsibleTagBar } from "@/components/ui/collapsible-tag-bar";
 import { SectionTabs, type SectionTabItem } from "@/components/shared/section-tabs";
-import { ContentModeHeader } from "@/components/shared/content-mode-header";
 import { useTagFilter } from "@/hooks/use-tag-filter";
 import { Pagination } from "@/components/ui/pagination";
 import { AdCard } from "@/components/ads/ad-card";
@@ -38,6 +35,7 @@ const GAME_TYPE_OPTIONS: { id: string; label: string }[] = [
   { id: "ADV", label: "ADV" },
   { id: "ACT", label: "ACT" },
   { id: "AVG", label: "AVG" },
+  { id: "VN", label: "VN" },
   { id: "STG", label: "STG" },
   { id: "PZL", label: "PZL" },
   { id: "FTG", label: "FTG" },
@@ -54,20 +52,14 @@ const ALL_SORT_OPTIONS: { id: SortBy; label: string }[] = [
   { id: "titleDesc", label: "标题 Z→A" },
 ];
 
-interface Tag {
-  id: string;
-  name: string;
-  slug: string;
-}
-
 interface TypeStat {
   type: string;
   count: number;
 }
 
 interface GameListClientProps {
-  initialTags: Tag[];
   initialGames: GameCardData[];
+  initialSortBy?: string;
   typeStats: TypeStat[];
   siteConfig: {
     announcement: string | null;
@@ -78,8 +70,8 @@ interface GameListClientProps {
 }
 
 export function GameListClient({
-  initialTags,
   initialGames,
+  initialSortBy,
   typeStats,
   siteConfig,
   initialAds = [],
@@ -111,16 +103,18 @@ export function GameListClient({
   const timeRange: "all" | "today" | "week" | "month" = ["all", "today", "week", "month"].includes(urlTimeRange)
     ? urlTimeRange
     : "all";
-  // URL 显式带了 sortBy 或 timeRange → 用户从「查看更多」过来，强制脱出首页模式
-  const hasExplicitListIntent = urlSortBy !== null || urlTimeRangeRaw !== null;
-  const { selectedSlugs, excludedSlugs, toggleTag, toggleExclude, clearAll, isSelected, isExcluded, hasFilter } =
-    useTagFilter();
+  const { selectedSlugs, excludedSlugs, clearAll, hasFilter } = useTagFilter();
   const [selectedType, setSelectedType] = useState<string>("");
   const [viewMode, setViewMode] = useState<"games" | "authors">("games");
   const [page, setPage] = usePageParam();
   const [authorsPage, setAuthorsPage] = usePageParam("ap");
 
-  const { data: gameData, isLoading } = trpc.game.list.useQuery(
+  const {
+    data: gameData,
+    isLoading,
+    isFetching,
+    isPlaceholderData = false,
+  } = trpc.game.list.useQuery(
     {
       limit: 20,
       page,
@@ -133,7 +127,6 @@ export function GameListClient({
     },
     {
       enabled: viewMode === "games",
-      placeholderData: (prev) => prev,
     },
   );
 
@@ -142,17 +135,27 @@ export function GameListClient({
     { limit: 12, page: authorsPage, sortBy: "gameCount" },
     {
       enabled: viewMode === "authors",
-      placeholderData: (prev) => prev,
     },
   );
   const authorItems = authorsData?.items ?? [];
   const authorsTotalPages = authorsData?.totalPages ?? 1;
 
+  const canUseInitialGames =
+    page === 1 &&
+    !hasFilter &&
+    !selectedType &&
+    !originalAuthorFilter &&
+    timeRange === "all" &&
+    sortBy === (initialSortBy ?? siteConfigCtx?.gameDefaultSort ?? "latest");
+
+  const currentGameData = isPlaceholderData ? undefined : gameData;
   const games = useMemo(
-    () => gameData?.games ?? (page === 1 && !hasFilter && !selectedType ? initialGames : []),
-    [gameData?.games, page, hasFilter, selectedType, initialGames],
+    () => currentGameData?.games ?? (canUseInitialGames ? initialGames : []),
+    [currentGameData?.games, canUseInitialGames, initialGames],
   );
-  const totalPages = gameData?.totalPages ?? 1;
+  const totalPages = currentGameData?.totalPages ?? 1;
+  const gamePending = isLoading || isFetching || isPlaceholderData;
+  const showGameSkeleton = gamePending && games.length === 0;
 
   // 当前页游戏的收藏状态（已登录才查；未登录返回空）
   const gameIds = useMemo(() => games.map((g) => g.id), [games]);
@@ -163,19 +166,6 @@ export function GameListClient({
   const favoritedSet = useMemo(() => new Set(favoritedData?.favoritedIds ?? []), [favoritedData?.favoritedIds]);
 
   const isFirstPage = page === 1 && !hasFilter && selectedType === "";
-  /**
-   * 「首页模式」判定：用户进入 /game 没做任何筛选时，主区域改为分区 Feed
-   * (最新/本周热门/本月排行)，参考 hanime1.me。
-   */
-  const isHomeMode =
-    viewMode === "games" &&
-    page === 1 &&
-    !hasFilter &&
-    selectedType === "" &&
-    sortBy === "latest" &&
-    timeRange === "all" &&
-    !originalAuthorFilter &&
-    !hasExplicitListIntent;
   const adSeed = `game-${page}-${sortBy}-${selectedSlugs.join(",")}-${excludedSlugs.join(",")}-${selectedType}`;
   const { gridItems, pickedAds, hasAds } = useInlineAds({
     items: games,
@@ -226,23 +216,6 @@ export function GameListClient({
     [setPage],
   );
 
-  const handleTagClick = useCallback(
-    (slug: string) => {
-      setPage(1);
-      toggleTag(slug);
-    },
-    [toggleTag, setPage],
-  );
-
-  const handleTagRightClick = useCallback(
-    (e: React.MouseEvent, slug: string) => {
-      e.preventDefault();
-      setPage(1);
-      toggleExclude(slug);
-    },
-    [toggleExclude, setPage],
-  );
-
   const handleTypeClick = useCallback(
     (type: string) => {
       setSelectedType(type);
@@ -256,6 +229,7 @@ export function GameListClient({
     const typeSet = new Set(typeStats.map((s) => s.type));
     return GAME_TYPE_OPTIONS.filter((opt) => opt.id === "" || typeSet.has(opt.id));
   }, [typeStats]);
+  const showGameTypeFilter = viewMode === "games" && availableTypes.length > 1;
 
   return (
     <MotionPage direction="none">
@@ -265,32 +239,30 @@ export function GameListClient({
           enabled={siteConfig?.announcementEnabled ?? false}
           announcement={siteConfig?.announcement ?? null}
         />
-        <MotionPage>
-          <ContentModeHeader current="game" />
-        </MotionPage>
-
-        <MotionPage>
-          <div className="flex flex-wrap gap-2 mb-4">
-            {availableTypes.map((opt) => {
-              const stat = typeStats.find((s) => s.type === opt.id);
-              return (
-                <button
-                  key={opt.id}
-                  onClick={() => handleTypeClick(opt.id)}
-                  className={cn(
-                    "shrink-0 px-3 py-1.5 rounded-lg text-sm font-medium transition-colors whitespace-nowrap",
-                    selectedType === opt.id
-                      ? "bg-primary text-primary-foreground"
-                      : "bg-muted hover:bg-muted/80 text-foreground",
-                  )}
-                >
-                  {opt.label}
-                  {stat && <span className="ml-1 text-xs opacity-70">({stat.count})</span>}
-                </button>
-              );
-            })}
-          </div>
-        </MotionPage>
+        {showGameTypeFilter && (
+          <MotionPage>
+            <div className="flex flex-wrap gap-2 mb-4">
+              {availableTypes.map((opt) => {
+                const stat = typeStats.find((s) => s.type === opt.id);
+                return (
+                  <button
+                    key={opt.id}
+                    onClick={() => handleTypeClick(opt.id)}
+                    className={cn(
+                      "shrink-0 px-3 py-1.5 rounded-lg text-sm font-medium transition-colors whitespace-nowrap",
+                      selectedType === opt.id
+                        ? "bg-primary text-primary-foreground"
+                        : "bg-muted hover:bg-muted/80 text-foreground",
+                    )}
+                  >
+                    {opt.label}
+                    {stat && <span className="ml-1 text-xs opacity-70">({stat.count})</span>}
+                  </button>
+                );
+              })}
+            </div>
+          </MotionPage>
+        )}
 
         <MotionPage>
           {sortOptions.length > 0 && (
@@ -336,27 +308,6 @@ export function GameListClient({
               </button>
             </div>
           )}
-
-          {viewMode === "games" && initialTags.length > 0 && (
-            <CollapsibleTagBar className="mb-6">
-              {initialTags.map((tag) => (
-                <button
-                  key={tag.id}
-                  onClick={() => handleTagClick(tag.slug)}
-                  onContextMenu={(e) => handleTagRightClick(e, tag.slug)}
-                  className={cn(
-                    "shrink-0 px-3 py-1.5 rounded-lg text-sm font-medium transition-colors whitespace-nowrap",
-                    isSelected(tag.slug) && "bg-foreground text-background",
-                    isExcluded(tag.slug) && "bg-destructive/20 text-destructive line-through",
-                    !isSelected(tag.slug) && !isExcluded(tag.slug) && "bg-muted hover:bg-muted/80 text-foreground",
-                  )}
-                  title="左键选择，右键排除"
-                >
-                  {tag.name}
-                </button>
-              ))}
-            </CollapsibleTagBar>
-          )}
         </MotionPage>
 
         <section>
@@ -369,13 +320,11 @@ export function GameListClient({
               onPageChange={setAuthorsPage}
               onAuthorClick={() => setViewMode("games")}
             />
-          ) : isHomeMode ? (
-            <GameFeedSections />
           ) : (
             <div
               key={`${sortBy}-${selectedSlugs.join(",")}-${excludedSlugs.join(",")}-${selectedType}-${page}-${originalAuthorFilter}`}
             >
-              {isLoading && games.length === 0 ? (
+              {showGameSkeleton ? (
                 <GameGrid games={[]} isLoading columnsClass={SECTION_GRID_CLASS} />
               ) : hasAds ? (
                 <div className={cn("grid gap-3 sm:gap-4 lg:gap-5", SECTION_GRID_CLASS)}>
@@ -401,7 +350,7 @@ export function GameListClient({
                 />
               )}
 
-              {!isLoading && games.length === 0 && (
+              {!gamePending && games.length === 0 && (
                 <div className="text-center py-16">
                   <div className="text-muted-foreground mb-4">
                     <Gamepad2 className="h-12 w-12 mx-auto mb-4 opacity-50" />
@@ -425,7 +374,7 @@ export function GameListClient({
             </div>
           )}
 
-          {!isHomeMode && (
+          {viewMode === "games" && (
             <Pagination currentPage={page} totalPages={totalPages} onPageChange={setPage} className="mt-8" />
           )}
         </section>

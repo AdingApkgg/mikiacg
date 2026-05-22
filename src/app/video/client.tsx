@@ -3,7 +3,6 @@
 import { trpc } from "@/lib/trpc";
 import { VideoGrid } from "@/components/video/video-grid";
 import { VideoCard } from "@/components/video/video-card";
-import { VideoFeedSections } from "@/components/video/video-feed-sections";
 import { Button } from "@/components/ui/button";
 import { useState, useEffect, useMemo, useCallback } from "react";
 import { useSearchParams, useRouter, usePathname } from "next/navigation";
@@ -11,10 +10,8 @@ import { usePageParam } from "@/hooks/use-page-param";
 import { X, Play, User2, Layers } from "lucide-react";
 import { MotionPage } from "@/components/motion";
 import { cn } from "@/lib/utils";
-import { CollapsibleTagBar } from "@/components/ui/collapsible-tag-bar";
 import { AnnouncementBanner } from "@/components/shared/announcement-banner";
 import { SectionTabs, type SectionTabItem } from "@/components/shared/section-tabs";
-import { ContentModeHeader } from "@/components/shared/content-mode-header";
 import { useTagFilter } from "@/hooks/use-tag-filter";
 import Link from "next/link";
 import { Card, CardContent } from "@/components/ui/card";
@@ -45,12 +42,6 @@ const ALL_SORT_OPTIONS: { id: SortBy; label: string }[] = [
   { id: "titleDesc", label: "标题 Z→A" },
 ];
 
-interface Tag {
-  id: string;
-  name: string;
-  slug: string;
-}
-
 interface Video {
   id: string;
   title: string;
@@ -70,8 +61,8 @@ interface Video {
 }
 
 interface VideoListClientProps {
-  initialTags: Tag[];
   initialVideos: Video[];
+  initialSortBy?: string;
   siteConfig: {
     announcement: string | null;
     announcementEnabled: boolean;
@@ -80,9 +71,73 @@ interface VideoListClientProps {
   initialAds?: Ad[];
 }
 
+interface VideoAuthorItem {
+  author: string;
+  videoCount: number;
+  totalViews: number;
+  previewVideos: { id: string; coverUrl: string | null; title: string }[];
+}
+
+export function VideoViewModeHeader({
+  viewMode,
+  viewModeOptions,
+  sortOptions,
+  sortBy,
+  onSortChange,
+  onViewModeChange,
+}: {
+  viewMode: ViewMode;
+  viewModeOptions: { id: ViewMode; label: string }[];
+  sortOptions: SectionTabItem<SortBy>[];
+  sortBy: SortBy;
+  onSortChange: (id: SortBy) => void;
+  onViewModeChange: (id: ViewMode) => void;
+}) {
+  const toggle = (
+    <div data-testid="video-view-mode-toggle" className="flex items-center gap-1 rounded-full bg-muted/60 p-0.5">
+      {viewModeOptions.map((option) => (
+        <button
+          key={option.id}
+          type="button"
+          onClick={() => onViewModeChange(option.id)}
+          className={cn(
+            "px-2.5 py-1 text-xs font-medium rounded-full transition-colors",
+            viewMode === option.id
+              ? "bg-background text-foreground shadow-sm"
+              : "text-muted-foreground hover:text-foreground",
+          )}
+        >
+          {option.label}
+        </button>
+      ))}
+    </div>
+  );
+
+  if (viewMode === "videos" && sortOptions.length > 0) {
+    return (
+      <SectionTabs<SortBy>
+        className="mb-3"
+        tabs={sortOptions}
+        value={sortBy}
+        onChange={onSortChange}
+        trailing={toggle}
+      />
+    );
+  }
+
+  return (
+    <div
+      data-testid="video-view-mode-header"
+      className="mb-3 flex items-end justify-end border-b border-border/60 pb-1.5"
+    >
+      {toggle}
+    </div>
+  );
+}
+
 export default function VideoListClient({
-  initialTags,
   initialVideos,
+  initialSortBy,
   siteConfig,
   initialAds = [],
 }: VideoListClientProps) {
@@ -116,15 +171,16 @@ export default function VideoListClient({
   const timeRange: "all" | "today" | "week" | "month" = ["all", "today", "week", "month"].includes(urlTimeRange)
     ? urlTimeRange
     : "all";
-  // URL 显式带了 sortBy 或 timeRange 参数 → 用户从「查看更多」过来，
-  // 即使值跟默认一致也要展开成完整列表 (不再回到首页模式)
-  const hasExplicitListIntent = urlSortBy !== null || urlTimeRangeRaw !== null;
-  const { selectedSlugs, excludedSlugs, toggleTag, toggleExclude, clearAll, isSelected, isExcluded, hasFilter } =
-    useTagFilter();
+  const { selectedSlugs, excludedSlugs, clearAll, hasFilter } = useTagFilter();
   const [videoPage, setVideoPage] = usePageParam("page");
   const [authorsPage, setAuthorsPage] = usePageParam("ap");
 
-  const { data: videoData, isLoading: videoLoading } = trpc.video.list.useQuery(
+  const {
+    data: videoData,
+    isLoading: videoLoading,
+    isFetching: videoFetching,
+    isPlaceholderData: videoPlaceholderData = false,
+  } = trpc.video.list.useQuery(
     {
       limit: 20,
       page: videoPage,
@@ -136,7 +192,6 @@ export default function VideoListClient({
     },
     {
       enabled: viewMode === "videos",
-      placeholderData: (prev) => prev,
     },
   );
 
@@ -145,18 +200,27 @@ export default function VideoListClient({
     { limit: 12, page: authorsPage, sortBy: "videoCount" },
     {
       enabled: viewMode === "authors",
-      placeholderData: (prev) => prev,
     },
   );
 
   // 数据（用 useMemo 稳定引用，避免下游 useMemo 依赖在每次渲染时变化）。
-  // 仅在无筛选 (无 tag、无原作者) 的首页 SSR 场景使用 initialVideos 占位，
-  // 否则等待 client query 返回。
+  // 仅在当前列表条件与服务端首屏 initialVideos 条件一致时使用 SSR 占位，
+  // 否则等待 client query 返回，避免热门/高赞页先闪出最新内容。
+  const canUseInitialVideos =
+    videoPage === 1 &&
+    !hasFilter &&
+    !authorFilter &&
+    timeRange === "all" &&
+    sortBy === (initialSortBy ?? siteConfigCtx?.videoDefaultSort ?? "latest");
+
+  const currentVideoData = videoPlaceholderData ? undefined : videoData;
   const videos = useMemo(
-    () => videoData?.videos ?? (videoPage === 1 && !hasFilter && !authorFilter ? initialVideos : []),
-    [videoData?.videos, videoPage, hasFilter, authorFilter, initialVideos],
+    () => currentVideoData?.videos ?? (canUseInitialVideos ? initialVideos : []),
+    [currentVideoData?.videos, canUseInitialVideos, initialVideos],
   );
-  const videoTotalPages = videoData?.totalPages ?? 1;
+  const videoTotalPages = currentVideoData?.totalPages ?? 1;
+  const videoPending = videoLoading || videoFetching || videoPlaceholderData;
+  const showVideoSkeleton = videoPending && videos.length === 0;
   const authorItems = authorsData?.items ?? [];
   const authorsTotalPages = authorsData?.totalPages ?? 1;
 
@@ -181,19 +245,6 @@ export default function VideoListClient({
   const favoritedSet = useMemo(() => new Set(favoritedData?.favoritedIds ?? []), [favoritedData?.favoritedIds]);
 
   const isFirstPage = videoPage === 1 && !hasFilter && !authorFilter;
-  /**
-   * 「首页模式」判定：用户进入 /video 没做任何筛选时，主区域改为分区 Feed
-   * (最新 / 本日热门 / 本周排行)，参考 hanime1.me。一旦用户切排序、加 tag、
-   * 选作者或翻页，就回退到普通网格。
-   */
-  const isHomeMode =
-    viewMode === "videos" &&
-    videoPage === 1 &&
-    !hasFilter &&
-    !authorFilter &&
-    sortBy === "latest" &&
-    timeRange === "all" &&
-    !hasExplicitListIntent;
   const adSeed = `${videoPage}-${sortBy}-${selectedSlugs.join(",")}-${excludedSlugs.join(",")}-${authorFilter}`;
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const { gridItems, pickedAds, hasAds } = useInlineAds<any>({
@@ -250,25 +301,6 @@ export default function VideoListClient({
     [setVideoPage],
   );
 
-  const handleTagClick = useCallback(
-    (slug: string) => {
-      if (viewMode === "authors") return;
-      setVideoPage(1);
-      toggleTag(slug);
-    },
-    [viewMode, toggleTag, setVideoPage],
-  );
-
-  const handleTagRightClick = useCallback(
-    (e: React.MouseEvent, slug: string) => {
-      e.preventDefault();
-      if (viewMode === "authors") return;
-      setVideoPage(1);
-      toggleExclude(slug);
-    },
-    [viewMode, toggleExclude, setVideoPage],
-  );
-
   return (
     <MotionPage direction="none">
       <div className="px-4 md:px-6 py-4 overflow-x-hidden">
@@ -278,53 +310,14 @@ export default function VideoListClient({
           announcement={siteConfig?.announcement ?? null}
         />
         <MotionPage>
-          <ContentModeHeader current="video" />
-          {viewMode === "videos" && sortOptions.length > 0 && (
-            <SectionTabs<SortBy>
-              className="mb-3"
-              tabs={sortOptions as SectionTabItem<SortBy>[]}
-              value={sortBy}
-              onChange={handleSortClick}
-              trailing={
-                <div className="flex items-center gap-1 rounded-full bg-muted/60 p-0.5">
-                  {viewModeOptions.map((option) => (
-                    <button
-                      key={option.id}
-                      onClick={() => handleViewModeClick(option.id)}
-                      className={cn(
-                        "px-2.5 py-1 text-xs font-medium rounded-full transition-colors",
-                        viewMode === option.id
-                          ? "bg-background text-foreground shadow-sm"
-                          : "text-muted-foreground hover:text-foreground",
-                      )}
-                    >
-                      {option.label}
-                    </button>
-                  ))}
-                </div>
-              }
-            />
-          )}
-          {viewMode === "authors" && (
-            <div className="mb-3 border-b border-border/60 pb-2">
-              <div className="flex items-center gap-1 rounded-full bg-muted/60 p-0.5 w-fit">
-                {viewModeOptions.map((option) => (
-                  <button
-                    key={option.id}
-                    onClick={() => handleViewModeClick(option.id)}
-                    className={cn(
-                      "px-2.5 py-1 text-xs font-medium rounded-full transition-colors",
-                      viewMode === option.id
-                        ? "bg-background text-foreground shadow-sm"
-                        : "text-muted-foreground hover:text-foreground",
-                    )}
-                  >
-                    {option.label}
-                  </button>
-                ))}
-              </div>
-            </div>
-          )}
+          <VideoViewModeHeader
+            viewMode={viewMode}
+            viewModeOptions={viewModeOptions}
+            sortOptions={sortOptions as SectionTabItem<SortBy>[]}
+            sortBy={sortBy}
+            onSortChange={handleSortClick}
+            onViewModeChange={handleViewModeClick}
+          />
 
           {/* 当前正在按某位原作者筛选时显示横幅 */}
           {viewMode === "videos" && authorFilter && (
@@ -343,38 +336,13 @@ export default function VideoListClient({
               </button>
             </div>
           )}
-          {viewMode === "videos" && initialTags.length > 0 && (
-            <CollapsibleTagBar className="mb-6">
-              {initialTags.map((tag) => (
-                <button
-                  key={tag.id}
-                  onClick={() => handleTagClick(tag.slug)}
-                  onContextMenu={(e) => handleTagRightClick(e, tag.slug)}
-                  className={cn(
-                    "shrink-0 px-3.5 py-1.5 rounded-full text-sm font-medium transition-colors whitespace-nowrap border",
-                    isSelected(tag.slug) && "bg-primary text-primary-foreground border-primary",
-                    isExcluded(tag.slug) && "bg-destructive/15 text-destructive line-through border-destructive/30",
-                    !isSelected(tag.slug) &&
-                      !isExcluded(tag.slug) &&
-                      "bg-card hover:bg-accent text-foreground border-border",
-                  )}
-                  title="左键选择，右键排除"
-                >
-                  {tag.name}
-                </button>
-              ))}
-            </CollapsibleTagBar>
-          )}
         </MotionPage>
         <section>
-          {isHomeMode ? (
-            // 首页模式：分区 Feed
-            <VideoFeedSections />
-          ) : viewMode === "videos" ? (
+          {viewMode === "videos" ? (
             // 视频网格
             <>
               <div key={`${sortBy}-${selectedSlugs.join(",")}-${excludedSlugs.join(",")}-${videoPage}`}>
-                {videoLoading && videos.length === 0 ? (
+                {showVideoSkeleton ? (
                   <VideoGrid videos={[]} isLoading columnsClass={SECTION_GRID_CLASS} />
                 ) : hasAds ? (
                   <div className={cn("grid gap-3 sm:gap-4 lg:gap-5", SECTION_GRID_CLASS)}>
@@ -403,7 +371,7 @@ export default function VideoListClient({
                 )}
 
                 {/* 无结果提示 */}
-                {!videoLoading && videos.length === 0 && (
+                {!videoPending && videos.length === 0 && (
                   <div className="text-center py-16">
                     <div className="text-muted-foreground mb-4">
                       <p className="text-lg font-medium">没有找到视频</p>
@@ -428,105 +396,125 @@ export default function VideoListClient({
             </>
           ) : (
             // 原作者聚合网格：按 extraInfo.author 分组，点击进入该作者作品筛选
-            <>
-              <div className="grid grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
-                {authorsLoading && authorItems.length === 0
-                  ? // 加载骨架屏
-                    Array.from({ length: 8 }).map((_, i) => (
-                      <Card key={i} className="overflow-hidden">
-                        <Skeleton className="aspect-video w-full" />
-                        <CardContent className="p-3 space-y-2">
-                          <Skeleton className="h-5 w-3/4" />
-                          <Skeleton className="h-4 w-1/2" />
-                        </CardContent>
-                      </Card>
-                    ))
-                  : authorItems.map((a) => (
-                      <Link
-                        key={a.author}
-                        href={`/video?author=${encodeURIComponent(a.author)}`}
-                        onClick={() => setViewMode("videos")}
-                      >
-                        <Card className="overflow-hidden group hover:shadow-lg transition-all duration-200 hover:-translate-y-1">
-                          {/* 作者代表作 2×2 网格预览 */}
-                          <div className="relative aspect-video bg-muted">
-                            {a.previewVideos.length > 0 ? (
-                              <div className="grid grid-cols-2 grid-rows-2 h-full">
-                                {[0, 1, 2, 3].map((idx) => {
-                                  const video = a.previewVideos[idx];
-                                  return (
-                                    <div key={idx} className="relative overflow-hidden">
-                                      {video ? (
-                                        // eslint-disable-next-line @next/next/no-img-element
-                                        <img
-                                          src={sideListCover(video.id, video.coverUrl)}
-                                          alt={video.title}
-                                          className="w-full h-full object-cover"
-                                        />
-                                      ) : (
-                                        <div className="w-full h-full bg-muted flex items-center justify-center">
-                                          <Play className="w-6 h-6 text-muted-foreground/50" />
-                                        </div>
-                                      )}
-                                    </div>
-                                  );
-                                })}
-                              </div>
-                            ) : (
-                              <div className="w-full h-full flex items-center justify-center">
-                                <User2 className="w-12 h-12 text-muted-foreground/30" />
-                              </div>
-                            )}
-
-                            {/* 视频数徽章 */}
-                            <Badge className="absolute bottom-2 right-2 bg-black/70 hover:bg-black/70 text-white">
-                              {a.videoCount} 个作品
-                            </Badge>
-
-                            {/* 悬停遮罩 */}
-                            <div className="absolute inset-0 bg-black/0 group-hover:bg-black/20 transition-colors flex items-center justify-center">
-                              <Play className="w-12 h-12 text-white opacity-0 group-hover:opacity-100 transition-opacity" />
-                            </div>
-                          </div>
-
-                          <CardContent className="p-3">
-                            <h3 className="font-medium line-clamp-1 group-hover:text-primary transition-colors flex items-center gap-1.5">
-                              <User2 className="h-3.5 w-3.5 shrink-0 text-muted-foreground" />
-                              <span className="truncate">{a.author}</span>
-                            </h3>
-                            <div className="flex items-center gap-2 mt-1.5 text-xs text-muted-foreground">
-                              <span>{a.videoCount} 个作品</span>
-                              <span>·</span>
-                              <span>{a.totalViews.toLocaleString()} 播放</span>
-                            </div>
-                          </CardContent>
-                        </Card>
-                      </Link>
-                    ))}
-              </div>
-
-              {/* 无结果提示 */}
-              {!authorsLoading && authorItems.length === 0 && (
-                <div className="text-center py-16">
-                  <div className="text-muted-foreground mb-4">
-                    <Layers className="h-12 w-12 mx-auto mb-4 opacity-50" />
-                    <p className="text-lg font-medium">暂无原作者数据</p>
-                    <p className="text-sm mt-1">投稿时填写「原作者」后，将自动出现在此</p>
-                  </div>
-                </div>
-              )}
-
-              {/* 分页器 */}
-              <Pagination
-                currentPage={authorsPage}
-                totalPages={authorsTotalPages}
-                onPageChange={setAuthorsPage}
-                className="mt-8"
-              />
-            </>
+            <VideoAuthorsGrid
+              items={authorItems}
+              isLoading={authorsLoading}
+              page={authorsPage}
+              totalPages={authorsTotalPages}
+              onPageChange={setAuthorsPage}
+              onAuthorClick={() => setViewMode("videos")}
+              coverSrc={sideListCover}
+            />
           )}
         </section>
       </div>
     </MotionPage>
+  );
+}
+
+export function VideoAuthorsGrid({
+  items,
+  isLoading,
+  page,
+  totalPages,
+  onPageChange,
+  onAuthorClick,
+  coverSrc,
+}: {
+  items: VideoAuthorItem[];
+  isLoading: boolean;
+  page: number;
+  totalPages: number;
+  onPageChange: (n: number) => void;
+  onAuthorClick: () => void;
+  coverSrc: (videoId: string, coverUrl: string | null | undefined) => string;
+}) {
+  return (
+    <>
+      <div className="grid w-full min-w-0 max-w-full grid-cols-2 gap-4 overflow-hidden lg:grid-cols-3 xl:grid-cols-4">
+        {isLoading && items.length === 0
+          ? Array.from({ length: 8 }).map((_, i) => (
+              <Card key={i} className="min-w-0 max-w-full overflow-hidden">
+                <Skeleton className="aspect-video w-full" />
+                <CardContent className="min-w-0 p-3 space-y-2 overflow-hidden">
+                  <Skeleton className="h-5 w-3/4" />
+                  <Skeleton className="h-4 w-1/2" />
+                </CardContent>
+              </Card>
+            ))
+          : items.map((a) => (
+              <Link
+                key={a.author}
+                href={`/video?author=${encodeURIComponent(a.author)}`}
+                onClick={onAuthorClick}
+                className="block min-w-0 w-full max-w-full overflow-hidden"
+              >
+                <Card className="min-w-0 w-full max-w-full overflow-hidden group hover:shadow-lg transition-all duration-200 hover:-translate-y-1">
+                  <div className="relative aspect-video min-w-0 w-full max-w-full overflow-hidden bg-muted">
+                    {a.previewVideos.length > 0 ? (
+                      <div className="grid h-full min-w-0 w-full max-w-full grid-cols-2 grid-rows-2 overflow-hidden">
+                        {[0, 1, 2, 3].map((idx) => {
+                          const video = a.previewVideos[idx];
+                          return (
+                            <div key={idx} className="relative min-w-0 overflow-hidden">
+                              {video ? (
+                                // eslint-disable-next-line @next/next/no-img-element
+                                <img
+                                  src={coverSrc(video.id, video.coverUrl)}
+                                  alt={video.title}
+                                  className="h-full w-full max-w-full object-cover"
+                                />
+                              ) : (
+                                <div className="flex h-full w-full items-center justify-center bg-muted">
+                                  <Play className="w-6 h-6 text-muted-foreground/50" />
+                                </div>
+                              )}
+                            </div>
+                          );
+                        })}
+                      </div>
+                    ) : (
+                      <div className="flex h-full w-full items-center justify-center">
+                        <User2 className="w-12 h-12 text-muted-foreground/30" />
+                      </div>
+                    )}
+
+                    <Badge className="absolute bottom-2 right-2 max-w-[calc(100%-1rem)] truncate bg-black/70 hover:bg-black/70 text-white">
+                      {a.videoCount} 个作品
+                    </Badge>
+
+                    <div className="absolute inset-0 flex items-center justify-center bg-black/0 transition-colors group-hover:bg-black/20">
+                      <Play className="w-12 h-12 text-white opacity-0 transition-opacity group-hover:opacity-100" />
+                    </div>
+                  </div>
+
+                  <CardContent className="min-w-0 w-full max-w-full overflow-hidden p-3">
+                    <h3 className="flex min-w-0 max-w-full items-center gap-1.5 font-medium transition-colors group-hover:text-primary">
+                      <User2 className="h-3.5 w-3.5 shrink-0 text-muted-foreground" />
+                      <span className="min-w-0 flex-1 truncate break-all">{a.author}</span>
+                    </h3>
+                    <div className="mt-1.5 flex min-w-0 max-w-full items-center gap-2 overflow-hidden text-xs text-muted-foreground">
+                      <span className="shrink-0">{a.videoCount} 个作品</span>
+                      <span className="shrink-0">·</span>
+                      <span className="min-w-0 truncate">{a.totalViews.toLocaleString()} 播放</span>
+                    </div>
+                  </CardContent>
+                </Card>
+              </Link>
+            ))}
+      </div>
+
+      {!isLoading && items.length === 0 && (
+        <div className="text-center py-16">
+          <div className="text-muted-foreground mb-4">
+            <Layers className="h-12 w-12 mx-auto mb-4 opacity-50" />
+            <p className="text-lg font-medium">暂无原作者数据</p>
+            <p className="text-sm mt-1">投稿时填写「原作者」后，将自动出现在此</p>
+          </div>
+        </div>
+      )}
+
+      <Pagination currentPage={page} totalPages={totalPages} onPageChange={onPageChange} className="mt-8" />
+    </>
   );
 }

@@ -10,8 +10,7 @@ import type { Metadata } from "next";
 /** 综合页是否隐藏 NSFW 内容的 cookie 名；值 "1" = 隐藏，缺省或其它值 = 展示。 */
 const NSFW_COOKIE = "composite-hide-nsfw";
 
-// 首页聚合数据缓存窗口。综合首页有 7 个并行 Prisma 查询 + 1 个 trending tags
-// 原生 SQL（三路 LEFT JOIN），不缓存时 TTFB 可达 1.5s+。这里两层缓存：
+// 首页聚合数据缓存窗口。综合首页并行拉取最新与热门内容，不缓存时 TTFB 可达 1.5s+。这里两层缓存：
 // - L1：进程内 Map（10s）—— 高频请求快路径，避免每次都打 Redis
 // - L2：Redis（60s）—— 跨进程共享，多机部署也能受益
 // 失效策略：自然 TTL 过期。内容站短时间内容变化对首页推荐影响有限，60s 可接受。
@@ -40,14 +39,13 @@ export async function generateMetadata(): Promise<Metadata> {
 
 // 综合页用到的全部查询参数集中在这里，方便后续按需调整窗口期 / 每段条数
 const HOT_WINDOW_DAYS = 30;
-const LATEST_VIDEO_COUNT = 12;
+const LATEST_VIDEO_COUNT = 8;
 const LATEST_IMAGE_COUNT = 8;
 const LATEST_GAME_COUNT = 8;
 const WEEKLY_TOP_COUNT = 10;
-const TRENDING_TAG_COUNT = 20;
 
 /**
- * 综合分区首屏数据：每类各取若干条最新 + 本月热门 + 热门标签，SSR 直出避免空骨架闪烁。
+ * 综合分区首屏数据：每类各取若干条最新 + 本月热门，SSR 直出避免空骨架闪烁。
  * 单分区被关闭时跳过该类型的查询，对应 section 在客户端也不渲染。
  * `hideNsfw` 来自 cookie，控制是否在所有查询里附加 `isNsfw: false`。
  */
@@ -67,8 +65,8 @@ const getInitialData = cache(async (hideNsfw: boolean) => {
   } as const;
   const gameInclude = videoInclude;
 
-  const [videos, images, games, hotVideos, hotImages, hotGames, trendingTags] = await Promise.all([
-    // 最新视频（横向滚动）
+  const [videos, images, games, hotVideos, hotImages, hotGames] = await Promise.all([
+    // 最新视频（两行网格）
     cfg.sectionVideoEnabled
       ? prisma.video.findMany({
           take: LATEST_VIDEO_COUNT,
@@ -120,37 +118,9 @@ const getInitialData = cache(async (hideNsfw: boolean) => {
           include: gameInclude,
         })
       : Promise.resolve([]),
-    // 热门标签：按三类「已发布」内容的关联数总和排序。直接从关联表 live 统计，
-    // 避开 Tag.videoCount/imagePostCount/gameCount 这套去规范化字段（部分环境未维护）。
-    prisma.$queryRaw<{ id: string; name: string; slug: string; total: number }[]>`
-      SELECT t.id, t.name, t.slug,
-        (COALESCE(v.cnt, 0) + COALESCE(i.cnt, 0) + COALESCE(g.cnt, 0))::int AS total
-      FROM "Tag" t
-      LEFT JOIN (
-        SELECT tov."tagId", count(*)::int AS cnt
-        FROM "TagOnVideo" tov
-        JOIN "Video" vd ON vd.id = tov."videoId" AND vd.status = 'PUBLISHED'
-        GROUP BY tov."tagId"
-      ) v ON v."tagId" = t.id
-      LEFT JOIN (
-        SELECT toi."tagId", count(*)::int AS cnt
-        FROM "TagOnImagePost" toi
-        JOIN "ImagePost" ip ON ip.id = toi."imagePostId" AND ip.status = 'PUBLISHED'
-        GROUP BY toi."tagId"
-      ) i ON i."tagId" = t.id
-      LEFT JOIN (
-        SELECT tog."tagId", count(*)::int AS cnt
-        FROM "TagOnGame" tog
-        JOIN "Game" gm ON gm.id = tog."gameId" AND gm.status = 'PUBLISHED'
-        GROUP BY tog."tagId"
-      ) g ON g."tagId" = t.id
-      WHERE COALESCE(v.cnt, 0) + COALESCE(i.cnt, 0) + COALESCE(g.cnt, 0) > 0
-      ORDER BY total DESC
-      LIMIT ${TRENDING_TAG_COUNT}
-    `,
   ]);
 
-  return { videos, images, games, hotVideos, hotImages, hotGames, trendingTags };
+  return { videos, images, games, hotVideos, hotImages, hotGames };
 });
 
 function serializeVideos(videos: Awaited<ReturnType<typeof getInitialData>>["videos"]) {
@@ -211,7 +181,6 @@ interface SerializedHomeData {
   hotVideos: ReturnType<typeof serializeVideos>;
   hotImages: ReturnType<typeof serializeImages>;
   hotGames: ReturnType<typeof serializeGames>;
-  trendingTags: { id: string; name: string; slug: string; total: number }[];
 }
 
 /** L1：进程内缓存 + singleflight，挂在 globalThis 上跨 dev 热重载保持 */
@@ -232,12 +201,6 @@ async function fetchAndSerializeHomeData(hideNsfw: boolean): Promise<SerializedH
     hotVideos: serializeVideos(raw.hotVideos),
     hotImages: serializeImages(raw.hotImages),
     hotGames: serializeGames(raw.hotGames),
-    trendingTags: raw.trendingTags.map((t) => ({
-      id: t.id,
-      name: t.name,
-      slug: t.slug,
-      total: Number(t.total),
-    })),
   };
 }
 
@@ -247,7 +210,7 @@ async function fetchAndSerializeHomeData(hideNsfw: boolean): Promise<SerializedH
  */
 async function getCachedHomeData(hideNsfw: boolean): Promise<SerializedHomeData> {
   const memKey = hideNsfw ? "1" : "0";
-  const redisKey = `home:composite:v1:${memKey}`;
+  const redisKey = `home:composite:v3:${memKey}`;
   const now = Date.now();
 
   // L1
@@ -317,8 +280,6 @@ export default async function HomePage() {
       hotVideos={data.hotVideos}
       hotImages={data.hotImages}
       hotGames={data.hotGames}
-      trendingTags={data.trendingTags}
-      hideNsfw={hideNsfw}
     />
   );
 }

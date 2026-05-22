@@ -32,7 +32,7 @@ const navItems: NavItem[] = [
   { href: "/profile", icon: User, label: "我的", auth: true, loginHref: "/login" },
 ];
 
-export function BottomNav() {
+export function BottomNav({ initialHideNsfw = false }: { initialHideNsfw?: boolean }) {
   const pathname = usePathname();
   const { session } = useStableSession();
   const siteConfig = useSiteConfig();
@@ -112,7 +112,7 @@ export function BottomNav() {
             </SheetTitle>
           </SheetHeader>
           <ScrollArea className="flex-1 min-h-0 py-4">
-            <SidebarContent onItemClick={() => setMenuOpen(false)} />
+            <SidebarContent onItemClick={() => setMenuOpen(false)} initialHideNsfw={initialHideNsfw} />
           </ScrollArea>
           <div className="shrink-0 border-t px-3 py-2">
             <AdSlot slotId="sidebar" minHeight={100} />

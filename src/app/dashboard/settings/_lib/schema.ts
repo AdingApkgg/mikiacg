@@ -14,6 +14,10 @@ export const validEnum = <T extends string>(value: unknown, valid: readonly T[],
 const s = (v: unknown, fallback = ""): string => (v as string) || fallback;
 const n = (v: unknown, fallback: number): number => (v as number) ?? fallback;
 const b = (v: unknown, fallback: boolean): boolean => (v as boolean) ?? fallback;
+const imageSortOptions = (v: unknown): string => {
+  const raw = s(v).trim();
+  return raw || "latest,views,likes";
+};
 
 // ---------------------------------------------------------------------------
 // 共享枚举
@@ -394,7 +398,7 @@ export function pickFeaturesValues(cfg: SiteConfig): FeaturesTabValues {
     sectionGameEnabled: b(cfg.sectionGameEnabled, true),
     videoSortOptions: s(cfg.videoSortOptions, "latest,views,likes"),
     gameSortOptions: s(cfg.gameSortOptions, "latest,views,likes"),
-    imageSortOptions: s(cfg.imageSortOptions, "latest,views"),
+    imageSortOptions: imageSortOptions(cfg.imageSortOptions),
     videoDefaultSort: validEnum(cfg.videoDefaultSort, ["latest", "views", "likes", "titleAsc", "titleDesc"], "latest"),
     gameDefaultSort: validEnum(cfg.gameDefaultSort, ["latest", "views", "likes", "titleAsc", "titleDesc"], "latest"),
     imageDefaultSort: validEnum(cfg.imageDefaultSort, ["latest", "views", "likes", "titleAsc", "titleDesc"], "latest"),

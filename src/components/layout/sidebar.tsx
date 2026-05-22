@@ -26,6 +26,7 @@ import type { AppSession } from "@/lib/auth";
 import { AdSlot } from "@/components/ads/ad-slot";
 import { SidebarFooter } from "./sidebar-footer";
 import { useSiteConfig } from "@/contexts/site-config";
+import { CompositeNsfwToggle } from "@/components/composite/composite-nsfw-toggle";
 
 /** 侧栏仅需 user，兼容服务端 AppSession 与客户端 useSession 的 data */
 type SessionWithUser = Pick<AppSession, "user"> | null;
@@ -34,6 +35,7 @@ interface SidebarProps {
   collapsed: boolean;
   onToggle: () => void;
   overlay?: boolean; // 覆盖模式（展开时覆盖内容而非推移）
+  initialHideNsfw?: boolean;
 }
 
 interface NavItem {
@@ -225,7 +227,15 @@ function useCommunityNavItems() {
 }
 
 /** 侧栏导航内容（桌面 & 移动端共用） */
-export function SidebarContent({ collapsed = false, onItemClick }: { collapsed?: boolean; onItemClick?: () => void }) {
+export function SidebarContent({
+  collapsed = false,
+  onItemClick,
+  initialHideNsfw = false,
+}: {
+  collapsed?: boolean;
+  onItemClick?: () => void;
+  initialHideNsfw?: boolean;
+}) {
   const pathname = usePathname();
   const { session } = useStableSession();
   const communityNavItems = useCommunityNavItems();
@@ -233,8 +243,7 @@ export function SidebarContent({ collapsed = false, onItemClick }: { collapsed?:
 
   return (
     <div className={cn(collapsed ? "px-1" : "px-2 space-y-2")}>
-      {/* 内容分区：视频/图片/游戏。跟主菜单都用 NavLink 风格，避免 sidebar 顶部
-          再单独塞一个 segmented control (顶部 ContentModeHeader 已承担分区切换)。 */}
+      {/* 内容分区：综合/视频/图片/游戏。仅保留侧边栏入口，避免内容区顶部重复分区切换。 */}
       {enabledSectionItems.length > 0 && (
         <NavGroup
           items={enabledSectionItems}
@@ -254,6 +263,9 @@ export function SidebarContent({ collapsed = false, onItemClick }: { collapsed?:
         session={session}
         onItemClick={onItemClick}
       />
+
+      <Separator className={collapsed ? "mx-auto w-10 my-1" : "my-2"} />
+      <CompositeNsfwToggle hideNsfw={initialHideNsfw} collapsed={collapsed} />
 
       {session && (
         <>
@@ -304,7 +316,7 @@ export function SidebarContent({ collapsed = false, onItemClick }: { collapsed?:
   );
 }
 
-export function Sidebar({ collapsed, onToggle, overlay = false }: SidebarProps) {
+export function Sidebar({ collapsed, onToggle, overlay = false, initialHideNsfw = false }: SidebarProps) {
   return (
     <>
       {/* 遮罩层 - 覆盖模式展开时显示 */}
@@ -330,7 +342,7 @@ export function Sidebar({ collapsed, onToggle, overlay = false }: SidebarProps) 
         )}
       >
         <ScrollArea className="flex-1 min-h-0 py-2">
-          <SidebarContent collapsed={collapsed} />
+          <SidebarContent collapsed={collapsed} initialHideNsfw={initialHideNsfw} />
         </ScrollArea>
 
         {/* 广告位 - 固定底部，不随导航滚动 */}

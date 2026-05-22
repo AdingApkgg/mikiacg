@@ -21,7 +21,7 @@ interface SectionTabsProps<T extends string> {
 export function SectionTabs<T extends string>({ tabs, value, onChange, className, trailing }: SectionTabsProps<T>) {
   return (
     <div className={cn("flex items-end gap-2 border-b border-border/60", className)}>
-      <div className="flex flex-1 items-end gap-0.5 overflow-x-auto scrollbar-thin">
+      <div className="flex flex-1 items-end gap-0.5 overflow-x-auto overflow-y-hidden scrollbar-hide">
         {tabs.map((tab) => {
           const active = tab.id === value;
           return (

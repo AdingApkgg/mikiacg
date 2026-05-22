@@ -2,7 +2,6 @@
 
 import { trpc } from "@/lib/trpc";
 import { ImagePostCard } from "@/components/image/image-post-card";
-import { ImageFeedSections } from "@/components/image/image-feed-sections";
 import { ImageMasonry } from "@/components/image/image-masonry";
 import { AnnouncementBanner } from "@/components/shared/announcement-banner";
 import { Button } from "@/components/ui/button";
@@ -11,10 +10,7 @@ import { useSearchParams } from "next/navigation";
 import { usePageParam } from "@/hooks/use-page-param";
 import { Images } from "lucide-react";
 import { MotionPage } from "@/components/motion";
-import { cn } from "@/lib/utils";
-import { CollapsibleTagBar } from "@/components/ui/collapsible-tag-bar";
 import { SectionTabs, type SectionTabItem } from "@/components/shared/section-tabs";
-import { ContentModeHeader } from "@/components/shared/content-mode-header";
 import { useTagFilter } from "@/hooks/use-tag-filter";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Pagination } from "@/components/ui/pagination";
@@ -31,6 +27,7 @@ const AD_DENSITY = 8;
 const SKELETON_RATIOS = ["3 / 4", "4 / 5", "1 / 1", "2 / 3", "5 / 7", "4 / 3"];
 
 type SortBy = "latest" | "views" | "likes" | "titleAsc" | "titleDesc";
+const DEFAULT_IMAGE_SORT_OPTIONS = "latest,views,likes";
 
 const ALL_SORT_OPTIONS: { id: SortBy; label: string }[] = [
   { id: "latest", label: "最新" },
@@ -39,12 +36,6 @@ const ALL_SORT_OPTIONS: { id: SortBy; label: string }[] = [
   { id: "titleAsc", label: "标题 A→Z" },
   { id: "titleDesc", label: "标题 Z→A" },
 ];
-
-interface Tag {
-  id: string;
-  name: string;
-  slug: string;
-}
 
 interface ImagePost {
   id: string;
@@ -63,11 +54,20 @@ interface ImagePost {
 }
 
 interface ImageListClientProps {
-  initialTags: Tag[];
   initialPosts: ImagePost[];
+  initialSortBy?: string;
 }
 
-export function ImageListClient({ initialTags, initialPosts }: ImageListClientProps) {
+function getEnabledSortOptions(rawOptions: string | null | undefined): SortBy[] {
+  const normalized = rawOptions?.trim();
+  const options = normalized || DEFAULT_IMAGE_SORT_OPTIONS;
+  return options
+    .split(",")
+    .map((s) => s.trim())
+    .filter((id): id is SortBy => ALL_SORT_OPTIONS.some((opt) => opt.id === id));
+}
+
+export function ImageListClient({ initialPosts, initialSortBy }: ImageListClientProps) {
   const setContentMode = useUIStore((s) => s.setContentMode);
   const siteConfigCtx = useSiteConfig();
   const searchParams = useSearchParams();
@@ -79,7 +79,7 @@ export function ImageListClient({ initialTags, initialPosts }: ImageListClientPr
   // URL ?sortBy 优先级最高（来自首页 section "查看更多" 链接）
   const urlSortBy = searchParams.get("sortBy") as SortBy | null;
   const [sortBy, setSortBy] = useState<SortBy>(() => {
-    const enabled = (siteConfigCtx?.imageSortOptions ?? "latest,views").split(",").map((s) => s.trim());
+    const enabled = getEnabledSortOptions(siteConfigCtx?.imageSortOptions);
     if (urlSortBy && enabled.includes(urlSortBy)) return urlSortBy;
     const configured = (siteConfigCtx?.imageDefaultSort as SortBy) || "latest";
     return enabled.includes(configured) ? configured : ((enabled[0] as SortBy) ?? "latest");
@@ -90,10 +90,7 @@ export function ImageListClient({ initialTags, initialPosts }: ImageListClientPr
   const timeRange: "all" | "today" | "week" | "month" = ["all", "today", "week", "month"].includes(urlTimeRange)
     ? urlTimeRange
     : "all";
-  // URL 显式带了 sortBy 或 timeRange → 用户从「查看更多」过来，强制脱出首页模式
-  const hasExplicitListIntent = urlSortBy !== null || urlTimeRangeRaw !== null;
-  const { selectedSlugs, excludedSlugs, toggleTag, toggleExclude, clearAll, isSelected, isExcluded, hasFilter } =
-    useTagFilter();
+  const { selectedSlugs, excludedSlugs, clearAll, hasFilter } = useTagFilter();
   const [page, setPage] = usePageParam();
 
   // 不再使用 placeholderData：翻页 / 切换排序 / 切换筛选时立即清空旧内容 → 显示骨架屏，
@@ -111,9 +108,15 @@ export function ImageListClient({ initialTags, initialPosts }: ImageListClientPr
     timeRange,
   });
 
+  const canUseInitialPosts =
+    page === 1 &&
+    !hasFilter &&
+    timeRange === "all" &&
+    sortBy === (initialSortBy ?? siteConfigCtx?.imageDefaultSort ?? "latest");
+
   const posts = useMemo(
-    () => postData?.posts ?? (page === 1 && !hasFilter && isLoading ? initialPosts : []),
-    [postData?.posts, page, hasFilter, initialPosts, isLoading],
+    () => postData?.posts ?? (canUseInitialPosts && isLoading ? initialPosts : []),
+    [postData?.posts, canUseInitialPosts, initialPosts, isLoading],
   );
   const totalPages = postData?.totalPages ?? 1;
   const showSkeleton = (isLoading || isFetching) && posts.length === 0;
@@ -136,11 +139,6 @@ export function ImageListClient({ initialTags, initialPosts }: ImageListClientPr
     [setPage],
   );
 
-  /**
-   * 「首页模式」判定：用户进入 /image 没做任何筛选时，主区域改为分区 Feed
-   * (最新 / 本日热门 / 本周排行)，参考 hanime1.me。
-   */
-  const isHomeMode = page === 1 && !hasFilter && sortBy === "latest" && timeRange === "all" && !hasExplicitListIntent;
   const adSeed = `image-${page}-${sortBy}-${selectedSlugs.join(",")}-${excludedSlugs.join(",")}`;
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const { gridItems, pickedAds, hasAds } = useInlineAds<any>({
@@ -151,7 +149,7 @@ export function ImageListClient({ initialTags, initialPosts }: ImageListClientPr
   });
 
   const sortOptions = useMemo(() => {
-    const enabledKeys = (siteConfigCtx?.imageSortOptions ?? "latest,views").split(",").map((s) => s.trim());
+    const enabledKeys = getEnabledSortOptions(siteConfigCtx?.imageSortOptions);
     return ALL_SORT_OPTIONS.filter((opt) => enabledKeys.includes(opt.id));
   }, [siteConfigCtx?.imageSortOptions]);
 
@@ -215,7 +213,6 @@ export function ImageListClient({ initialTags, initialPosts }: ImageListClientPr
           announcement={siteConfigCtx?.announcement ?? null}
         />
         <MotionPage>
-          <ContentModeHeader current="image" />
           {sortOptions.length > 0 && (
             <SectionTabs<SortBy>
               className="mb-3"
@@ -227,67 +224,34 @@ export function ImageListClient({ initialTags, initialPosts }: ImageListClientPr
               }}
             />
           )}
-          {initialTags.length > 0 && (
-            <CollapsibleTagBar className="mb-6">
-              {initialTags.map((tag) => (
-                <button
-                  key={tag.id}
-                  onClick={() => {
-                    setPage(1);
-                    toggleTag(tag.slug);
-                  }}
-                  onContextMenu={(e) => {
-                    e.preventDefault();
-                    setPage(1);
-                    toggleExclude(tag.slug);
-                  }}
-                  className={cn(
-                    "shrink-0 px-3 py-1.5 rounded-lg text-sm font-medium transition-colors whitespace-nowrap",
-                    isSelected(tag.slug) && "bg-foreground text-background",
-                    isExcluded(tag.slug) && "bg-destructive/20 text-destructive line-through",
-                    !isSelected(tag.slug) && !isExcluded(tag.slug) && "bg-muted hover:bg-muted/80 text-foreground",
-                  )}
-                  title="左键选择，右键排除"
-                >
-                  {tag.name}
-                </button>
-              ))}
-            </CollapsibleTagBar>
-          )}
         </MotionPage>
         <section>
-          {isHomeMode ? (
-            <ImageFeedSections />
-          ) : (
-            <div key={`${sortBy}-${selectedSlugs.join(",")}-${excludedSlugs.join(",")}-${page}`}>
-              {showSkeleton ? (
-                <ImageMasonry items={skeletonItems} />
-              ) : hasAds ? (
-                <ImageMasonry items={adGridItems} />
-              ) : (
-                <ImageMasonry items={postItems} />
-              )}
+          <div key={`${sortBy}-${selectedSlugs.join(",")}-${excludedSlugs.join(",")}-${page}`}>
+            {showSkeleton ? (
+              <ImageMasonry items={skeletonItems} />
+            ) : hasAds ? (
+              <ImageMasonry items={adGridItems} />
+            ) : (
+              <ImageMasonry items={postItems} />
+            )}
 
-              {!isLoading && !isFetching && posts.length === 0 && (
-                <div className="text-center py-16">
-                  <div className="text-muted-foreground mb-4">
-                    <Images className="h-12 w-12 mx-auto mb-4 opacity-50" />
-                    <p className="text-lg font-medium">没有找到图片</p>
-                    <p className="text-sm mt-1">{hasFilter ? "尝试调整标签筛选条件" : "暂无图片内容"}</p>
-                  </div>
-                  {hasFilter && (
-                    <Button variant="outline" onClick={clearAll} className="mt-4">
-                      清除筛选
-                    </Button>
-                  )}
+            {!isLoading && !isFetching && posts.length === 0 && (
+              <div className="text-center py-16">
+                <div className="text-muted-foreground mb-4">
+                  <Images className="h-12 w-12 mx-auto mb-4 opacity-50" />
+                  <p className="text-lg font-medium">没有找到图片</p>
+                  <p className="text-sm mt-1">{hasFilter ? "尝试调整标签筛选条件" : "暂无图片内容"}</p>
                 </div>
-              )}
-            </div>
-          )}
+                {hasFilter && (
+                  <Button variant="outline" onClick={clearAll} className="mt-4">
+                    清除筛选
+                  </Button>
+                )}
+              </div>
+            )}
+          </div>
 
-          {!isHomeMode && (
-            <Pagination currentPage={page} totalPages={totalPages} onPageChange={handlePageChange} className="mt-8" />
-          )}
+          <Pagination currentPage={page} totalPages={totalPages} onPageChange={handlePageChange} className="mt-8" />
         </section>
       </div>
     </MotionPage>
