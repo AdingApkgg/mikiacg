@@ -10,10 +10,6 @@ config({ path: path.join(__dirname, "..", envFile) });
 // 工具函数
 // ---------------------------------------------------------------------------
 
-function randomId6(): string {
-  return String(Math.floor(Math.random() * 1000000)).padStart(6, "0");
-}
-
 function randomInt(min: number, max: number): number {
   return Math.floor(Math.random() * (max - min + 1)) + min;
 }
@@ -32,6 +28,26 @@ function daysAgo(days: number): Date {
   d.setDate(d.getDate() - days);
   d.setHours(randomInt(0, 23), randomInt(0, 59), randomInt(0, 59));
   return d;
+}
+
+const DEMO_TARGET_COUNT = 50;
+const DEMO_ID_BASE = {
+  video: 910000,
+  game: 920000,
+  imagePost: 930000,
+};
+
+function demoId(base: number, index: number): string {
+  return String(base + index + 1).padStart(6, "0");
+}
+
+function demoSeedKey(kind: "video" | "game" | "image-post", index: number): string {
+  return `seed-${kind}-${String(index + 1).padStart(2, "0")}`;
+}
+
+function hasSeedKey(extraInfo: unknown, seedKey: string): boolean {
+  if (!extraInfo || typeof extraInfo !== "object" || Array.isArray(extraInfo)) return false;
+  return (extraInfo as { seedKey?: unknown }).seedKey === seedKey;
 }
 
 async function hashPassword(password: string): Promise<string> {
@@ -376,6 +392,50 @@ const VIDEOS: VideoSeed[] = [
   },
 ];
 
+const VIDEO_SUPPLEMENT_TEMPLATES = [
+  { ipTag: "genshin", character: "申鹤", scene: "雪夜练习室" },
+  { ipTag: "honkai-star-rail", character: "银狼", scene: "数据迷宫夜巡" },
+  { ipTag: "zzz", character: "铃", scene: "录像店的午后" },
+  { ipTag: "blue-archive", character: "日奈", scene: "风纪委员会档案" },
+  { ipTag: "wuthering-waves", character: "长离", scene: "赤羽回响" },
+  { ipTag: "azur-lane", character: "能代", scene: "港区晨练" },
+  { ipTag: "fgo", character: "玛修", scene: "迦勒底训练日志" },
+  { ipTag: "hololive", character: "星街彗星", scene: "舞台灯光测试" },
+  { ipTag: "idolmaster", character: "樋口圆香", scene: "录音棚小剧场" },
+  { ipTag: "honkai3", character: "琪亚娜", scene: "月光下的重逢" },
+  { ipTag: "overwatch", character: "天使", scene: "守望基地休憩" },
+  { ipTag: "nier", character: "2B", scene: "废墟花园巡礼" },
+  { ipTag: "final-fantasy", character: "蒂法", scene: "第七天堂夜谈" },
+  { ipTag: "girls-frontline", character: "HK416", scene: "安全屋任务记录" },
+  { ipTag: "genshin", character: "夜兰", scene: "璃月情报局" },
+  { ipTag: "honkai-star-rail", character: "黄泉", scene: "雨夜列车" },
+  { ipTag: "zzz", character: "艾莲", scene: "咖啡店打烊后" },
+  { ipTag: "blue-archive", character: "爱丽丝", scene: "游戏开发部新企划" },
+  { ipTag: "wuthering-waves", character: "秧秧", scene: "风声练习曲" },
+  { ipTag: "azur-lane", character: "柴郡", scene: "茶会摄影棚" },
+  { ipTag: "fgo", character: "尼禄", scene: "黄金剧场排练" },
+  { ipTag: "hololive", character: "白上吹雪", scene: "直播前一小时" },
+  { ipTag: "idolmaster", character: "浅仓透", scene: "海边广告拍摄" },
+  { ipTag: "honkai3", character: "爱莉希雅", scene: "粉色庭院回忆" },
+  { ipTag: "overwatch", character: "猎空", scene: "训练室加速测试" },
+  { ipTag: "nier", character: "A2", scene: "荒漠信号塔" },
+] as const;
+
+const VIDEO_SUPPLEMENT_CREATORS = ["starrymomoko", "pastapaprika", "vicineko", "seneto"] as const;
+
+const VIDEO_SUPPLEMENTS: VideoSeed[] = VIDEO_SUPPLEMENT_TEMPLATES.map((item, index) => {
+  const creator = VIDEO_SUPPLEMENT_CREATORS[index % VIDEO_SUPPLEMENT_CREATORS.length];
+  const renderTag = creator === "seneto" || index % 7 === 0 ? "2d" : "3d";
+  return {
+    title: `【${item.character} ${item.scene}】Demo Motion ${String(index + 1).padStart(2, "0")}`,
+    creator,
+    tags: [item.ipTag, creator, renderTag, index % 3 === 0 ? "story" : "short"],
+    duration: [90 + (index % 5) * 20, 260 + (index % 6) * 50] as [number, number],
+  };
+});
+
+const DEMO_VIDEOS: VideoSeed[] = [...VIDEOS, ...VIDEO_SUPPLEMENTS].slice(0, DEMO_TARGET_COUNT);
+
 // ---------------------------------------------------------------------------
 // 游戏数据 — 模拟实际站点的日系同人游戏风格
 // ---------------------------------------------------------------------------
@@ -504,11 +564,269 @@ const GAMES: GameSeed[] = [
   { title: "【ACT/双端】像素女武神", gameType: "ACT", platform: "PC,Android", isFree: true, tags: ["act", "pixel"] },
 ];
 
+const GAME_SUPPLEMENTS: GameSeed[] = [
+  {
+    title: "【SLG/双端】月影旅社 Demo版",
+    gameType: "SLG",
+    platform: "PC,Android",
+    isFree: true,
+    tags: ["slg", "story"],
+    version: "Ver0.9.1",
+  },
+  {
+    title: "【SLG/电脑】海滨管理日记",
+    gameType: "SLG",
+    platform: "PC",
+    isFree: true,
+    tags: ["slg"],
+    version: "Ver1.4",
+  },
+  {
+    title: "【SLG/双端】星港值班室",
+    gameType: "SLG",
+    platform: "PC,Android",
+    isFree: true,
+    tags: ["slg"],
+    version: "Ch1V0.7",
+  },
+  {
+    title: "【SLG/电脑】社团经营计划",
+    gameType: "SLG",
+    platform: "PC",
+    isFree: false,
+    tags: ["slg", "story"],
+    version: "Ver2.0",
+  },
+  {
+    title: "【SLG/双端】魔法学院助教",
+    gameType: "SLG",
+    platform: "PC,Android",
+    isFree: true,
+    tags: ["slg"],
+    version: "Ver0.8.3",
+  },
+  {
+    title: "【ADV/免费】雨后咖啡馆",
+    gameType: "ADV",
+    platform: "PC",
+    isFree: true,
+    tags: ["adv", "story"],
+    version: "Ver1.0",
+  },
+  {
+    title: "【ADV/双端】夏日取材旅行",
+    gameType: "ADV",
+    platform: "PC,Android",
+    isFree: true,
+    tags: ["adv"],
+    version: "Ver1.1",
+  },
+  {
+    title: "【ADV/电脑】旧图书馆的约定",
+    gameType: "ADV",
+    platform: "PC",
+    isFree: false,
+    tags: ["adv", "story"],
+    version: "Ver1.2",
+  },
+  {
+    title: "【ADV/双端】电波少女通信录",
+    gameType: "ADV",
+    platform: "PC,Android",
+    isFree: true,
+    tags: ["adv"],
+    version: "Ver0.6",
+  },
+  {
+    title: "【RPG/电脑】露娜与星屑迷宫",
+    gameType: "RPG",
+    platform: "PC",
+    isFree: true,
+    tags: ["rpg", "pixel"],
+    version: "Ver1.0.5",
+  },
+  {
+    title: "【RPG/双端】遗迹调查团",
+    gameType: "RPG",
+    platform: "PC,Android",
+    isFree: true,
+    tags: ["rpg"],
+    version: "Ver0.9",
+  },
+  {
+    title: "【RPG/电脑】魔导工坊物语",
+    gameType: "RPG",
+    platform: "PC",
+    isFree: false,
+    tags: ["rpg", "story"],
+    version: "Ver2.3",
+  },
+  {
+    title: "【RPG/双端】像素王国边境",
+    gameType: "RPG",
+    platform: "PC,Android",
+    isFree: true,
+    tags: ["rpg", "pixel"],
+    version: "Ver1.7",
+  },
+  {
+    title: "【ACT/电脑】月下疾走",
+    gameType: "ACT",
+    platform: "PC",
+    isFree: true,
+    tags: ["act"],
+    version: "Ver1.0",
+  },
+  {
+    title: "【ACT/双端】霓虹忍者试炼",
+    gameType: "ACT",
+    platform: "PC,Android",
+    isFree: true,
+    tags: ["act", "pixel"],
+    version: "Ver0.5",
+  },
+  {
+    title: "【ACT/电脑】机甲少女突击",
+    gameType: "ACT",
+    platform: "PC",
+    isFree: false,
+    tags: ["act"],
+    version: "Ver1.8",
+  },
+  {
+    title: "【AVG/免费】深夜电台来信",
+    gameType: "AVG",
+    platform: "PC",
+    isFree: true,
+    tags: ["avg", "story"],
+    version: "Ver1.0",
+  },
+  {
+    title: "【AVG/双端】周末摄影社",
+    gameType: "AVG",
+    platform: "PC,Android",
+    isFree: true,
+    tags: ["avg"],
+    version: "Ver1.3",
+  },
+  {
+    title: "【VN/电脑】白昼梦手札",
+    gameType: "VN",
+    platform: "PC",
+    isFree: true,
+    tags: ["vn", "story"],
+    version: "Ver1.0",
+  },
+  {
+    title: "【VN/双端】星空下的便利店",
+    gameType: "VN",
+    platform: "PC,Android",
+    isFree: true,
+    tags: ["vn"],
+    version: "Ver0.9.8",
+  },
+  {
+    title: "【SLG/双端】温泉街复兴计划",
+    gameType: "SLG",
+    platform: "PC,Android",
+    isFree: true,
+    tags: ["slg"],
+    version: "Ver1.5",
+  },
+  {
+    title: "【SLG/电脑】边境小镇日常",
+    gameType: "SLG",
+    platform: "PC",
+    isFree: true,
+    tags: ["slg", "story"],
+    version: "Ver0.4",
+  },
+  {
+    title: "【ADV/免费】迷你偶像企划",
+    gameType: "ADV",
+    platform: "PC",
+    isFree: true,
+    tags: ["adv"],
+    version: "Ver1.2.1",
+  },
+  {
+    title: "【RPG/双端】晨星炼金术士",
+    gameType: "RPG",
+    platform: "PC,Android",
+    isFree: true,
+    tags: ["rpg"],
+    version: "Ver1.1",
+  },
+  {
+    title: "【ACT/电脑】幻影剑士序章",
+    gameType: "ACT",
+    platform: "PC",
+    isFree: true,
+    tags: ["act"],
+    version: "Ver0.7",
+  },
+  {
+    title: "【AVG/双端】甜点屋营业中",
+    gameType: "AVG",
+    platform: "PC,Android",
+    isFree: true,
+    tags: ["avg"],
+    version: "Ver1.0",
+  },
+  {
+    title: "【VN/电脑】玻璃海岸的信",
+    gameType: "VN",
+    platform: "PC",
+    isFree: false,
+    tags: ["vn", "story"],
+    version: "Ver1.4",
+  },
+  {
+    title: "【SLG/双端】同好会扩张计划",
+    gameType: "SLG",
+    platform: "PC,Android",
+    isFree: true,
+    tags: ["slg"],
+    version: "Ver2.1",
+  },
+  {
+    title: "【RPG/电脑】月轮地牢探索",
+    gameType: "RPG",
+    platform: "PC",
+    isFree: true,
+    tags: ["rpg", "pixel"],
+    version: "Ver1.6",
+  },
+  {
+    title: "【ADV/双端】放课后观察日记",
+    gameType: "ADV",
+    platform: "PC,Android",
+    isFree: true,
+    tags: ["adv", "story"],
+    version: "Ver0.8",
+  },
+  {
+    title: "【ACT/双端】魔法滑板竞速",
+    gameType: "ACT",
+    platform: "PC,Android",
+    isFree: true,
+    tags: ["act"],
+    version: "Ver1.0",
+  },
+];
+
+const DEMO_GAMES: GameSeed[] = [...GAMES, ...GAME_SUPPLEMENTS].slice(0, DEMO_TARGET_COUNT);
+
 // ---------------------------------------------------------------------------
 // 图片帖子
 // ---------------------------------------------------------------------------
 
-const IMAGE_POSTS = [
+interface ImagePostSeed {
+  title: string;
+  tags: string[];
+}
+
+const IMAGE_POSTS: ImagePostSeed[] = [
   { title: "原神 神里绫华 同人插画", tags: ["genshin", "2d"] },
   { title: "星穹铁道 卡芙卡 壁纸合集", tags: ["honkai-star-rail", "2d"] },
   { title: "绝区零 妮可 角色设计图", tags: ["zzz", "2d"] },
@@ -522,6 +840,51 @@ const IMAGE_POSTS = [
   { title: "星铁 黑天鹅 暗系插画", tags: ["honkai-star-rail", "2d"] },
   { title: "FGO 阿尔托莉雅 全形态合集", tags: ["fgo", "2d", "compilation"] },
 ];
+
+const IMAGE_SUPPLEMENTS: ImagePostSeed[] = [
+  { title: "原神 胡桃 夜市灯笼插画", tags: ["genshin", "2d"] },
+  { title: "原神 雷电将军 紫电壁纸组", tags: ["genshin", "2d", "compilation"] },
+  { title: "原神 珊瑚宫心海 海色图集", tags: ["genshin", "2d"] },
+  { title: "星穹铁道 流萤 星海写真", tags: ["honkai-star-rail", "2d"] },
+  { title: "星穹铁道 银狼 像素头像包", tags: ["honkai-star-rail", "2d", "pixel"] },
+  { title: "星穹铁道 知更鸟 舞台灯光设定", tags: ["honkai-star-rail", "2d"] },
+  { title: "绝区零 艾莲 午后速写", tags: ["zzz", "2d"] },
+  { title: "绝区零 安比 训练室涂鸦", tags: ["zzz", "2d"] },
+  { title: "绝区零 朱鸢 城市夜景壁纸", tags: ["zzz", "2d"] },
+  { title: "蔚蓝档案 日奈 风纪笔记", tags: ["blue-archive", "2d"] },
+  { title: "蔚蓝档案 爱丽丝 游戏开发部", tags: ["blue-archive", "2d"] },
+  { title: "蔚蓝档案 星野 夏日小憩", tags: ["blue-archive", "2d"] },
+  { title: "鸣潮 今汐 月白图集", tags: ["wuthering-waves", "2d"] },
+  { title: "鸣潮 秧秧 风声练习", tags: ["wuthering-waves", "2d"] },
+  { title: "鸣潮 吟霖 红线设定稿", tags: ["wuthering-waves", "2d"] },
+  { title: "碧蓝航线 大凤 花嫁图集", tags: ["azur-lane", "2d", "compilation"] },
+  { title: "碧蓝航线 柴郡 茶会壁纸", tags: ["azur-lane", "2d"] },
+  { title: "碧蓝航线 能代 港区晨光", tags: ["azur-lane", "2d"] },
+  { title: "Hololive 星街彗星 舞台海报", tags: ["hololive", "2d"] },
+  { title: "Hololive 白上吹雪 直播封面", tags: ["hololive", "2d"] },
+  { title: "Hololive 宝钟玛琳 航海插画", tags: ["hololive", "2d"] },
+  { title: "偶像大师 浅仓透 海风写真", tags: ["idolmaster", "2d"] },
+  { title: "偶像大师 樋口圆香 录音棚", tags: ["idolmaster", "2d"] },
+  { title: "偶像大师 市川雏菜 色彩练习", tags: ["idolmaster", "2d"] },
+  { title: "崩坏3 爱莉希雅 粉色庭院", tags: ["honkai3", "2d"] },
+  { title: "崩坏3 琪亚娜 月光壁纸", tags: ["honkai3", "2d"] },
+  { title: "崩坏3 雷电芽衣 雷鸣设定", tags: ["honkai3", "2d"] },
+  { title: "守望先锋 天使 基地休憩", tags: ["overwatch", "2d"] },
+  { title: "守望先锋 猎空 加速轨迹", tags: ["overwatch", "2d"] },
+  { title: "守望先锋 D.Va 机甲贴纸", tags: ["overwatch", "2d"] },
+  { title: "尼尔 2B 废墟花园", tags: ["nier", "2d"] },
+  { title: "尼尔 A2 荒漠信号塔", tags: ["nier", "2d"] },
+  { title: "最终幻想 蒂法 第七天堂", tags: ["final-fantasy", "2d"] },
+  { title: "最终幻想 爱丽丝 花店速写", tags: ["final-fantasy", "2d"] },
+  { title: "FGO 尼禄 黄金剧场", tags: ["fgo", "2d"] },
+  { title: "FGO 贞德 蓝白旗帜", tags: ["fgo", "2d"] },
+  { title: "少女前线 HK416 安全屋", tags: ["girls-frontline", "2d"] },
+  { title: "少女前线 UMP45 夜间任务", tags: ["girls-frontline", "2d"] },
+  { title: "原神 芙宁娜 歌剧院图集", tags: ["genshin", "2d", "compilation"] },
+  { title: "星穹铁道 黄泉 雨夜列车", tags: ["honkai-star-rail", "2d"] },
+];
+
+const DEMO_IMAGE_POSTS: ImagePostSeed[] = [...IMAGE_POSTS, ...IMAGE_SUPPLEMENTS].slice(0, DEMO_TARGET_COUNT);
 
 // ---------------------------------------------------------------------------
 // 评论
@@ -608,17 +971,14 @@ async function main() {
   try {
     // ============================== 标签分类 & 标签 ==============================
     console.log("📌 创建标签分类 & 标签...");
-    await prisma.tagOnVideo.deleteMany({});
-    await prisma.tagOnGame.deleteMany({});
-    await prisma.tagOnImagePost.deleteMany({});
-    await prisma.tag.deleteMany({});
-    await prisma.tagCategory.deleteMany({});
 
     const categoryRecords: Record<string, string> = {};
     for (let i = 0; i < TAG_CATEGORIES.length; i++) {
       const cat = TAG_CATEGORIES[i];
-      const record = await prisma.tagCategory.create({
-        data: { name: cat.name, slug: cat.slug, color: cat.color, sortOrder: i },
+      const record = await prisma.tagCategory.upsert({
+        where: { slug: cat.slug },
+        update: { name: cat.name, color: cat.color, sortOrder: i },
+        create: { name: cat.name, slug: cat.slug, color: cat.color, sortOrder: i },
       });
       categoryRecords[cat.slug] = record.id;
     }
@@ -833,6 +1193,91 @@ async function main() {
       .filter((u) => USERS_DATA.find((d) => d.username === u.username)?.canUpload)
       .map((u) => u.id);
 
+    async function resolveDemoVideoId(desiredId: string, seedKey: string, title: string, index: number): Promise<string> {
+      const existing = await prisma.video.findUnique({
+        where: { id: desiredId },
+        select: { id: true, title: true, videoUrl: true, extraInfo: true },
+      });
+      if (!existing || hasSeedKey(existing.extraInfo, seedKey)) return desiredId;
+      if (existing.title === title && existing.videoUrl.startsWith("https://example.com/videos/")) return desiredId;
+
+      const existingSeed = await prisma.video.findFirst({
+        where: { title, videoUrl: { startsWith: "https://example.com/videos/" } },
+        select: { id: true },
+      });
+      if (existingSeed) return existingSeed.id;
+
+      for (let offset = 0; offset < 100; offset++) {
+        const fallbackId = demoId(950000 + index * 100, offset);
+        const fallback = await prisma.video.findUnique({
+          where: { id: fallbackId },
+          select: { title: true, videoUrl: true, extraInfo: true },
+        });
+        if (!fallback || hasSeedKey(fallback.extraInfo, seedKey)) return fallbackId;
+        if (fallback.title === title && fallback.videoUrl.startsWith("https://example.com/videos/")) return fallbackId;
+      }
+
+      throw new Error(`无法为演示视频分配安全 ID: ${title}`);
+    }
+
+    async function resolveDemoGameId(desiredId: string, seedKey: string, title: string, index: number): Promise<string> {
+      const existing = await prisma.game.findUnique({
+        where: { id: desiredId },
+        select: { id: true, title: true, description: true, extraInfo: true },
+      });
+      if (!existing || hasSeedKey(existing.extraInfo, seedKey)) return desiredId;
+      if (existing.title === title && existing.description?.startsWith(`${title} ——`)) return desiredId;
+
+      const existingSeed = await prisma.game.findFirst({
+        where: { title, description: { startsWith: `${title} ——` } },
+        select: { id: true },
+      });
+      if (existingSeed) return existingSeed.id;
+
+      for (let offset = 0; offset < 100; offset++) {
+        const fallbackId = demoId(960000 + index * 100, offset);
+        const fallback = await prisma.game.findUnique({
+          where: { id: fallbackId },
+          select: { title: true, description: true, extraInfo: true },
+        });
+        if (!fallback || hasSeedKey(fallback.extraInfo, seedKey)) return fallbackId;
+        if (fallback.title === title && fallback.description?.startsWith(`${title} ——`)) return fallbackId;
+      }
+
+      throw new Error(`无法为演示游戏分配安全 ID: ${title}`);
+    }
+
+    async function resolveDemoImagePostId(
+      desiredId: string,
+      title: string,
+      index: number,
+    ): Promise<string> {
+      const existing = await prisma.imagePost.findUnique({
+        where: { id: desiredId },
+        select: { id: true, title: true, description: true },
+      });
+      if (!existing) return desiredId;
+      if (existing.title === title && existing.description?.startsWith(`${title} ——`)) return desiredId;
+
+      const existingSeed = await prisma.imagePost.findFirst({
+        where: { title, description: { startsWith: `${title} ——` } },
+        select: { id: true },
+      });
+      if (existingSeed) return existingSeed.id;
+
+      for (let offset = 0; offset < 100; offset++) {
+        const fallbackId = demoId(970000 + index * 100, offset);
+        const fallback = await prisma.imagePost.findUnique({
+          where: { id: fallbackId },
+          select: { title: true, description: true },
+        });
+        if (!fallback) return fallbackId;
+        if (fallback.title === title && fallback.description?.startsWith(`${title} ——`)) return fallbackId;
+      }
+
+      throw new Error(`无法为演示图片帖子分配安全 ID: ${title}`);
+    }
+
     // ============================== 站点配置 ==============================
     console.log("⚙️  初始化站点配置...");
     await prisma.siteConfig.upsert({
@@ -857,34 +1302,52 @@ async function main() {
 
     // ============================== 视频 ==============================
     console.log("🎬 创建视频...");
-    const usedIds = new Set<string>();
     const videoRecords: Array<{ id: string; uploaderId: string }> = [];
 
-    for (const v of VIDEOS) {
-      let vid: string;
-      do {
-        vid = randomId6();
-      } while (usedIds.has(vid));
-      usedIds.add(vid);
-
+    for (let i = 0; i < DEMO_VIDEOS.length; i++) {
+      const v = DEMO_VIDEOS[i];
+      const seedKey = demoSeedKey("video", i);
+      const vid = await resolveDemoVideoId(demoId(DEMO_ID_BASE.video, i), seedKey, v.title, i);
       const uploaderId = uploaderMap[v.creator] || pick(uploaderIds);
       const createdAt = daysAgo(randomInt(1, 45));
-      const duration = randomInt(v.duration[0], v.duration[1]);
+      const duration = v.duration[0] + ((i * 37) % (v.duration[1] - v.duration[0] + 1));
+      const description = `${v.title} —— 3D 渲染动画作品`;
+      const coverUrl = `https://picsum.photos/seed/video-${seedKey}/1280/720`;
+      const videoUrl = `https://example.com/videos/${vid}/master.m3u8`;
+      const extraInfo = {
+        seedKind: "demo",
+        seedKey,
+        intro: description,
+        author: v.creator,
+        keywords: v.tags,
+        notices: [{ type: "info", content: "本内容为本地开发演示数据。" }],
+      };
 
       const video = await prisma.video.upsert({
         where: { id: vid },
-        update: {},
+        update: {
+          title: v.title,
+          description,
+          coverUrl,
+          videoUrl,
+          duration,
+          status: "PUBLISHED",
+          uploaderId,
+          extraInfo,
+        },
         create: {
           id: vid,
           title: v.title,
-          description: `${v.title} —— 3D 渲染动画作品`,
-          videoUrl: `https://example.com/videos/${vid}/master.m3u8`,
+          description,
+          coverUrl,
+          videoUrl,
           duration,
           views: randomInt(50, 2000),
           status: "PUBLISHED",
           uploaderId,
           createdAt,
           updatedAt: createdAt,
+          extraInfo,
         },
       });
 
@@ -901,14 +1364,21 @@ async function main() {
     // ============================== 合集 ==============================
     console.log("📚 创建合集...");
     const seriesCreator = uploaderMap["starrymomoko"] || uploaderIds[0];
-    const series1 = await prisma.series.create({
-      data: {
+    const series1 = await prisma.series.upsert({
+      where: { id: "seed-series-starrymomoko-genshin" },
+      update: {
+        title: "StarryMomoko 原神合集",
+        description: "StarryMomoko 创作的原神系列 3D 动画",
+        creatorId: seriesCreator,
+      },
+      create: {
+        id: "seed-series-starrymomoko-genshin",
         title: "StarryMomoko 原神合集",
         description: "StarryMomoko 创作的原神系列 3D 动画",
         creatorId: seriesCreator,
       },
     });
-    const smVideos = videoRecords.filter((_, i) => VIDEOS[i]?.creator === "starrymomoko").slice(0, 6);
+    const smVideos = videoRecords.filter((_, i) => DEMO_VIDEOS[i]?.creator === "starrymomoko").slice(0, 6);
     for (let i = 0; i < smVideos.length; i++) {
       await prisma.seriesEpisode
         .create({ data: { seriesId: series1.id, videoId: smVideos[i].id, episodeNum: i + 1 } })
@@ -916,10 +1386,21 @@ async function main() {
     }
 
     const ppCreator = uploaderMap["pastapaprika"] || uploaderIds[0];
-    const series2 = await prisma.series.create({
-      data: { title: "PastaPaprika 原神系列", description: "PastaPaprika 创作的原神角色短片", creatorId: ppCreator },
+    const series2 = await prisma.series.upsert({
+      where: { id: "seed-series-pastapaprika-genshin" },
+      update: {
+        title: "PastaPaprika 原神系列",
+        description: "PastaPaprika 创作的原神角色短片",
+        creatorId: ppCreator,
+      },
+      create: {
+        id: "seed-series-pastapaprika-genshin",
+        title: "PastaPaprika 原神系列",
+        description: "PastaPaprika 创作的原神角色短片",
+        creatorId: ppCreator,
+      },
     });
-    const ppVideos = videoRecords.filter((_, i) => VIDEOS[i]?.creator === "pastapaprika").slice(0, 6);
+    const ppVideos = videoRecords.filter((_, i) => DEMO_VIDEOS[i]?.creator === "pastapaprika").slice(0, 6);
     for (let i = 0; i < ppVideos.length; i++) {
       await prisma.seriesEpisode
         .create({ data: { seriesId: series2.id, videoId: ppVideos[i].id, episodeNum: i + 1 } })
@@ -931,35 +1412,58 @@ async function main() {
     console.log("🎮 创建游戏...");
     const gameRecords: Array<{ id: string }> = [];
 
-    for (const g of GAMES) {
-      let gid: string;
-      do {
-        gid = randomId6();
-      } while (usedIds.has(gid));
-      usedIds.add(gid);
-
-      const uploaderId = g.platform.includes("Android")
+    for (let i = 0; i < DEMO_GAMES.length; i++) {
+      const g = DEMO_GAMES[i];
+      const seedKey = demoSeedKey("game", i);
+      const gid = await resolveDemoGameId(demoId(DEMO_ID_BASE.game, i), seedKey, g.title, i);
+      const platforms = g.platform.split(",").map((platform) => platform.trim());
+      const uploaderId = platforms.includes("Android")
         ? uploaderMap["playmeow"] || pick(uploaderIds)
         : uploaderMap["ntrman"] || pick(uploaderIds);
       const createdAt = daysAgo(randomInt(1, 60));
-      const platforms = g.platform.split(",");
+      const description = `${g.title} —— ${g.gameType}类型${g.isFree ? "免费" : "付费"}游戏`;
+      const version = g.version || `Ver${1 + (i % 2)}.${i % 10}`;
+      const coverUrl = `https://picsum.photos/seed/game-${seedKey}/960/540`;
+      const extraInfo = {
+        seedKind: "demo",
+        seedKey,
+        originalName: g.title.replace(/^【[^】]+】/, ""),
+        originalAuthor: i % 2 === 0 ? "Demo Circle" : "Sample Studio",
+        fileSize: `${300 + ((i * 137) % 2800)} MB`,
+        platforms,
+        screenshots: Array.from({ length: 4 }, (_, idx) => `https://picsum.photos/seed/game-${seedKey}-${idx}/1280/720`),
+        keywords: g.tags,
+        notices: [{ type: "info", content: "本内容为本地开发演示数据。" }],
+      };
 
       const game = await prisma.game.upsert({
         where: { id: gid },
-        update: {},
+        update: {
+          title: g.title,
+          description,
+          coverUrl,
+          gameType: g.gameType,
+          isFree: g.isFree,
+          version,
+          status: "PUBLISHED",
+          uploaderId,
+          extraInfo,
+        },
         create: {
           id: gid,
           title: g.title,
-          description: `${g.title} —— ${g.gameType}类型${g.isFree ? "免费" : "付费"}游戏`,
+          description,
+          coverUrl,
           gameType: g.gameType,
           isFree: g.isFree,
-          version: g.version || `Ver${randomInt(1, 2)}.${randomInt(0, 9)}`,
+          version,
           views: randomInt(50, 1000),
+          downloads: randomInt(5, 300),
           status: "PUBLISHED",
           uploaderId,
           createdAt,
           updatedAt: createdAt,
-          extraInfo: { platforms, fileSize: `${randomInt(200, 3000)} MB` },
+          extraInfo,
         },
       });
 
@@ -977,28 +1481,32 @@ async function main() {
     console.log("🖼️  创建图片帖子...");
     const imageRecords: Array<{ id: string }> = [];
 
-    for (const p of IMAGE_POSTS) {
-      let iid: string;
-      do {
-        iid = randomId6();
-      } while (usedIds.has(iid));
-      usedIds.add(iid);
-
-      const uploaderId = pick(uploaderIds);
-      const imageCount = randomInt(2, 8);
+    for (let i = 0; i < DEMO_IMAGE_POSTS.length; i++) {
+      const p = DEMO_IMAGE_POSTS[i];
+      const seedKey = demoSeedKey("image-post", i);
+      const iid = await resolveDemoImagePostId(demoId(DEMO_ID_BASE.imagePost, i), p.title, i);
+      const uploaderId = uploaderIds[i % uploaderIds.length] || pick(uploaderIds);
+      const imageCount = 2 + (i % 7);
       const images = Array.from(
         { length: imageCount },
-        (_, idx) => `https://picsum.photos/seed/${iid}-${idx}/800/1200`,
+        (_, idx) => `https://picsum.photos/seed/image-${seedKey}-${idx}/900/1200`,
       );
       const createdAt = daysAgo(randomInt(1, 45));
+      const description = `${p.title} —— 同人创作，本地开发演示图帖。`;
 
       const post = await prisma.imagePost.upsert({
         where: { id: iid },
-        update: {},
+        update: {
+          title: p.title,
+          description,
+          images,
+          status: "PUBLISHED",
+          uploaderId,
+        },
         create: {
           id: iid,
           title: p.title,
-          description: `${p.title} —— 同人创作`,
+          description,
           images,
           views: randomInt(30, 5000),
           status: "PUBLISHED",
@@ -1023,6 +1531,9 @@ async function main() {
     let commentCount = 0;
 
     for (const video of videoRecords) {
+      const existingCommentCount = await prisma.comment.count({ where: { videoId: video.id } });
+      if (existingCommentCount > 0) continue;
+
       const count = randomInt(2, 8);
       const topIds: string[] = [];
       for (let c = 0; c < count; c++) {
@@ -1043,6 +1554,9 @@ async function main() {
     }
 
     for (const game of gameRecords.slice(0, 12)) {
+      const existingCommentCount = await prisma.gameComment.count({ where: { gameId: game.id } });
+      if (existingCommentCount > 0) continue;
+
       const count = randomInt(2, 5);
       for (let c = 0; c < count; c++) {
         await prisma.gameComment.create({
@@ -1059,6 +1573,9 @@ async function main() {
     }
 
     for (const post of imageRecords) {
+      const existingCommentCount = await prisma.imagePostComment.count({ where: { imagePostId: post.id } });
+      if (existingCommentCount > 0) continue;
+
       const count = randomInt(1, 4);
       for (let c = 0; c < count; c++) {
         await prisma.imagePostComment.create({
@@ -1121,10 +1638,18 @@ async function main() {
     // ============================== 播放列表 ==============================
     console.log("📋 创建播放列表...");
     const plUser = userRecords.find((u) => u.username === "viewer")!;
-    const playlist = await prisma.playlist.create({
-      data: { name: "原神合集收藏", description: "收藏的原神相关 3D 动画", isPublic: true, userId: plUser.id },
+    const playlist = await prisma.playlist.upsert({
+      where: { id: "seed-playlist-genshin-favorites" },
+      update: { name: "原神合集收藏", description: "收藏的原神相关 3D 动画", isPublic: true, userId: plUser.id },
+      create: {
+        id: "seed-playlist-genshin-favorites",
+        name: "原神合集收藏",
+        description: "收藏的原神相关 3D 动画",
+        isPublic: true,
+        userId: plUser.id,
+      },
     });
-    const genshinVideos = videoRecords.filter((_, i) => VIDEOS[i]?.tags.includes("genshin"));
+    const genshinVideos = videoRecords.filter((_, i) => DEMO_VIDEOS[i]?.tags.includes("genshin"));
     for (let i = 0; i < genshinVideos.length; i++) {
       await prisma.playlistItem
         .create({ data: { playlistId: playlist.id, videoId: genshinVideos[i].id, sortOrder: i } })

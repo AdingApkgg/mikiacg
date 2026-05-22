@@ -5,7 +5,6 @@ import { useEffect } from "react";
 import { ArrowRight, Play, Images, Gamepad2, type LucideIcon } from "lucide-react";
 import { MotionPage } from "@/components/motion";
 import { AnnouncementBanner } from "@/components/shared/announcement-banner";
-import { HeaderBannerCarousel } from "@/components/ads/header-banner";
 import { AdCard } from "@/components/ads/ad-card";
 import { useRandomAds } from "@/hooks/use-ads";
 import { resolveSlotPosition } from "@/lib/ads";
@@ -94,11 +93,10 @@ export function CompositeClient({
 
   return (
     <MotionPage direction="none">
-      <div className="px-4 md:px-6 py-4 overflow-x-hidden">
-        <HeaderBannerCarousel className="mb-4" />
+      <div className="px-4 md:px-6 py-4 overflow-x-clip">
         <AnnouncementBanner enabled={cfg?.announcementEnabled ?? false} announcement={cfg?.announcement ?? null} />
 
-        {renderedAnchors.length > 0 && <CompositeAnchorNav items={renderedAnchors} className="mb-6" />}
+        {renderedAnchors.length > 0 && <CompositeAnchorNav items={renderedAnchors} topOffset={56} className="mb-6" />}
 
         <div className="space-y-10">
           <section id="hero" className="scroll-mt-32">

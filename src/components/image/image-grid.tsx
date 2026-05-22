@@ -47,7 +47,7 @@ const gridColumns = {
 };
 
 /**
- * 图集网格（square variant）：与 VideoGrid / GameGrid 风格一致，
+ * 图集网格（默认 variant）：与 VideoGrid / GameGrid 风格一致，
  * 不同于首页 `/image` 的瀑布流。可选 `adSeed` 启用信息流广告。
  */
 export function ImageGrid({
@@ -119,7 +119,7 @@ export function ImageGrid({
 function ImagePostCardSkeleton() {
   return (
     <div className="space-y-2">
-      <Skeleton className="aspect-square rounded-2xl" />
+      <Skeleton className="aspect-video rounded-2xl" />
       <div className="px-0.5 space-y-1">
         <Skeleton className="h-4 w-full" />
         <Skeleton className="h-3 w-2/3" />

@@ -65,6 +65,23 @@ vi.mock("@/components/game/game-card", () => ({
 }));
 
 describe("CompositeClient", () => {
+  it("无广告时不渲染顶部广告入口", async () => {
+    const { CompositeClient } = await import("./composite-client");
+
+    const html = renderToStaticMarkup(
+      <CompositeClient
+        initialVideos={[]}
+        initialImages={[]}
+        initialGames={[]}
+        hotVideos={[]}
+        hotImages={[]}
+        hotGames={[]}
+      />,
+    );
+
+    expect(html).not.toContain('data-testid="header-banner"');
+  });
+
   it("不渲染热门标签 section 和 tags 锚点", async () => {
     const { CompositeClient } = await import("./composite-client");
     const item = {
@@ -97,5 +114,37 @@ describe("CompositeClient", () => {
     expect(html).not.toContain("热门标签");
     expect(html).not.toContain('id="tags"');
     expect(html).not.toContain(">标签</button>");
+  });
+
+  it("首页锚点导航使用 Header 下方的 sticky offset", async () => {
+    const { CompositeClient } = await import("./composite-client");
+    const item = {
+      id: "item-1",
+      title: "测试内容",
+      coverUrl: null,
+      duration: 60,
+      views: 1,
+      isNsfw: false,
+      createdAt: "2026-01-01T00:00:00.000Z",
+      extraInfo: null,
+      uploader: { id: "user-1", username: "user", nickname: null, avatar: null },
+      tags: [],
+      _count: { likes: 0, dislikes: 0, favorites: 0 },
+    };
+    const image = { ...item, description: null, images: ["/image.jpg"] };
+    const game = { ...item, description: null, gameType: "ADV", isFree: true, version: null };
+
+    const html = renderToStaticMarkup(
+      <CompositeClient
+        initialVideos={[item]}
+        initialImages={[image]}
+        initialGames={[game]}
+        hotVideos={[item, { ...item, id: "video-hot-2" }]}
+        hotImages={[image, { ...image, id: "image-hot-2" }]}
+        hotGames={[game, { ...game, id: "game-hot-2" }]}
+      />,
+    );
+
+    expect(html).toContain('style="top:56px"');
   });
 });

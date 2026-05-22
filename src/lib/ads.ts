@@ -358,7 +358,8 @@ export function isAdInFineSchedule(ad: Ad, now = new Date()): boolean {
 
 /** 检查广告是否匹配指定广告位 */
 export function isAdForPosition(ad: Ad, slotPosition?: string): boolean {
-  const positions = ad.positions;
+  const positions = ad.positions ?? [];
+  if (slotPosition === "header-carousel") return positions.includes("header-carousel");
   if (!positions || positions.length === 0 || positions.includes("all")) return true;
   if (!slotPosition) return false;
   return positions.includes(slotPosition as AdPosition);

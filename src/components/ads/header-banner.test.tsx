@@ -58,6 +58,36 @@ describe("HeaderBannerCarousel", () => {
     vi.resetModules();
   });
 
+  it("positions 为 all 时不渲染顶部轮播", async () => {
+    mocks.ads = [makeAd({ id: "all-position", positions: ["all"] })];
+    const rendered = await renderCarousel();
+    roots.push(rendered.root);
+
+    expect(rendered.container.innerHTML).toBe("");
+  });
+
+  it("positions 缺失时不渲染顶部轮播", async () => {
+    mocks.ads = [
+      makeAd({
+        id: "missing-positions",
+        positions: undefined as unknown as Ad["positions"],
+      }),
+    ];
+    const rendered = await renderCarousel();
+    roots.push(rendered.root);
+
+    expect(rendered.container.innerHTML).toBe("");
+  });
+
+  it("显式 header-carousel 且有图片时渲染顶部轮播", async () => {
+    mocks.ads = [makeAd({ id: "header-position", positions: ["header-carousel"], imageUrl: "/banner.jpg" })];
+    const rendered = await renderCarousel();
+    roots.push(rendered.root);
+
+    expect(rendered.container.querySelector("img")?.getAttribute("src")).toBe("/banner.jpg");
+    expect(rendered.container.textContent).toContain("测试广告");
+  });
+
   it("无有效 header-carousel 图片广告时不渲染空容器", async () => {
     mocks.ads = [makeAd({ id: "empty-image", imageUrl: "", images: undefined })];
     const rendered = await renderCarousel();

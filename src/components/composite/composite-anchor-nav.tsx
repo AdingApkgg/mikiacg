@@ -12,7 +12,7 @@ export interface AnchorItem {
 
 interface CompositeAnchorNavProps {
   items: AnchorItem[];
-  /** Sticky 时距顶 offset（默认 56px = 站点 header 高度 h-14） */
+  /** Sticky 时相对当前滚动容器的距顶 offset。AppLayout 已为 Header 预留高度，首页默认 0。 */
   topOffset?: number;
   className?: string;
 }
@@ -27,6 +27,8 @@ export const COMPOSITE_ANCHOR_ITEMS: AnchorItem[] = [
   { id: "ranking", label: "本月排行", icon: Trophy },
 ];
 
+const SECTION_ACTIVATION_GAP = 8;
+
 /**
  * 综合页顶部锚点快跳条：滚动时变 sticky，点击平滑滚到对应 section。
  * 当前可视 section 的 anchor 自动高亮：
@@ -34,17 +36,24 @@ export const COMPOSITE_ANCHOR_ITEMS: AnchorItem[] = [
  *  - 滚到页面底部时强制激活最后一项（最后一段往往滚不到顶部）
  *  - 用户刚点击后短暂锁定激活态，避免平滑滚动期间被回写覆盖
  */
-export function CompositeAnchorNav({ items, topOffset = 56, className }: CompositeAnchorNavProps) {
+export function CompositeAnchorNav({ items, topOffset = 0, className }: CompositeAnchorNavProps) {
   const [activeId, setActiveId] = useState<string | null>(items[0]?.id ?? null);
+  const navRef = useRef<HTMLDivElement>(null);
   // 点击锁：刚点击后 800ms 内忽略 scroll 自动判定，避免平滑滚动中途穿过多个 section 抖动
   const lockUntilRef = useRef<number>(0);
 
+  const getViewportAnchorLine = useCallback(() => {
+    const rect = navRef.current?.getBoundingClientRect();
+    if (rect && rect.height > 0) return rect.bottom + SECTION_ACTIVATION_GAP;
+    return topOffset + 24;
+  }, [topOffset]);
+
   useEffect(() => {
     if (items.length === 0) return;
-    const checkLine = topOffset + 24;
 
     const compute = () => {
       if (Date.now() < lockUntilRef.current) return;
+      const checkLine = getViewportAnchorLine();
       // 到达页面底部时直接选最后一个
       if (window.innerHeight + window.scrollY >= document.documentElement.scrollHeight - 4) {
         setActiveId(items[items.length - 1].id);
@@ -70,7 +79,7 @@ export function CompositeAnchorNav({ items, topOffset = 56, className }: Composi
       window.removeEventListener("scroll", compute);
       window.removeEventListener("resize", compute);
     };
-  }, [items, topOffset]);
+  }, [getViewportAnchorLine, items]);
 
   const scrollTo = useCallback(
     (id: string) => {
@@ -79,7 +88,8 @@ export function CompositeAnchorNav({ items, topOffset = 56, className }: Composi
       // 立刻置为 active 并锁定，避免平滑滚动途中被错位高亮
       setActiveId(id);
       lockUntilRef.current = Date.now() + 800;
-      const top = el.getBoundingClientRect().top + window.scrollY - (topOffset + 12);
+      const navBottom = navRef.current?.getBoundingClientRect().bottom ?? topOffset;
+      const top = el.getBoundingClientRect().top + window.scrollY - (navBottom + SECTION_ACTIVATION_GAP);
       window.scrollTo({ top, behavior: "smooth" });
     },
     [topOffset],
@@ -89,6 +99,7 @@ export function CompositeAnchorNav({ items, topOffset = 56, className }: Composi
 
   return (
     <div
+      ref={navRef}
       className={cn(
         "sticky z-30 -mx-4 md:-mx-6 px-4 md:px-6 py-2 backdrop-blur-md bg-background/85 border-b border-border/60",
         className,

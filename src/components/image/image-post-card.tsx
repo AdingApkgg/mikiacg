@@ -44,13 +44,13 @@ interface ImagePostCardProps {
   /** 当前用户是否已收藏 */
   isFavorited?: boolean;
   /**
-   * 显式控制首屏优先加载。不传则按 `index < 4` 兜底。
+   * 显式控制首屏优先加载。不传则按 `index < 2` 兜底。
    * 多 section 场景（如 /image 首页）应只让真正的首屏首行传 true，
-   * 避免多个 section 各自前 4 张都抢 fetchpriority=high 导致网络拥塞。
+   * 避免多个 section 各自前多张都抢 fetchpriority=high 导致网络拥塞。
    */
   priority?: boolean;
   /**
-   * `square`：固定方形封面 + 多图堆叠副图（默认，user/favorites/search/history/tag 等场景沿用）
+   * `square`：默认网格卡片，使用普通 16:9 扁平封面（历史命名保留兼容）
    * `masonry`：保留图片原始宽高比，适合 `/image` 瀑布流首页
    */
   variant?: "square" | "masonry";
@@ -86,7 +86,6 @@ function ImagePostCardComponent({
   variant = "square",
 }: ImagePostCardProps) {
   const thumbPrimary = useThumb("gridPrimary");
-  const thumbSecondary = useThumb("gridSecondary");
   const { play } = useSound();
   // 优先用调用方显式传入的 priority；否则按 `index < 2` 兜底。
   // 之前是 `< 4`，但综合首页同时渲染视频/图集多个 section，每个 section 前 N 张都抢
@@ -97,10 +96,7 @@ function ImagePostCardComponent({
 
   const imageUrls = (post.images ?? []) as string[];
   const imageCount = imageUrls.length;
-  const hasMultiple = imageCount > 1;
   const showMain = inView || priority;
-  // 堆叠背景图始终等 inView，不受 priority 影响，减少首屏并发请求
-  const showSecondary = inView && hasMultiple && variant === "square";
   const mainSrcKey = `${post.id}:${imageUrls[0] ?? ""}`;
   const isMasonry = variant === "masonry";
 
@@ -166,56 +162,25 @@ function ImagePostCardComponent({
             {overlays}
           </div>
         ) : (
-          <div className={cn("relative aspect-square", hasMultiple && "pr-2.5 pb-1")}>
-            {showSecondary && (
-              <>
-                {imageUrls[2] && (
-                  <div className="absolute inset-0 rounded-2xl overflow-hidden border border-border/40 shadow-md origin-bottom-left rotate-[5deg] translate-x-3 translate-y-[-2px] transition-transform duration-500 ease-[cubic-bezier(0.16,1,0.3,1)] group-hover:rotate-[7deg] group-hover:translate-x-3.5">
-                    {/* eslint-disable-next-line @next/next/no-img-element */}
-                    <img
-                      src={thumbSecondary(imageUrls[2])}
-                      alt=""
-                      className="w-full h-full object-cover brightness-[0.85]"
-                      loading="lazy"
-                      decoding="async"
-                      fetchPriority="low"
-                    />
-                  </div>
-                )}
-                <div className="absolute inset-0 rounded-2xl overflow-hidden border border-border/50 shadow-md origin-bottom-left rotate-[2.5deg] translate-x-1.5 translate-y-[-1px] transition-transform duration-500 ease-[cubic-bezier(0.16,1,0.3,1)] group-hover:rotate-[4deg] group-hover:translate-x-2">
-                  {/* eslint-disable-next-line @next/next/no-img-element */}
-                  <img
-                    src={thumbSecondary(imageUrls[1])}
-                    alt=""
-                    className="w-full h-full object-cover brightness-90"
-                    loading="lazy"
-                    decoding="async"
-                    fetchPriority="low"
-                  />
-                </div>
-              </>
+          <div className="relative aspect-video overflow-hidden rounded-2xl bg-muted shadow-[0_1px_2px_0_rgb(0_0_0_/_0.05)] group-hover:shadow-lg transition-shadow duration-300 ease-out">
+            {imageUrls.length > 0 ? (
+              showMain ? (
+                <ImagePostMainThumb
+                  key={mainSrcKey}
+                  src={thumbPrimary(imageUrls[0])}
+                  alt={post.title}
+                  priority={priority}
+                />
+              ) : (
+                <MediaCoverSkeleton className="relative z-[1] h-full w-full min-h-0" />
+              )
+            ) : (
+              <div className="w-full h-full flex items-center justify-center">
+                <Images className="w-12 h-12 text-muted-foreground/30" />
+              </div>
             )}
 
-            <div className="relative overflow-hidden rounded-2xl bg-muted shadow-sm group-hover:shadow-xl transition-[shadow,transform] duration-300 ease-out h-full border border-transparent group-hover:border-border/20">
-              {imageUrls.length > 0 ? (
-                showMain ? (
-                  <ImagePostMainThumb
-                    key={mainSrcKey}
-                    src={thumbPrimary(imageUrls[0])}
-                    alt={post.title}
-                    priority={priority}
-                  />
-                ) : (
-                  <MediaCoverSkeleton className="relative z-[1] h-full w-full min-h-0" />
-                )
-              ) : (
-                <div className="w-full h-full flex items-center justify-center">
-                  <Images className="w-12 h-12 text-muted-foreground/30" />
-                </div>
-              )}
-
-              {overlays}
-            </div>
+            {overlays}
           </div>
         )}
 

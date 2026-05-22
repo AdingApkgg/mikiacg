@@ -16,6 +16,22 @@ describe("CompositeAnchorNav", () => {
 
     expect(html).toContain("button");
     expect(html).toContain("本月热门");
+    expect(html).toContain("overflow-x-auto");
+  });
+
+  it("默认 sticky top 为 0，避免首页重复叠加 Header 占位", () => {
+    const items: AnchorItem[] = [{ id: "hero", label: "本月热门", icon: Flame }];
+    const html = renderToStaticMarkup(<CompositeAnchorNav items={items} />);
+
+    expect(html).toMatch(/style="top:0(?:px)?"/);
+    expect(html).not.toContain("top:56");
+  });
+
+  it("传入 topOffset 时仍用于 sticky top", () => {
+    const items: AnchorItem[] = [{ id: "hero", label: "本月热门", icon: Flame }];
+    const html = renderToStaticMarkup(<CompositeAnchorNav items={items} topOffset={24} />);
+
+    expect(html).toContain('style="top:24px"');
   });
 
   it("默认锚点不包含标签入口", () => {

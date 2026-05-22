@@ -43,7 +43,7 @@ const EASE_IN: [number, number, number, number] = [0.4, 0, 1, 1];
 // 仅做 enter 动画；离场体验由组件层的 AnimatePresence 承担（列表项移除、
 // 对话框关闭、上传项删除等）。
 //
-// 视觉风格参考 kun-galgame-nuxt4：opacity + translateY 20px，0.2s ease
+// 路由层只做 opacity，避免 translateY 在页面切换时临时制造纵向溢出。
 // ============================================================================
 
 interface PageTransitionProps {
@@ -68,11 +68,10 @@ export function PageTransition({ children }: PageTransitionProps) {
   return (
     <m.div
       key={transitionKey}
-      className="w-full min-w-0 max-w-full overflow-x-hidden"
-      initial={isMounted ? { opacity: 0, y: 20 } : false}
+      className="w-full min-w-0 max-w-full overflow-x-clip"
+      initial={isMounted ? { opacity: 0 } : false}
       animate={{
         opacity: 1,
-        y: 0,
         transition: { duration: config.duration.normal, ease: "easeOut" },
       }}
     >

@@ -102,7 +102,7 @@ export function AppLayout({ children, initialHideNsfw = false }: { children: Rea
 
   return (
     <ShortcutRegistryProvider>
-      <div className="relative min-h-screen flex flex-col overflow-x-hidden">
+      <div className="relative min-h-screen flex flex-col overflow-x-clip">
         {/* 顶部导航进度条 */}
         <NavigationProgress />
 
@@ -129,7 +129,7 @@ export function AppLayout({ children, initialHideNsfw = false }: { children: Rea
           {/* 主内容区 */}
           <main
             className={cn(
-              "flex-1 flex flex-col min-h-[calc(100vh-3.5rem)] min-w-0 overflow-x-hidden transition-[margin] duration-200",
+              "flex-1 flex flex-col min-h-[calc(100vh-3.5rem)] min-w-0 overflow-x-clip transition-[margin] duration-200",
               // YouTube 风格：展开时内容区推移（非覆盖模式）
               showSidebar && !useOverlayMode && isExpanded && "md:ml-[220px]",
               showSidebar && !useOverlayMode && !isExpanded && "md:ml-[72px]",

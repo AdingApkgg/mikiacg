@@ -3,12 +3,16 @@
 import { useState, useEffect, useCallback, useRef, useSyncExternalStore } from "react";
 import { useRedirectOptions } from "@/hooks/use-redirect-options";
 import { useRandomAds } from "@/hooks/use-ads";
-import { resolveSlotPosition, getAdImage } from "@/lib/ads";
+import { resolveSlotPosition, getAdImage, type Ad } from "@/lib/ads";
 import { cn, getRedirectUrl } from "@/lib/utils";
 import { ChevronLeft, ChevronRight } from "lucide-react";
 
 const AUTO_PLAY_MS = 5000;
 const emptySubscribe = () => () => {};
+
+function isExplicitHeaderCarouselAd(ad: Ad): boolean {
+  return Array.isArray(ad.positions) && ad.positions.includes("header-carousel");
+}
 
 export function HeaderBannerCarousel({ className }: { className?: string }) {
   const redirectOpts = useRedirectOptions();
@@ -24,7 +28,7 @@ export function HeaderBannerCarousel({ className }: { className?: string }) {
   const timerRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const displayAds = ads.filter((ad) => {
     const imageUrl = getAdImage(ad, "header-carousel")?.trim();
-    return ad.kind !== "html" && !!imageUrl && !failedIds.has(ad.id);
+    return isExplicitHeaderCarouselAd(ad) && ad.kind !== "html" && !!imageUrl && !failedIds.has(ad.id);
   });
   const total = displayAds.length;
 
