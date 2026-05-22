@@ -22,7 +22,8 @@ interface ImageItem {
   id: string;
   title: string;
   description?: string | null;
-  images: string[];
+  // Prisma JSON 列，运行时为 string[]，在使用处再做断言
+  images: unknown;
   views: number;
   uploader: { id: string; username: string; nickname?: string | null };
 }
@@ -251,7 +252,8 @@ function useHeroCover(kind: HeroKind, item: HeroItem, size: HeroSize): string | 
   }
   if (kind === "image") {
     const p = item as ImageItem;
-    const first = p.images[0];
+    const arr = (p.images ?? []) as string[];
+    const first = arr[0];
     if (!first) return null;
     return size === "lg" ? thumb(first, { w: 800, h: 450 }) : thumb(first);
   }

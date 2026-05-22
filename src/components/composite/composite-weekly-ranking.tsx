@@ -18,7 +18,8 @@ interface VideoLite extends BaseItem {
   coverUrl?: string | null;
 }
 interface ImageLite extends BaseItem {
-  images: string[];
+  // Prisma JSON 列，运行时为 string[]，在使用处再做断言
+  images: unknown;
 }
 interface GameLite extends BaseItem {
   coverUrl?: string | null;
@@ -184,7 +185,8 @@ function useRowCover(kind: Kind, item: BaseItem): string {
   }
   if (kind === "image") {
     const p = item as ImageLite;
-    return thumb(p.images[0] ?? "");
+    const arr = (p.images ?? []) as string[];
+    return thumb(arr[0] ?? "");
   }
   const g = item as GameLite;
   return thumb(g.coverUrl ?? "");
