@@ -1,9 +1,11 @@
 import dayjs from "dayjs";
 import relativeTime from "dayjs/plugin/relativeTime";
-import "dayjs/locale/zh-cn";
+// 直接 import locale 对象并手动 register；副作用 import "dayjs/locale/zh-cn" 在 Next.js
+// server 端的 ESM/CJS interop 下会把 locale 注册到另一个 dayjs 实例上,导致 fromNow() 始终输出英文
+import zhCnLocale from "dayjs/locale/zh-cn";
 
 dayjs.extend(relativeTime);
-dayjs.locale("zh-cn");
+dayjs.locale(zhCnLocale, undefined, true);
 
 export function formatDuration(seconds: number): string {
   const hours = Math.floor(seconds / 3600);
@@ -28,7 +30,7 @@ export function formatViews(views: number): string {
 }
 
 export function formatRelativeTime(date: Date | string): string {
-  return dayjs(date).fromNow();
+  return dayjs(date).locale("zh-cn").fromNow();
 }
 
 export function formatDate(date: Date | string, format: string = "YYYY-MM-DD"): string {
