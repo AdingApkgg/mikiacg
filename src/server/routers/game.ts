@@ -428,6 +428,7 @@ export const gameRouter = router({
           version: data.version || null,
           extraInfo: data.extraInfo || undefined,
           status,
+          publishedAt: status === "PUBLISHED" ? new Date() : null,
           uploaderId: ctx.session.user.id,
           tags: {
             create: allTagIds.map((tagId) => ({ tagId })),
@@ -554,6 +555,7 @@ export const gameRouter = router({
                 version: gameInput.version || null,
                 extraInfo: gameInput.extraInfo || undefined,
                 status,
+                publishedAt: status === "PUBLISHED" ? new Date() : null,
                 uploaderId: ctx.session.user.id,
                 tags: {
                   create: tagIds.map((tagId) => ({ tagId })),
@@ -761,6 +763,14 @@ export const gameRouter = router({
           status,
         },
       });
+
+      // 首次过审时记录 publishedAt（已发布过的保留原值）
+      if (status === "PUBLISHED") {
+        await ctx.prisma.game.updateMany({
+          where: { id: gameId, publishedAt: null },
+          data: { publishedAt: new Date() },
+        });
+      }
 
       if (tagNames) {
         await ctx.prisma.tagOnGame.deleteMany({ where: { gameId } });

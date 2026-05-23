@@ -133,6 +133,14 @@ export const adminVideosRouter = router({
         select: { id: true, title: true, status: true, uploaderId: true },
       });
 
+      // 首次过审时记录 publishedAt（已设置则保留原值）
+      if (input.status === "PUBLISHED") {
+        await ctx.prisma.video.updateMany({
+          where: { id: input.videoId, publishedAt: null },
+          data: { publishedAt: new Date() },
+        });
+      }
+
       if (video.uploaderId) {
         const statusText = input.status === "PUBLISHED" ? "已通过审核" : "未通过审核";
         createNotification({
@@ -192,6 +200,13 @@ export const adminVideosRouter = router({
         where: { id: { in: input.videoIds } },
         data: { status: input.status },
       });
+
+      if (input.status === "PUBLISHED") {
+        await ctx.prisma.video.updateMany({
+          where: { id: { in: input.videoIds }, publishedAt: null },
+          data: { publishedAt: new Date() },
+        });
+      }
 
       for (const vid of input.videoIds) {
         void safeSync(syncVideo(vid));
@@ -510,6 +525,7 @@ export const adminVideosRouter = router({
               coverUrl: videoData.coverUrl || null,
               isNsfw: videoData.isNsfw,
               status: "PUBLISHED",
+              publishedAt: new Date(),
               extraInfo: extraInfo ? JSON.parse(JSON.stringify(extraInfo)) : undefined,
               uploader: { connect: { id: ctx.session.user.id } },
               ...(tagIds.length > 0

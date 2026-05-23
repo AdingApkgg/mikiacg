@@ -104,6 +104,7 @@ function serializeGames(games: Awaited<ReturnType<typeof getInitialData>>["games
     version: game.version,
     views: game.views,
     createdAt: game.createdAt.toISOString(),
+    publishedAt: game.publishedAt?.toISOString() ?? null,
     extraInfo: game.extraInfo,
     uploader: game.uploader,
     tags: game.tags,

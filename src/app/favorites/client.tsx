@@ -317,7 +317,7 @@ export default function FavoritesClient({ page }: { page: number }) {
                             <Heart className="h-3 w-3" />
                             {video._count.likes}
                           </span>
-                          <span>{formatRelativeTime(video.createdAt)}</span>
+                          <span>{formatRelativeTime(video.publishedAt ?? video.createdAt)}</span>
                         </div>
                       </div>
 

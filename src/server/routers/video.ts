@@ -838,6 +838,7 @@ export const videoRouter = router({
           duration: data.duration,
           isNsfw,
           status,
+          ...(status === "PUBLISHED" ? { publishedAt: new Date() } : {}),
           ...(coverUrl ? { coverUrl } : {}),
           ...(pages && pages.length > 1 ? { pages } : {}),
           ...(extraInfo ? { extraInfo } : {}),
@@ -992,6 +993,7 @@ export const videoRouter = router({
                 videoUrl: v.videoUrl,
                 isNsfw: v.isNsfw,
                 status,
+                ...(status === "PUBLISHED" ? { publishedAt: new Date() } : {}),
                 ...(v.coverUrl ? { coverUrl: v.coverUrl } : {}),
                 ...(v.extraInfo ? { extraInfo: v.extraInfo } : {}),
                 uploader: { connect: { id: ctx.session.user.id } },
@@ -1163,6 +1165,14 @@ export const videoRouter = router({
         where: { id },
         data: updateData,
       });
+
+      // 首次过审时记录 publishedAt（已发布过的保留原值，避免被覆盖）
+      if (status === "PUBLISHED") {
+        await ctx.prisma.video.updateMany({
+          where: { id, publishedAt: null },
+          data: { publishedAt: new Date() },
+        });
+      }
 
       if (tagIds !== undefined || tagNames !== undefined) {
         const oldTags = await ctx.prisma.tagOnVideo.findMany({
@@ -1558,6 +1568,14 @@ export const videoRouter = router({
         where: { id: input.id },
         data: { status: input.status },
       });
+
+      // 首次过审时记录 publishedAt（已设置则保留）
+      if (input.status === "PUBLISHED") {
+        await ctx.prisma.video.updateMany({
+          where: { id: input.id, publishedAt: null },
+          data: { publishedAt: new Date() },
+        });
+      }
 
       memDelete(`video:${input.id}`);
 
@@ -1985,6 +2003,7 @@ export const videoRouter = router({
             views: true,
             isNsfw: true,
             createdAt: true,
+            publishedAt: true,
             _count: { select: { likes: true } },
           },
         }),
@@ -2022,6 +2041,7 @@ export const videoRouter = router({
             views: true,
             isNsfw: true,
             createdAt: true,
+            publishedAt: true,
             _count: { select: { likes: true } },
           },
         }),
@@ -2050,6 +2070,7 @@ export const videoRouter = router({
         views: true,
         isNsfw: true,
         createdAt: true,
+        publishedAt: true,
         extraInfo: true,
         uploader: {
           select: { id: true, username: true, nickname: true, avatar: true },

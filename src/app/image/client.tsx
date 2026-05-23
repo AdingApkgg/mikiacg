@@ -44,6 +44,7 @@ interface ImagePost {
   images: string[];
   views: number;
   createdAt: string;
+  publishedAt?: string | null;
   uploader: {
     id: string;
     username: string;

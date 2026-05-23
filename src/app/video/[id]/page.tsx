@@ -114,6 +114,7 @@ function serializeVideo(video: NonNullable<Awaited<ReturnType<typeof getVideo>>>
     status: video.status,
     createdAt: video.createdAt.toISOString(),
     updatedAt: video.updatedAt.toISOString(),
+    publishedAt: video.publishedAt?.toISOString() ?? null,
     uploader: video.uploader,
     tags: video.tags,
     _count: video._count,

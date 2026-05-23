@@ -676,7 +676,7 @@ function MyVideosContent() {
                               </span>
                               <span className="flex items-center gap-1">
                                 <Clock className="h-3 w-3" />
-                                {formatRelativeTime(video.createdAt)}
+                                {formatRelativeTime(video.publishedAt ?? video.createdAt)}
                               </span>
                             </div>
                           </div>
@@ -1107,7 +1107,7 @@ function MyVideosContent() {
                               </span>
                               <span className="flex items-center gap-1">
                                 <Clock className="h-3 w-3" />
-                                {formatRelativeTime(game.createdAt)}
+                                {formatRelativeTime(game.publishedAt ?? game.createdAt)}
                               </span>
                             </div>
                           </div>
@@ -1482,7 +1482,7 @@ function MyVideosContent() {
                                 </span>
                                 <span className="flex items-center gap-1">
                                   <Clock className="h-3 w-3" />
-                                  {formatRelativeTime(post.createdAt)}
+                                  {formatRelativeTime(post.publishedAt ?? post.createdAt)}
                                 </span>
                               </div>
                             </div>

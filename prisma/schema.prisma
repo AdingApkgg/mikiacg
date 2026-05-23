@@ -333,9 +333,10 @@ model Video {
   
   // 合集关联
   seriesEpisodes SeriesEpisode[]
-  
+
   createdAt   DateTime    @default(now())
   updatedAt   DateTime    @updatedAt
+  publishedAt DateTime?   /// 首次过审时间；前台展示时间优先用它，缺失则回退 createdAt
 
   favorites     Favorite[]
   watchHistory  WatchHistory[]
@@ -348,6 +349,7 @@ model Video {
   @@index([uploaderId])
   @@index([status])
   @@index([createdAt])
+  @@index([publishedAt])
 }
 
 // 合集/剧集
@@ -443,6 +445,7 @@ model Game {
 
   createdAt   DateTime    @default(now())
   updatedAt   DateTime    @updatedAt
+  publishedAt DateTime?   /// 首次过审时间；前台展示时间优先用它，缺失则回退 createdAt
 
   favorites     GameFavorite[]
   likes         GameLike[]
@@ -456,6 +459,7 @@ model Game {
   @@index([uploaderId])
   @@index([status])
   @@index([createdAt])
+  @@index([publishedAt])
   @@index([gameType])
   @@index([downloads])
 }
@@ -733,10 +737,12 @@ model ImagePost {
 
   createdAt   DateTime    @default(now())
   updatedAt   DateTime    @updatedAt
+  publishedAt DateTime?   /// 首次过审时间；前台展示时间优先用它，缺失则回退 createdAt
 
   @@index([uploaderId])
   @@index([status])
   @@index([createdAt])
+  @@index([publishedAt])
 }
 
 model ImagePostComment {

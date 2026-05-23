@@ -24,6 +24,8 @@ interface VideoCardProps {
     duration?: number | null;
     views: number;
     createdAt: Date | string;
+    /** 过审时间，存在时优先用作前台展示时间 */
+    publishedAt?: Date | string | null;
     uploader: {
       id: string;
       username: string;
@@ -66,6 +68,8 @@ function VideoCardComponent({ video, index, highlightQuery, watchProgress, rank,
   const extra =
     video.extraInfo && typeof video.extraInfo === "object" && !Array.isArray(video.extraInfo) ? video.extraInfo : null;
   const authorName = extra?.author || video.uploader.nickname || video.uploader.username;
+  // 前台展示时间优先用过审时间，缺失则回退创建时间（存量数据与未过审记录走 createdAt 兜底）
+  const displayTime = video.publishedAt ?? video.createdAt;
   // hover 视频预览：仅当上传时填入了 extraInfo.previewUrl 才启用 (后端切片产物)，
   // 没有 fallback 到原视频 (避免无意中播放完整视频的流量)
   const previewUrl: string | null = typeof extra?.previewUrl === "string" ? extra.previewUrl : null;
@@ -142,12 +146,12 @@ function VideoCardComponent({ video, index, highlightQuery, watchProgress, rank,
           {rank !== undefined && <RankBadge rank={rank} />}
 
           {/* 左上：NEW（仅当未在排行榜场景下） */}
-          {rank === undefined && <NewBadge createdAt={video.createdAt} />}
+          {rank === undefined && <NewBadge createdAt={displayTime} />}
 
           {/* 时长徽章：避开左上角的 RankBadge / NewBadge */}
           {video.duration &&
             (() => {
-              const hasTopLeftBadge = rank !== undefined || isNewlyUploaded(video.createdAt);
+              const hasTopLeftBadge = rank !== undefined || isNewlyUploaded(displayTime);
               return (
                 <div
                   className={cn(
@@ -203,7 +207,7 @@ function VideoCardComponent({ video, index, highlightQuery, watchProgress, rank,
           </h3>
           <CardMeta
             author={authorName}
-            createdAt={video.createdAt}
+            createdAt={displayTime}
             trailing={
               commentCount > 0 ? (
                 <span className="inline-flex items-center gap-0.5 tabular-nums">

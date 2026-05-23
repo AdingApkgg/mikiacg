@@ -50,6 +50,7 @@ interface Video {
   duration: number | null;
   views: number;
   createdAt: string;
+  publishedAt?: string | null;
   uploader: {
     id: string;
     username: string;

@@ -237,6 +237,7 @@ export const imageRouter = router({
           images: data.images,
           isNsfw: data.isNsfw,
           status,
+          publishedAt: status === "PUBLISHED" ? new Date() : null,
           uploaderId: ctx.session.user.id,
           tags: { create: allTagIds.map((tagId) => ({ tagId })) },
         },
@@ -317,6 +318,7 @@ export const imageRouter = router({
                 images: postInput.images,
                 isNsfw: postInput.isNsfw,
                 status,
+                publishedAt: status === "PUBLISHED" ? new Date() : null,
                 uploaderId: ctx.session.user.id,
                 tags: { create: tagIds.map((tagId) => ({ tagId })) },
               },
@@ -408,6 +410,14 @@ export const imageRouter = router({
         where: { id },
         data: updateData,
       });
+
+      // 首次过审时记录 publishedAt（已发布过的保留原值）
+      if (status === "PUBLISHED") {
+        await ctx.prisma.imagePost.updateMany({
+          where: { id, publishedAt: null },
+          data: { publishedAt: new Date() },
+        });
+      }
 
       if (tagIds !== undefined || tagNames !== undefined) {
         const oldTags = await ctx.prisma.tagOnImagePost.findMany({

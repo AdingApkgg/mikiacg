@@ -85,6 +85,14 @@ export const adminImagesRouter = router({
         data: { status: input.status },
       });
 
+      // 首次过审时设置 publishedAt（已设置则保留原值）
+      if (input.status === "PUBLISHED") {
+        await ctx.prisma.imagePost.updateMany({
+          where: { id: input.imageId, publishedAt: null },
+          data: { publishedAt: new Date() },
+        });
+      }
+
       void safeSync(syncImagePost(input.imageId));
 
       if (input.status === "PUBLISHED") {
@@ -143,6 +151,13 @@ export const adminImagesRouter = router({
         where: { id: { in: input.imageIds } },
         data: { status: input.status },
       });
+
+      if (input.status === "PUBLISHED") {
+        await ctx.prisma.imagePost.updateMany({
+          where: { id: { in: input.imageIds }, publishedAt: null },
+          data: { publishedAt: new Date() },
+        });
+      }
 
       for (const pid of input.imageIds) {
         void safeSync(syncImagePost(pid));

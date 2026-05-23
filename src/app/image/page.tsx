@@ -67,6 +67,7 @@ function serializePosts(posts: Awaited<ReturnType<typeof getInitialData>>["posts
     images: post.images as string[],
     views: post.views,
     createdAt: post.createdAt.toISOString(),
+    publishedAt: post.publishedAt?.toISOString() ?? null,
     uploader: post.uploader,
     tags: post.tags,
   }));

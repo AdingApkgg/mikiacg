@@ -12,6 +12,7 @@ interface ImagePost {
   views: number;
   isNsfw?: boolean;
   createdAt: Date | string;
+  publishedAt?: Date | string | null;
   uploader: {
     id: string;
     username: string;

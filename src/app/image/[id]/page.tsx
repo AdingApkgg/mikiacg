@@ -90,6 +90,7 @@ function serializePost(post: NonNullable<Awaited<ReturnType<typeof getImagePost>
     status: post.status,
     createdAt: post.createdAt.toISOString(),
     updatedAt: post.updatedAt.toISOString(),
+    publishedAt: post.publishedAt?.toISOString() ?? null,
     uploader: post.uploader,
     tags: post.tags,
     _count: post._count,

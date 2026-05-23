@@ -12,6 +12,7 @@ interface Video {
   duration?: number | null;
   views: number;
   createdAt: Date | string;
+  publishedAt?: Date | string | null;
   uploader: {
     id: string;
     username: string;

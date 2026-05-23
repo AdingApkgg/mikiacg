@@ -139,6 +139,7 @@ function serializeGame(game: NonNullable<Awaited<ReturnType<typeof getGame>>>) {
     status: game.status,
     createdAt: game.createdAt.toISOString(),
     updatedAt: game.updatedAt.toISOString(),
+    publishedAt: game.publishedAt?.toISOString() ?? null,
     extraInfo: game.extraInfo as GameExtraInfo | null,
     uploader: game.uploader,
     tags: game.tags,

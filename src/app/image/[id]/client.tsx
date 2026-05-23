@@ -169,7 +169,7 @@ export function ImageDetailClient({ post }: ImageDetailClientProps) {
             </span>
             <span className="flex items-center gap-1">
               <Calendar className="h-3.5 w-3.5" />
-              {formatRelativeTime(post.createdAt)}
+              {formatRelativeTime(post.publishedAt ?? post.createdAt)}
             </span>
             <span className="flex items-center gap-1">
               <Images className="h-3.5 w-3.5" />

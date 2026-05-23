@@ -29,6 +29,8 @@ interface ImagePostCardProps {
     views: number;
     isNsfw?: boolean;
     createdAt: Date | string;
+    /** 过审时间，存在时优先用作前台展示时间 */
+    publishedAt?: Date | string | null;
     uploader: {
       id: string;
       username: string;
@@ -99,13 +101,15 @@ function ImagePostCardComponent({
   const showMain = inView || priority;
   const mainSrcKey = `${post.id}:${imageUrls[0] ?? ""}`;
   const isMasonry = variant === "masonry";
+  // 前台时间优先用过审时间，回退创建时间
+  const displayTime = post.publishedAt ?? post.createdAt;
 
   const overlays = (
     <>
       <div className="absolute inset-0 bg-gradient-to-t from-black/60 via-transparent to-transparent pointer-events-none" />
 
       {/* 排行榜徽章 / NEW 徽章（左上角，二选一）*/}
-      {rank !== undefined ? <RankBadge rank={rank} /> : <NewBadge createdAt={post.createdAt} />}
+      {rank !== undefined ? <RankBadge rank={rank} /> : <NewBadge createdAt={displayTime} />}
 
       {post.isNsfw && (
         <div className="absolute top-1.5 right-1.5 bg-red-500/90 backdrop-blur-sm text-white text-[10px] sm:text-xs px-1.5 py-0.5 rounded font-bold">
@@ -193,7 +197,7 @@ function ImagePostCardComponent({
               <SearchHighlightText text={post.description} highlightQuery={highlightQuery} />
             </p>
           )}
-          <CardMeta author={post.uploader.nickname || post.uploader.username} createdAt={post.createdAt} />
+          <CardMeta author={post.uploader.nickname || post.uploader.username} createdAt={displayTime} />
         </div>
       </Link>
     </div>

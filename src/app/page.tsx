@@ -133,6 +133,7 @@ function serializeVideos(videos: Awaited<ReturnType<typeof getInitialData>>["vid
     views: v.views,
     isNsfw: v.isNsfw,
     createdAt: v.createdAt.toISOString(),
+    publishedAt: v.publishedAt?.toISOString() ?? null,
     extraInfo: v.extraInfo,
     uploader: v.uploader,
     tags: v.tags,
@@ -149,6 +150,7 @@ function serializeImages(images: Awaited<ReturnType<typeof getInitialData>>["ima
     views: p.views,
     isNsfw: p.isNsfw,
     createdAt: p.createdAt.toISOString(),
+    publishedAt: p.publishedAt?.toISOString() ?? null,
     uploader: p.uploader,
     tags: p.tags,
   }));
@@ -166,6 +168,7 @@ function serializeGames(games: Awaited<ReturnType<typeof getInitialData>>["games
     views: g.views,
     isNsfw: g.isNsfw,
     createdAt: g.createdAt.toISOString(),
+    publishedAt: g.publishedAt?.toISOString() ?? null,
     extraInfo: g.extraInfo,
     uploader: g.uploader,
     tags: g.tags,

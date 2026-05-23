@@ -655,7 +655,7 @@ export function VideoPageClient({ id: initialId, initialVideo }: VideoPageClient
                   <div className="flex items-center gap-2 mt-1 text-xs text-muted-foreground">
                     <span>{formatViews(displayVideo.views)}次观看</span>
                     <span>·</span>
-                    <span>{formatRelativeTime(displayVideo.createdAt)}</span>
+                    <span>{formatRelativeTime(displayVideo.publishedAt ?? displayVideo.createdAt)}</span>
                     {!descExpanded && (displayVideo.description || displayVideo.tags.length > 0) && (
                       <span className="ml-auto text-primary">展开</span>
                     )}
@@ -1132,7 +1132,7 @@ export function VideoPageClient({ id: initialId, initialVideo }: VideoPageClient
                 </span>
                 <span className="flex items-center gap-1">
                   <Calendar className="h-4 w-4" />
-                  {formatRelativeTime(displayVideo.createdAt)}
+                  {formatRelativeTime(displayVideo.publishedAt ?? displayVideo.createdAt)}
                 </span>
               </div>
             </div>

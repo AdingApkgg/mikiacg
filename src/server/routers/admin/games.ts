@@ -122,8 +122,12 @@ export const adminGamesRouter = router({
         data: { status: input.status },
       });
 
-      // 审核通过时通知搜索引擎索引
+      // 审核通过时通知搜索引擎索引，并首次设置 publishedAt（已设置则保留）
       if (input.status === "PUBLISHED") {
+        await ctx.prisma.game.updateMany({
+          where: { id: input.gameId, publishedAt: null },
+          data: { publishedAt: new Date() },
+        });
         submitGameToIndexNow(input.gameId).catch(() => {});
       }
 
@@ -198,6 +202,7 @@ export const adminGamesRouter = router({
           version: input.version,
           extraInfo: input.extraInfo || undefined,
           status: input.status,
+          publishedAt: input.status === "PUBLISHED" ? new Date() : null,
           uploaderId: ctx.session.user.id,
           tags: {
             create: tagConnections,
@@ -357,8 +362,12 @@ export const adminGamesRouter = router({
         data: { status: input.status },
       });
 
-      // 批量审核通过时通知搜索引擎索引
+      // 批量审核通过时通知搜索引擎索引，并首次设置 publishedAt
       if (input.status === "PUBLISHED") {
+        await ctx.prisma.game.updateMany({
+          where: { id: { in: input.gameIds }, publishedAt: null },
+          data: { publishedAt: new Date() },
+        });
         submitGamesToIndexNow(input.gameIds).catch(() => {});
       }
 

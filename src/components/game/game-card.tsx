@@ -56,6 +56,8 @@ export interface GameCardData {
   views: number;
   isNsfw?: boolean;
   createdAt: Date | string;
+  /** 过审时间，存在时优先用作前台展示时间 */
+  publishedAt?: Date | string | null;
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   extraInfo?: any;
   uploader: {
@@ -137,6 +139,8 @@ function GameCardComponent({ game, index, highlightQuery, rank, isFavorited }: G
     game.extraInfo && typeof game.extraInfo === "object" && !Array.isArray(game.extraInfo) ? game.extraInfo : null;
   const authorName = extra?.originalAuthor || game.uploader.nickname || game.uploader.username;
   const hasDownloads = extra?.downloads && Array.isArray(extra.downloads) && extra.downloads.length > 0;
+  // 前台时间优先用过审时间，回退创建时间
+  const displayTime = game.publishedAt ?? game.createdAt;
 
   const totalVotes = game._count.likes + (game._count.dislikes || 0);
   const likeRatio = totalVotes > 0 ? Math.round((game._count.likes / totalVotes) * 100) : 100;
@@ -161,12 +165,12 @@ function GameCardComponent({ game, index, highlightQuery, rank, isFavorited }: G
           {rank !== undefined && <RankBadge rank={rank} />}
 
           {/* NEW 徽章（仅当未在排行榜场景下，且 24h 内上传）*/}
-          {rank === undefined && <NewBadge createdAt={game.createdAt} />}
+          {rank === undefined && <NewBadge createdAt={displayTime} />}
 
           {/* Game type badge: 避开左上角的 Rank/NEW 徽章 */}
           {game.gameType &&
             (() => {
-              const hasTopLeftBadge = rank !== undefined || isNewlyUploaded(game.createdAt);
+              const hasTopLeftBadge = rank !== undefined || isNewlyUploaded(displayTime);
               return (
                 <div
                   className={cn(
@@ -225,7 +229,7 @@ function GameCardComponent({ game, index, highlightQuery, rank, isFavorited }: G
           <h3 className="font-medium line-clamp-2 text-xs sm:text-sm leading-snug group-hover:text-primary transition-colors duration-200 ease-out">
             <SearchHighlightText text={game.title} highlightQuery={highlightQuery} />
           </h3>
-          <CardMeta author={authorName} createdAt={game.createdAt} />
+          <CardMeta author={authorName} createdAt={displayTime} />
         </div>
       </Link>
     </div>

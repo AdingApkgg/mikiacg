@@ -524,7 +524,7 @@ export function GamePageClient({
                 </Link>
                 <span className="flex items-center gap-1">
                   <Calendar className="h-3 w-3 sm:h-3.5 sm:w-3.5" />
-                  {formatDate(initialGame.createdAt, "YYYY-MM-DD")}
+                  {formatDate(initialGame.publishedAt ?? initialGame.createdAt, "YYYY-MM-DD")}
                 </span>
               </div>
 
@@ -1043,7 +1043,10 @@ export function GamePageClient({
                           {extra.fileSize && <MobileInfoGrid label="大小" value={extra.fileSize} />}
                           {extra.originalAuthor && <MobileInfoGrid label="作者" value={extra.originalAuthor} />}
                           {!extra.fileSize && !extra.originalAuthor && (
-                            <MobileInfoGrid label="发布" value={formatDate(initialGame.createdAt, "YYYY-MM-DD")} />
+                            <MobileInfoGrid
+                              label="发布"
+                              value={formatDate(initialGame.publishedAt ?? initialGame.createdAt, "YYYY-MM-DD")}
+                            />
                           )}
                         </dl>
                       )}
@@ -1113,7 +1116,7 @@ export function GamePageClient({
                           )}
                           <Separator />
                           <InfoRow icon={Calendar} label="发布时间">
-                            {formatDate(initialGame.createdAt, "YYYY-MM-DD")}
+                            {formatDate(initialGame.publishedAt ?? initialGame.createdAt, "YYYY-MM-DD")}
                           </InfoRow>
                           <InfoRow icon={Clock} label="更新时间">
                             {formatDate(initialGame.updatedAt, "YYYY-MM-DD")}
@@ -1197,7 +1200,7 @@ export function GamePageClient({
                         )}
                         <Separator />
                         <InfoRow icon={Calendar} label="发布时间">
-                          {formatDate(initialGame.createdAt, "YYYY-MM-DD")}
+                          {formatDate(initialGame.publishedAt ?? initialGame.createdAt, "YYYY-MM-DD")}
                         </InfoRow>
                         <InfoRow icon={Clock} label="更新时间">
                           {formatDate(initialGame.updatedAt, "YYYY-MM-DD")}

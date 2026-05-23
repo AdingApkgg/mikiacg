@@ -418,7 +418,7 @@ function RecentUploads() {
                     {formatViews(v.views)}
                   </span>
                   <span>·</span>
-                  <span>{formatRelativeTime(v.createdAt)}</span>
+                  <span>{formatRelativeTime(v.publishedAt ?? v.createdAt)}</span>
                 </div>
               </div>
               <ChevronRight className="h-4 w-4 shrink-0 text-muted-foreground/60" />
