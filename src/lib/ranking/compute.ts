@@ -1,4 +1,5 @@
 import { prisma } from "@/lib/prisma";
+import { gamePublicationDateWhere, imagePublicationDateWhere, videoPublicationDateWhere } from "@/lib/publication";
 import { getPublicSiteConfig } from "@/lib/site-config";
 import { setRanking } from "./cache";
 import { calculateScore, getCombinedQuota, getTopN, getWeights } from "./score";
@@ -254,7 +255,7 @@ export async function computeTagHotRanking(): Promise<RankingItem[]> {
 /**
  * 增长最快标签榜（代理算法）：
  *
- * 标签没有 createdAt，无法精确统计标签被打次数的增量。改用代理：
+ * 标签没有独立的发布时间，无法精确统计标签被打次数的增量。改用代理：
  * 当前 24h 内新发布的视频/图集/游戏所携带的标签计数 − 前 24h 同期计数。
  * 语义≈"近期新内容里出现频次的环比增量"。
  */
@@ -268,15 +269,15 @@ export async function computeTagSurgeRanking(): Promise<RankingItem[]> {
   const collect = async (since: Date): Promise<Map<string, number>> => {
     const [v, g, i] = await Promise.all([
       prisma.tagOnVideo.findMany({
-        where: { video: { createdAt: { gte: since }, status: "PUBLISHED" } },
+        where: { video: { status: "PUBLISHED", ...videoPublicationDateWhere({ gte: since }) } },
         select: { tagId: true },
       }),
       prisma.tagOnGame.findMany({
-        where: { game: { createdAt: { gte: since }, status: "PUBLISHED" } },
+        where: { game: { status: "PUBLISHED", ...gamePublicationDateWhere({ gte: since }) } },
         select: { tagId: true },
       }),
       prisma.tagOnImagePost.findMany({
-        where: { imagePost: { createdAt: { gte: since }, status: "PUBLISHED" } },
+        where: { imagePost: { status: "PUBLISHED", ...imagePublicationDateWhere({ gte: since }) } },
         select: { tagId: true },
       }),
     ]);

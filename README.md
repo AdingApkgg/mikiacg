@@ -110,7 +110,7 @@ pnpm approve-builds  # 批准依赖的构建脚本（sharp, prisma 等）
 ### 2. 配置环境变量
 
 ```bash
-cp .env.example .env.development
+cp .env.development.example .env.development
 ```
 
 编辑 `.env.development`，必填项：
@@ -123,31 +123,59 @@ cp .env.example .env.development
 | `MEILISEARCH_MASTER_KEY` | Meilisearch API 密钥（与 `MEILI_MASTER_KEY` 在 Compose 中保持一致） |
 | `BETTER_AUTH_SECRET`     | Auth 密钥（`openssl rand -base64 32`）                              |
 | `BETTER_AUTH_BASE_URL`   | 站点地址（开发环境 `http://localhost:3000`）                        |
-| `NEXT_PUBLIC_APP_URL`    | 前端访问地址                                                        |
+| `NEXT_PUBLIC_APP_URL`    | 前端访问地址（开发环境 `http://localhost:3000`）                    |
+| `NEXT_PUBLIC_SOCKET_URL` | Socket.io 地址（开发环境 `http://localhost:3001`）                  |
 | `NEXT_PUBLIC_APP_NAME`   | 站点名称                                                            |
 
 可选项：`SMTP_*`（邮件）、`INDEXNOW_KEY`（搜索引擎推送）、`GOOGLE_*`（Search Console）、`S3_*`（对象存储）。
 
 ### 3. 启动基础服务
 
-**方式 A：Podman / Docker Compose（推荐）**
+**方式 A：Docker / Podman Compose（推荐）**
 
 ```bash
 pnpm compose:infra   # 启动 PostgreSQL 18 + Redis 8 + Meilisearch 容器
 ```
 
+`pnpm compose:infra` 会通过 `scripts/compose.sh` 自动选择可用的 `docker compose`、`docker-compose` 或 `podman compose`，并读取 `.env.development`。也可以显式使用：
+
+```bash
+pnpm compose:infra:docker
+pnpm compose:infra:podman
+```
+
 默认连接地址（`.env.development`）：
 
 ```
-DATABASE_URL="postgresql://postgres:your_password@localhost:5432/acgn?schema=public"
+DATABASE_URL="postgresql://postgres:postgres@localhost:5432/acgn?schema=public"
 REDIS_URL="redis://localhost:6379"
 MEILISEARCH_URL="http://127.0.0.1:7700"
-MEILISEARCH_MASTER_KEY="与 compose 中 MEILI_MASTER_KEY 一致"
+MEILISEARCH_MASTER_KEY="dev-meili-master-key-change-me"
+MEILI_MASTER_KEY="dev-meili-master-key-change-me"
+```
+
+`compose.yaml` 会把容器端口暴露到宿主机：PostgreSQL `5432`、Redis `6379`、Meilisearch `7700`。如需改端口，可在 `.env.development` 中设置 `POSTGRES_PORT`、`REDIS_PORT`、`MEILISEARCH_PORT`，并同步修改对应连接 URL。
+
+数据会持久化在 Compose named volumes：`postgres_data`、`redis_data`、`meilisearch_data`。`pnpm compose:down` 只停止并移除容器，不会删除这些 volumes。不要执行 `docker compose down -v`、`podman compose down -v` 或其他删除 volume 的命令，否则本地数据库和索引数据会丢失。
+
+确认基础服务可连接：
+
+```bash
+pnpm compose:ps
+bash scripts/compose.sh --env-file .env.development exec postgres pg_isready -U postgres -d acgn
+bash scripts/compose.sh --env-file .env.development exec redis redis-cli ping
+curl http://127.0.0.1:7700/health
 ```
 
 **方式 B：本地安装**
 
 自行安装 PostgreSQL、Redis 与 Meilisearch，在 `.env.development` 中修改连接地址。
+
+### 3.1 容器全栈启动
+
+`pnpm compose:up` 是生产式容器全栈启动：PostgreSQL、Redis、Meilisearch、Next.js、Socket.io 都在容器中运行。它会读取 `.env.production`，并且 `compose.yaml` 中的 `app` / `socket` 服务仍通过 `env_file: .env.production` 加载生产配置。
+
+宿主机开发推荐使用 `pnpm compose:infra` 加 `pnpm dev`。不要把 `pnpm compose:up` 当作热更新开发服务器使用。
 
 ### 4. 初始化数据库
 
@@ -178,6 +206,8 @@ pnpm dev:socket   # 仅 Socket.io 服务器 (端口 3001)
 ```
 
 访问 http://localhost:3000
+
+如果本地 shell 找不到 `pnpm`，可用 `corepack pnpm` 替代，例如 `corepack pnpm dev`。
 
 ### 6. 初始化站点 & 创建站长
 
@@ -211,15 +241,20 @@ pnpm script:create-owner   # 创建 OWNER 角色用户
 | `pnpm db:studio`   | 打开 Prisma Studio   |
 | `pnpm db:seed`     | 填充初始数据         |
 
-### Podman / Docker Compose
+### Docker / Podman Compose
 
 | 命令                 | 说明                                                               |
 | -------------------- | ------------------------------------------------------------------ |
 | `pnpm compose:infra` | 启动 PostgreSQL + Redis + Meilisearch 容器（开发用）               |
-| `pnpm compose:up`    | 全栈启动（PostgreSQL + Redis + Meilisearch + Next.js + Socket.io） |
-| `pnpm compose:down`  | 停止所有容器                                                       |
-| `pnpm compose:logs`  | 查看容器日志                                                       |
-| `pnpm compose:build` | 重新构建应用镜像                                                   |
+| `pnpm compose:up`    | 生产式容器全栈启动，需 `.env.production`                           |
+| `pnpm compose:down`  | 停止开发基础服务对应的 Compose 容器                                |
+| `pnpm compose:logs`  | 查看开发基础服务对应的 Compose 日志                                |
+| `pnpm compose:build` | 使用 `.env.production` 重新构建生产式容器镜像                      |
+| `pnpm compose:ps`    | 查看 Compose 服务状态                                              |
+| `pnpm compose:prod:down` | 停止生产式容器全栈                                             |
+| `pnpm compose:prod:logs` | 查看生产式容器全栈日志                                         |
+
+`pnpm compose:down` 不会删除 named volumes。不要使用 `compose down -v`，否则 `postgres_data`、`redis_data`、`meilisearch_data` 中的本地数据会被删除。
 
 ### PM2
 

@@ -117,17 +117,25 @@ export const adminGamesRouter = router({
       }),
     )
     .mutation(async ({ ctx, input }) => {
-      await ctx.prisma.game.update({
-        where: { id: input.gameId },
-        data: { status: input.status },
+      await ctx.prisma.$transaction(async (tx) => {
+        if (input.status === "PUBLISHED") {
+          await tx.game.updateMany({
+            where: { id: input.gameId, status: { not: "PUBLISHED" } },
+            data: { status: "PUBLISHED", publishedAt: new Date() },
+          });
+          const game = await tx.game.findUnique({ where: { id: input.gameId }, select: { id: true } });
+          if (!game) throw new TRPCError({ code: "NOT_FOUND", message: "游戏不存在" });
+          return;
+        }
+
+        await tx.game.update({
+          where: { id: input.gameId },
+          data: { status: input.status },
+        });
       });
 
-      // 审核通过时通知搜索引擎索引，并首次设置 publishedAt（已设置则保留）
+      // 审核通过时通知搜索引擎索引
       if (input.status === "PUBLISHED") {
-        await ctx.prisma.game.updateMany({
-          where: { id: input.gameId, publishedAt: null },
-          data: { publishedAt: new Date() },
-        });
         submitGameToIndexNow(input.gameId).catch(() => {});
       }
 
@@ -357,25 +365,28 @@ export const adminGamesRouter = router({
       }),
     )
     .mutation(async ({ ctx, input }) => {
-      const result = await ctx.prisma.game.updateMany({
-        where: { id: { in: input.gameIds } },
-        data: { status: input.status },
+      const [targetCount, result] = await ctx.prisma.$transaction(async (tx) => {
+        const count = await tx.game.count({ where: { id: { in: input.gameIds } } });
+        const updateResult =
+          input.status === "PUBLISHED"
+            ? await tx.game.updateMany({
+                where: { id: { in: input.gameIds }, status: { not: "PUBLISHED" } },
+                data: { status: "PUBLISHED", publishedAt: new Date() },
+              })
+            : await tx.game.updateMany({
+                where: { id: { in: input.gameIds } },
+                data: { status: input.status },
+              });
+        return [count, updateResult] as const;
       });
 
-      // 批量审核通过时通知搜索引擎索引，并首次设置 publishedAt
-      if (input.status === "PUBLISHED") {
-        await ctx.prisma.game.updateMany({
-          where: { id: { in: input.gameIds }, publishedAt: null },
-          data: { publishedAt: new Date() },
-        });
-        submitGamesToIndexNow(input.gameIds).catch(() => {});
-      }
+      if (input.status === "PUBLISHED") submitGamesToIndexNow(input.gameIds).catch(() => {});
 
       for (const gid of input.gameIds) {
         void safeSync(syncGame(gid));
       }
 
-      return { success: true, count: result.count };
+      return { success: true, count: result.count, targetCount };
     }),
 
   /** 批量删除游戏 */

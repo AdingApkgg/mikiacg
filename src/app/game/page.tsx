@@ -6,6 +6,7 @@ import { getPublicSiteConfig } from "@/lib/site-config";
 import { pickWeightedRandomAds, resolveSlotPosition, type Ad } from "@/lib/ads";
 import { GameListJsonLd } from "@/components/seo/json-ld";
 import type { Metadata } from "next";
+import { gamePublicationOrderBy } from "@/lib/publication";
 
 export async function generateMetadata(): Promise<Metadata> {
   const config = await getPublicSiteConfig();
@@ -41,7 +42,7 @@ const getInitialData = cache(async () => {
           ? { title: "asc" as const }
           : sortKey === "titleDesc"
             ? { title: "desc" as const }
-            : { createdAt: "desc" as const };
+            : gamePublicationOrderBy;
 
   const [games, typeStats, siteConfig] = await Promise.all([
     // 获取首屏游戏（排序跟随站点配置的默认排序）

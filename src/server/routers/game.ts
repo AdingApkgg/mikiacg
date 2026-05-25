@@ -20,6 +20,12 @@ import {
 import { meili, INDEX, safeSync } from "@/lib/meilisearch";
 import { syncGame, deleteGame } from "@/lib/search-sync";
 import { shouldMeiliListSearch, gameListMeiliFilter, gameListMeiliSort } from "@/lib/meili-filters";
+import {
+  addWhereAnd,
+  gamePublicationDateWhere,
+  gamePublicationOrderBy,
+  shouldRefreshPublishedAt,
+} from "@/lib/publication";
 
 const GAME_CACHE_TTL = 60; // 1 minute
 
@@ -108,7 +114,7 @@ export const gameRouter = router({
       }
 
       if (timeFilter) {
-        baseWhere.createdAt = { gte: timeFilter };
+        addWhereAnd(baseWhere, gamePublicationDateWhere({ gte: timeFilter }));
       }
 
       if (originalAuthor) {
@@ -154,7 +160,7 @@ export const gameRouter = router({
       }
 
       const orderBy = {
-        latest: { createdAt: "desc" as const },
+        latest: gamePublicationOrderBy,
         views: { views: "desc" as const },
         downloads: { downloads: "desc" as const },
         likes: { likes: { _count: "desc" as const } },
@@ -206,7 +212,7 @@ export const gameRouter = router({
           "extraInfo"->>'originalAuthor' AS author,
           COUNT(*)::bigint AS game_count,
           COALESCE(SUM(views), 0)::bigint AS total_views,
-          MAX("createdAt") AS latest_at
+          MAX(COALESCE("publishedAt", "createdAt")) AS latest_at
         FROM "Game"
         WHERE status = 'PUBLISHED'
           AND "extraInfo" ? 'originalAuthor'
@@ -235,7 +241,7 @@ export const gameRouter = router({
               extraInfo: { path: ["originalAuthor"], equals: r.author },
             },
             select: { id: true, coverUrl: true, title: true },
-            orderBy: { createdAt: "desc" },
+            orderBy: gamePublicationOrderBy,
             take: 4,
           });
           return {
@@ -745,7 +751,7 @@ export const gameRouter = router({
 
       const game = await ctx.prisma.game.findUnique({
         where: { id: gameId },
-        select: { uploaderId: true, tags: { select: { tagId: true } } },
+        select: { uploaderId: true, status: true, tags: { select: { tagId: true } } },
       });
       if (!game) {
         throw new TRPCError({ code: "NOT_FOUND", message: "游戏不存在" });
@@ -761,16 +767,9 @@ export const gameRouter = router({
           ...updateFields,
           coverUrl: updateFields.coverUrl === undefined ? undefined : updateFields.coverUrl || null,
           status,
+          ...(shouldRefreshPublishedAt(game.status, status) ? { publishedAt: new Date() } : {}),
         },
       });
-
-      // 首次过审时记录 publishedAt（已发布过的保留原值）
-      if (status === "PUBLISHED") {
-        await ctx.prisma.game.updateMany({
-          where: { id: gameId, publishedAt: null },
-          data: { publishedAt: new Date() },
-        });
-      }
 
       if (tagNames) {
         await ctx.prisma.tagOnGame.deleteMany({ where: { gameId } });

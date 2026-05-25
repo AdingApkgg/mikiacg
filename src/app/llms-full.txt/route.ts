@@ -1,6 +1,12 @@
 import { prisma } from "@/lib/prisma";
 import { NextResponse } from "next/server";
 import { getPublicSiteConfig } from "@/lib/site-config";
+import {
+  gamePublicationOrderBy,
+  imagePublicationOrderBy,
+  publicationDate,
+  videoPublicationOrderBy,
+} from "@/lib/publication";
 
 export const dynamic = "force-dynamic";
 
@@ -99,7 +105,7 @@ ${popularImageTags.map((tag) => `- [${tag.name}](${baseUrl}/image/tag/${tag.slug
     // 最新视频
     const recentVideos = await prisma.video.findMany({
       where: { status: "PUBLISHED" },
-      orderBy: { createdAt: "desc" },
+      orderBy: videoPublicationOrderBy,
       take: 10,
       select: {
         id: true,
@@ -107,6 +113,7 @@ ${popularImageTags.map((tag) => `- [${tag.name}](${baseUrl}/image/tag/${tag.slug
         description: true,
         views: true,
         createdAt: true,
+        publishedAt: true,
         uploader: { select: { nickname: true, username: true } },
       },
     });
@@ -121,7 +128,7 @@ ${recentVideos
 - URL: ${baseUrl}/video/${video.id}
 - 上传者: ${video.uploader.nickname || video.uploader.username}
 - 观看次数: ${video.views}
-- 上传时间: ${new Date(video.createdAt).toISOString().split("T")[0]}
+- 发表时间: ${publicationDate(video).toISOString().split("T")[0]}
 ${video.description ? `- 简介: ${video.description.slice(0, 200)}${video.description.length > 200 ? "..." : ""}` : ""}
 `,
   )
@@ -132,7 +139,7 @@ ${video.description ? `- 简介: ${video.description.slice(0, 200)}${video.descr
     // 最新游戏
     const recentGames = await prisma.game.findMany({
       where: { status: "PUBLISHED" },
-      orderBy: { createdAt: "desc" },
+      orderBy: gamePublicationOrderBy,
       take: 10,
       select: {
         id: true,
@@ -143,6 +150,7 @@ ${video.description ? `- 简介: ${video.description.slice(0, 200)}${video.descr
         version: true,
         views: true,
         createdAt: true,
+        publishedAt: true,
         uploader: { select: { nickname: true, username: true } },
       },
     });
@@ -158,7 +166,7 @@ ${recentGames
 - 类型: ${game.gameType || "未分类"}${game.isFree ? "" : " (付费)"}${game.version ? ` ${game.version}` : ""}
 - 上传者: ${game.uploader.nickname || game.uploader.username}
 - 浏览次数: ${game.views}
-- 上传时间: ${new Date(game.createdAt).toISOString().split("T")[0]}
+- 发表时间: ${publicationDate(game).toISOString().split("T")[0]}
 ${game.description ? `- 简介: ${game.description.slice(0, 200)}${game.description.length > 200 ? "..." : ""}` : ""}
 `,
   )
@@ -169,7 +177,7 @@ ${game.description ? `- 简介: ${game.description.slice(0, 200)}${game.descript
     // 最新图片
     const recentImages = await prisma.imagePost.findMany({
       where: { status: "PUBLISHED" },
-      orderBy: { createdAt: "desc" },
+      orderBy: imagePublicationOrderBy,
       take: 10,
       select: {
         id: true,
@@ -178,6 +186,7 @@ ${game.description ? `- 简介: ${game.description.slice(0, 200)}${game.descript
         images: true,
         views: true,
         createdAt: true,
+        publishedAt: true,
         uploader: { select: { nickname: true, username: true } },
       },
     });
@@ -193,7 +202,7 @@ ${recentImages
 - 图片数量: ${(image.images as string[]).length}
 - 上传者: ${image.uploader.nickname || image.uploader.username}
 - 浏览次数: ${image.views}
-- 上传时间: ${new Date(image.createdAt).toISOString().split("T")[0]}
+- 发表时间: ${publicationDate(image).toISOString().split("T")[0]}
 ${image.description ? `- 简介: ${image.description.slice(0, 200)}${image.description.length > 200 ? "..." : ""}` : ""}
 `,
   )

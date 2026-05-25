@@ -127,19 +127,26 @@ export const adminVideosRouter = router({
       }),
     )
     .mutation(async ({ ctx, input }) => {
-      const video = await ctx.prisma.video.update({
-        where: { id: input.videoId },
-        data: { status: input.status },
-        select: { id: true, title: true, status: true, uploaderId: true },
-      });
+      const video = await ctx.prisma.$transaction(async (tx) => {
+        if (input.status === "PUBLISHED") {
+          await tx.video.updateMany({
+            where: { id: input.videoId, status: { not: "PUBLISHED" } },
+            data: { status: "PUBLISHED", publishedAt: new Date() },
+          });
+          const publishedVideo = await tx.video.findUnique({
+            where: { id: input.videoId },
+            select: { id: true, title: true, status: true, uploaderId: true },
+          });
+          if (!publishedVideo) throw new TRPCError({ code: "NOT_FOUND", message: "视频不存在" });
+          return publishedVideo;
+        }
 
-      // 首次过审时记录 publishedAt（已设置则保留原值）
-      if (input.status === "PUBLISHED") {
-        await ctx.prisma.video.updateMany({
-          where: { id: input.videoId, publishedAt: null },
-          data: { publishedAt: new Date() },
+        return tx.video.update({
+          where: { id: input.videoId },
+          data: { status: input.status },
+          select: { id: true, title: true, status: true, uploaderId: true },
         });
-      }
+      });
 
       if (video.uploaderId) {
         const statusText = input.status === "PUBLISHED" ? "已通过审核" : "未通过审核";
@@ -196,23 +203,26 @@ export const adminVideosRouter = router({
       }),
     )
     .mutation(async ({ ctx, input }) => {
-      const result = await ctx.prisma.video.updateMany({
-        where: { id: { in: input.videoIds } },
-        data: { status: input.status },
+      const [targetCount, result] = await ctx.prisma.$transaction(async (tx) => {
+        const count = await tx.video.count({ where: { id: { in: input.videoIds } } });
+        const updateResult =
+          input.status === "PUBLISHED"
+            ? await tx.video.updateMany({
+                where: { id: { in: input.videoIds }, status: { not: "PUBLISHED" } },
+                data: { status: "PUBLISHED", publishedAt: new Date() },
+              })
+            : await tx.video.updateMany({
+                where: { id: { in: input.videoIds } },
+                data: { status: input.status },
+              });
+        return [count, updateResult] as const;
       });
-
-      if (input.status === "PUBLISHED") {
-        await ctx.prisma.video.updateMany({
-          where: { id: { in: input.videoIds }, publishedAt: null },
-          data: { publishedAt: new Date() },
-        });
-      }
 
       for (const vid of input.videoIds) {
         void safeSync(syncVideo(vid));
       }
 
-      return { success: true, count: result.count };
+      return { success: true, count: result.count, targetCount };
     }),
 
   // 批量删除视频
