@@ -4,6 +4,12 @@ import { z } from "zod";
 import { ADMIN_SCOPES } from "@/lib/constants";
 import { isOwner as isOwnerRole, isPrivileged } from "@/lib/permissions";
 import { resolveAdminScopes, resolveRole } from "@/lib/group-permissions";
+import {
+  gamePublicationDateWhere,
+  imagePublicationDateWhere,
+  publicationDate,
+  videoPublicationDateWhere,
+} from "@/lib/publication";
 
 const MAX_RANGE_DAYS = 90;
 const DAY_MS = 1000 * 60 * 60 * 24;
@@ -722,9 +728,9 @@ export const adminStatsRouter = router({
       newImageFavorites,
     ] = await Promise.all([
       ctx.prisma.user.count({ where: { createdAt: dateRange } }),
-      ctx.prisma.video.count({ where: { createdAt: dateRange, status: "PUBLISHED" } }),
-      ctx.prisma.game.count({ where: { createdAt: dateRange, status: "PUBLISHED" } }),
-      ctx.prisma.imagePost.count({ where: { createdAt: dateRange, status: "PUBLISHED" } }),
+      ctx.prisma.video.count({ where: { status: "PUBLISHED", ...videoPublicationDateWhere(dateRange) } }),
+      ctx.prisma.game.count({ where: { status: "PUBLISHED", ...gamePublicationDateWhere(dateRange) } }),
+      ctx.prisma.imagePost.count({ where: { status: "PUBLISHED", ...imagePublicationDateWhere(dateRange) } }),
       ctx.prisma.tag.count({ where: { createdAt: dateRange } }),
       ctx.prisma.series.count({ where: { createdAt: dateRange } }),
       ctx.prisma.searchRecord.count({ where: { createdAt: dateRange } }),
@@ -782,12 +788,18 @@ export const adminStatsRouter = router({
       imageComments,
     ] = await Promise.all([
       ctx.prisma.user.findMany({ where: { createdAt: dateRange }, select: { createdAt: true } }),
-      ctx.prisma.video.findMany({ where: { createdAt: dateRange, status: "PUBLISHED" }, select: { createdAt: true } }),
-      ctx.prisma.imagePost.findMany({
-        where: { createdAt: dateRange, status: "PUBLISHED" },
-        select: { createdAt: true },
+      ctx.prisma.video.findMany({
+        where: { status: "PUBLISHED", ...videoPublicationDateWhere(dateRange) },
+        select: { createdAt: true, publishedAt: true },
       }),
-      ctx.prisma.game.findMany({ where: { createdAt: dateRange, status: "PUBLISHED" }, select: { createdAt: true } }),
+      ctx.prisma.imagePost.findMany({
+        where: { status: "PUBLISHED", ...imagePublicationDateWhere(dateRange) },
+        select: { createdAt: true, publishedAt: true },
+      }),
+      ctx.prisma.game.findMany({
+        where: { status: "PUBLISHED", ...gamePublicationDateWhere(dateRange) },
+        select: { createdAt: true, publishedAt: true },
+      }),
       ctx.prisma.watchHistory.findMany({ where: { createdAt: dateRange }, select: { createdAt: true } }),
       ctx.prisma.gameViewHistory.findMany({ where: { createdAt: dateRange }, select: { createdAt: true } }),
       ctx.prisma.imagePostViewHistory.findMany({ where: { createdAt: dateRange }, select: { createdAt: true } }),
@@ -846,11 +858,17 @@ export const adminStatsRouter = router({
         if (trend[k]) trend[k][field]++;
       }
     };
+    const incPublished = (rows: { createdAt: Date; publishedAt: Date | null }[], field: keyof DayData) => {
+      for (const r of rows) {
+        const k = toKey(publicationDate(r));
+        if (trend[k]) trend[k][field]++;
+      }
+    };
 
     inc(users, "users");
-    inc(videos, "videos");
-    inc(images, "images");
-    inc(games, "games");
+    incPublished(videos, "videos");
+    incPublished(images, "images");
+    incPublished(games, "games");
     inc([...videoViews, ...gameViews, ...imageViews], "views");
     inc([...videoLikes, ...gameLikes, ...imageLikes], "likes");
     inc([...videoFavs, ...gameFavs, ...imageFavs], "favorites");

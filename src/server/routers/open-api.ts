@@ -2,6 +2,30 @@ import { z } from "zod";
 import { TRPCError } from "@trpc/server";
 import { Prisma } from "@/generated/prisma/client";
 import { router, apiScopedProcedure, publicProcedure } from "../trpc";
+import {
+  comparePublicationFeedItems,
+  decodePublicationFeedCursor,
+  encodePublicationFeedCursor,
+  gameCreatedFallbackFeedCursorWhere,
+  gameFeedCreatedFallbackOrderBy,
+  gameFeedPublishedOrderBy,
+  gamePublishedFeedCursorWhere,
+  gamePublicationDateWhere,
+  gamePublicationOrderBy,
+  imageCreatedFallbackFeedCursorWhere,
+  imageFeedCreatedFallbackOrderBy,
+  imageFeedPublishedOrderBy,
+  imagePublishedFeedCursorWhere,
+  imagePublicationDateWhere,
+  imagePublicationOrderBy,
+  publicationTimestamp,
+  videoCreatedFallbackFeedCursorWhere,
+  videoFeedCreatedFallbackOrderBy,
+  videoFeedPublishedOrderBy,
+  videoPublishedFeedCursorWhere,
+  videoPublicationDateWhere,
+  videoPublicationOrderBy,
+} from "@/lib/publication";
 
 const MAX_RANGE_DAYS = 90;
 const DAY_MS = 1000 * 60 * 60 * 24;
@@ -156,9 +180,9 @@ export const openApiRouter = router({
       newImageFavorites,
     ] = await Promise.all([
       ctx.prisma.user.count({ where: { createdAt: dateRange } }),
-      ctx.prisma.video.count({ where: { createdAt: dateRange, status: "PUBLISHED" } }),
-      ctx.prisma.game.count({ where: { createdAt: dateRange, status: "PUBLISHED" } }),
-      ctx.prisma.imagePost.count({ where: { createdAt: dateRange, status: "PUBLISHED" } }),
+      ctx.prisma.video.count({ where: { status: "PUBLISHED", ...videoPublicationDateWhere(dateRange) } }),
+      ctx.prisma.game.count({ where: { status: "PUBLISHED", ...gamePublicationDateWhere(dateRange) } }),
+      ctx.prisma.imagePost.count({ where: { status: "PUBLISHED", ...imagePublicationDateWhere(dateRange) } }),
       ctx.prisma.tag.count({ where: { createdAt: dateRange } }),
       ctx.prisma.series.count({ where: { createdAt: dateRange } }),
       ctx.prisma.searchRecord.count({ where: { createdAt: dateRange } }),
@@ -202,12 +226,12 @@ export const openApiRouter = router({
 
     type DailyCountRow = { day: string; count: number };
 
-    const dailyCounts = (table: string, extraWhere = ""): Promise<DailyCountRow[]> => {
+    const dailyCounts = (table: string, extraWhere = "", dateExpression = `"createdAt"`): Promise<DailyCountRow[]> => {
       const where = extraWhere
-        ? `WHERE "createdAt" >= $1 AND "createdAt" <= $2 AND ${extraWhere}`
-        : `WHERE "createdAt" >= $1 AND "createdAt" <= $2`;
+        ? `WHERE ${dateExpression} >= $1 AND ${dateExpression} <= $2 AND ${extraWhere}`
+        : `WHERE ${dateExpression} >= $1 AND ${dateExpression} <= $2`;
       return ctx.prisma.$queryRawUnsafe<DailyCountRow[]>(
-        `SELECT to_char(DATE_TRUNC('day', "createdAt" AT TIME ZONE 'UTC'), 'YYYY-MM-DD') as day, COUNT(*)::int as count FROM "${table}" ${where} GROUP BY day`,
+        `SELECT to_char(DATE_TRUNC('day', ${dateExpression} AT TIME ZONE 'UTC'), 'YYYY-MM-DD') as day, COUNT(*)::int as count FROM "${table}" ${where} GROUP BY day`,
         since,
         until,
       );
@@ -232,9 +256,9 @@ export const openApiRouter = router({
       imageComments,
     ] = await Promise.all([
       dailyCounts("User"),
-      dailyCounts("Video", `"status" = 'PUBLISHED'`),
-      dailyCounts("ImagePost", `"status" = 'PUBLISHED'`),
-      dailyCounts("Game", `"status" = 'PUBLISHED'`),
+      dailyCounts("Video", `"status" = 'PUBLISHED'`, `COALESCE("publishedAt", "createdAt")`),
+      dailyCounts("ImagePost", `"status" = 'PUBLISHED'`, `COALESCE("publishedAt", "createdAt")`),
+      dailyCounts("Game", `"status" = 'PUBLISHED'`, `COALESCE("publishedAt", "createdAt")`),
       dailyCounts("WatchHistory"),
       dailyCounts("GameViewHistory"),
       dailyCounts("ImagePostViewHistory"),
@@ -651,6 +675,7 @@ export const openApiRouter = router({
           coverUrl: string | null;
           views: number;
           createdAt: Date;
+          publishedAt: Date | null;
           uploader: { id: string; name: string };
         }[];
         games?: {
@@ -659,6 +684,7 @@ export const openApiRouter = router({
           coverUrl: string | null;
           views: number;
           createdAt: Date;
+          publishedAt: Date | null;
           uploader: { id: string; name: string };
         }[];
         images?: {
@@ -667,6 +693,7 @@ export const openApiRouter = router({
           coverUrl: string | null;
           views: number;
           createdAt: Date;
+          publishedAt: Date | null;
           uploader: { id: string; name: string };
         }[];
       } = {};
@@ -674,7 +701,7 @@ export const openApiRouter = router({
       if (type === "video" || type === "all") {
         const videos = await ctx.prisma.video.findMany({
           where: { status: "PUBLISHED" },
-          orderBy: { createdAt: "desc" },
+          orderBy: videoPublicationOrderBy,
           take: limit,
           select: {
             id: true,
@@ -683,6 +710,7 @@ export const openApiRouter = router({
             views: true,
             isNsfw: true,
             createdAt: true,
+            publishedAt: true,
             uploader: { select: { id: true, nickname: true, username: true } },
           },
         });
@@ -692,6 +720,7 @@ export const openApiRouter = router({
           coverUrl: v.coverUrl,
           views: v.views,
           createdAt: v.createdAt,
+          publishedAt: v.publishedAt,
           uploader: { id: v.uploader.id, name: v.uploader.nickname || v.uploader.username },
         }));
       }
@@ -699,7 +728,7 @@ export const openApiRouter = router({
       if (type === "game" || type === "all") {
         const games = await ctx.prisma.game.findMany({
           where: { status: "PUBLISHED" },
-          orderBy: { createdAt: "desc" },
+          orderBy: gamePublicationOrderBy,
           take: limit,
           select: {
             id: true,
@@ -708,6 +737,7 @@ export const openApiRouter = router({
             views: true,
             isNsfw: true,
             createdAt: true,
+            publishedAt: true,
             uploader: { select: { id: true, nickname: true, username: true } },
           },
         });
@@ -717,6 +747,7 @@ export const openApiRouter = router({
           coverUrl: g.coverUrl,
           views: g.views,
           createdAt: g.createdAt,
+          publishedAt: g.publishedAt,
           uploader: { id: g.uploader.id, name: g.uploader.nickname || g.uploader.username },
         }));
       }
@@ -724,7 +755,7 @@ export const openApiRouter = router({
       if (type === "image" || type === "all") {
         const posts = await ctx.prisma.imagePost.findMany({
           where: { status: "PUBLISHED" },
-          orderBy: { createdAt: "desc" },
+          orderBy: imagePublicationOrderBy,
           take: limit,
           select: {
             id: true,
@@ -733,6 +764,7 @@ export const openApiRouter = router({
             views: true,
             isNsfw: true,
             createdAt: true,
+            publishedAt: true,
             uploader: { select: { id: true, nickname: true, username: true } },
           },
         });
@@ -742,6 +774,7 @@ export const openApiRouter = router({
           coverUrl: (p.images as string[])?.[0] ?? null,
           views: p.views,
           createdAt: p.createdAt,
+          publishedAt: p.publishedAt,
           uploader: { id: p.uploader.id, name: p.uploader.nickname || p.uploader.username },
         }));
       }
@@ -975,6 +1008,7 @@ export const openApiRouter = router({
         coverUrl: string | null;
         views: number;
         createdAt: Date;
+        publishedAt: Date | null;
         uploader: { id: string; name: string; avatar: string | null };
       };
 
@@ -986,7 +1020,7 @@ export const openApiRouter = router({
             status: "PUBLISHED",
             OR: [{ title: textFilter }, { description: textFilter }],
           },
-          orderBy: sortBy === "views" ? { views: "desc" } : { createdAt: "desc" },
+          orderBy: sortBy === "views" ? { views: "desc" } : videoPublicationOrderBy,
           take: fetchCount,
           select: {
             id: true,
@@ -995,6 +1029,7 @@ export const openApiRouter = router({
             views: true,
             isNsfw: true,
             createdAt: true,
+            publishedAt: true,
             uploader: { select: { id: true, nickname: true, username: true, avatar: true } },
           },
         });
@@ -1006,6 +1041,7 @@ export const openApiRouter = router({
             coverUrl: v.coverUrl,
             views: v.views,
             createdAt: v.createdAt,
+            publishedAt: v.publishedAt,
             uploader: {
               id: v.uploader.id,
               name: v.uploader.nickname || v.uploader.username,
@@ -1021,7 +1057,7 @@ export const openApiRouter = router({
             status: "PUBLISHED",
             OR: [{ title: textFilter }, { description: textFilter }],
           },
-          orderBy: sortBy === "views" ? { views: "desc" } : { createdAt: "desc" },
+          orderBy: sortBy === "views" ? { views: "desc" } : gamePublicationOrderBy,
           take: fetchCount,
           select: {
             id: true,
@@ -1030,6 +1066,7 @@ export const openApiRouter = router({
             views: true,
             isNsfw: true,
             createdAt: true,
+            publishedAt: true,
             uploader: { select: { id: true, nickname: true, username: true, avatar: true } },
           },
         });
@@ -1041,6 +1078,7 @@ export const openApiRouter = router({
             coverUrl: g.coverUrl,
             views: g.views,
             createdAt: g.createdAt,
+            publishedAt: g.publishedAt,
             uploader: {
               id: g.uploader.id,
               name: g.uploader.nickname || g.uploader.username,
@@ -1056,7 +1094,7 @@ export const openApiRouter = router({
             status: "PUBLISHED",
             OR: [{ title: textFilter }, { description: textFilter }],
           },
-          orderBy: sortBy === "views" ? { views: "desc" } : { createdAt: "desc" },
+          orderBy: sortBy === "views" ? { views: "desc" } : imagePublicationOrderBy,
           take: fetchCount,
           select: {
             id: true,
@@ -1065,6 +1103,7 @@ export const openApiRouter = router({
             views: true,
             isNsfw: true,
             createdAt: true,
+            publishedAt: true,
             uploader: { select: { id: true, nickname: true, username: true, avatar: true } },
           },
         });
@@ -1076,6 +1115,7 @@ export const openApiRouter = router({
             coverUrl: (p.images as string[])?.[0] ?? null,
             views: p.views,
             createdAt: p.createdAt,
+            publishedAt: p.publishedAt,
             uploader: {
               id: p.uploader.id,
               name: p.uploader.nickname || p.uploader.username,
@@ -1086,7 +1126,7 @@ export const openApiRouter = router({
       }
 
       if (sortBy === "latest") {
-        results.sort((a, b) => b.createdAt.getTime() - a.createdAt.getTime());
+        results.sort((a, b) => publicationTimestamp(b) - publicationTimestamp(a));
       } else {
         results.sort((a, b) => b.views - a.views);
       }
@@ -1106,8 +1146,10 @@ export const openApiRouter = router({
     .query(async ({ ctx, input }) => {
       const types = input.types ?? ["video", "game", "image"];
       const { cursor, limit } = input;
-      const cursorDate = cursor ? new Date(cursor) : undefined;
-      const dateWhere = cursorDate ? { createdAt: { lt: cursorDate } } : {};
+      const decodedCursor = cursor ? decodePublicationFeedCursor(cursor) : undefined;
+      if (cursor && !decodedCursor) {
+        throw new TRPCError({ code: "BAD_REQUEST", message: "无效的分页游标" });
+      }
 
       type FeedItem = {
         type: "video" | "game" | "image";
@@ -1116,6 +1158,7 @@ export const openApiRouter = router({
         coverUrl: string | null;
         views: number;
         createdAt: Date;
+        publishedAt: Date | null;
         uploader: { id: string; name: string; avatar: string | null };
       };
 
@@ -1123,21 +1166,47 @@ export const openApiRouter = router({
       const perTypeLimit = limit + 1;
 
       if (types.includes("video")) {
-        const videos = await ctx.prisma.video.findMany({
-          where: { status: "PUBLISHED", ...dateWhere },
-          orderBy: { createdAt: "desc" },
-          take: perTypeLimit,
-          select: {
-            id: true,
-            title: true,
-            coverUrl: true,
-            views: true,
-            isNsfw: true,
-            createdAt: true,
-            uploader: { select: { id: true, nickname: true, username: true, avatar: true } },
-          },
-        });
-        for (const v of videos) {
+        const [publishedVideos, fallbackVideos] = await Promise.all([
+          ctx.prisma.video.findMany({
+            where: {
+              status: "PUBLISHED",
+              publishedAt: { not: null },
+              ...(decodedCursor ? videoPublishedFeedCursorWhere(decodedCursor) : {}),
+            },
+            orderBy: videoFeedPublishedOrderBy,
+            take: perTypeLimit,
+            select: {
+              id: true,
+              title: true,
+              coverUrl: true,
+              views: true,
+              isNsfw: true,
+              createdAt: true,
+              publishedAt: true,
+              uploader: { select: { id: true, nickname: true, username: true, avatar: true } },
+            },
+          }),
+          ctx.prisma.video.findMany({
+            where: {
+              status: "PUBLISHED",
+              publishedAt: null,
+              ...(decodedCursor ? videoCreatedFallbackFeedCursorWhere(decodedCursor) : {}),
+            },
+            orderBy: videoFeedCreatedFallbackOrderBy,
+            take: perTypeLimit,
+            select: {
+              id: true,
+              title: true,
+              coverUrl: true,
+              views: true,
+              isNsfw: true,
+              createdAt: true,
+              publishedAt: true,
+              uploader: { select: { id: true, nickname: true, username: true, avatar: true } },
+            },
+          }),
+        ]);
+        for (const v of [...publishedVideos, ...fallbackVideos]) {
           items.push({
             type: "video",
             id: v.id,
@@ -1145,6 +1214,7 @@ export const openApiRouter = router({
             coverUrl: v.coverUrl,
             views: v.views,
             createdAt: v.createdAt,
+            publishedAt: v.publishedAt,
             uploader: {
               id: v.uploader.id,
               name: v.uploader.nickname || v.uploader.username,
@@ -1155,21 +1225,47 @@ export const openApiRouter = router({
       }
 
       if (types.includes("game")) {
-        const games = await ctx.prisma.game.findMany({
-          where: { status: "PUBLISHED", ...dateWhere },
-          orderBy: { createdAt: "desc" },
-          take: perTypeLimit,
-          select: {
-            id: true,
-            title: true,
-            coverUrl: true,
-            views: true,
-            isNsfw: true,
-            createdAt: true,
-            uploader: { select: { id: true, nickname: true, username: true, avatar: true } },
-          },
-        });
-        for (const g of games) {
+        const [publishedGames, fallbackGames] = await Promise.all([
+          ctx.prisma.game.findMany({
+            where: {
+              status: "PUBLISHED",
+              publishedAt: { not: null },
+              ...(decodedCursor ? gamePublishedFeedCursorWhere(decodedCursor) : {}),
+            },
+            orderBy: gameFeedPublishedOrderBy,
+            take: perTypeLimit,
+            select: {
+              id: true,
+              title: true,
+              coverUrl: true,
+              views: true,
+              isNsfw: true,
+              createdAt: true,
+              publishedAt: true,
+              uploader: { select: { id: true, nickname: true, username: true, avatar: true } },
+            },
+          }),
+          ctx.prisma.game.findMany({
+            where: {
+              status: "PUBLISHED",
+              publishedAt: null,
+              ...(decodedCursor ? gameCreatedFallbackFeedCursorWhere(decodedCursor) : {}),
+            },
+            orderBy: gameFeedCreatedFallbackOrderBy,
+            take: perTypeLimit,
+            select: {
+              id: true,
+              title: true,
+              coverUrl: true,
+              views: true,
+              isNsfw: true,
+              createdAt: true,
+              publishedAt: true,
+              uploader: { select: { id: true, nickname: true, username: true, avatar: true } },
+            },
+          }),
+        ]);
+        for (const g of [...publishedGames, ...fallbackGames]) {
           items.push({
             type: "game",
             id: g.id,
@@ -1177,6 +1273,7 @@ export const openApiRouter = router({
             coverUrl: g.coverUrl,
             views: g.views,
             createdAt: g.createdAt,
+            publishedAt: g.publishedAt,
             uploader: {
               id: g.uploader.id,
               name: g.uploader.nickname || g.uploader.username,
@@ -1187,21 +1284,47 @@ export const openApiRouter = router({
       }
 
       if (types.includes("image")) {
-        const posts = await ctx.prisma.imagePost.findMany({
-          where: { status: "PUBLISHED", ...dateWhere },
-          orderBy: { createdAt: "desc" },
-          take: perTypeLimit,
-          select: {
-            id: true,
-            title: true,
-            images: true,
-            views: true,
-            isNsfw: true,
-            createdAt: true,
-            uploader: { select: { id: true, nickname: true, username: true, avatar: true } },
-          },
-        });
-        for (const p of posts) {
+        const [publishedPosts, fallbackPosts] = await Promise.all([
+          ctx.prisma.imagePost.findMany({
+            where: {
+              status: "PUBLISHED",
+              publishedAt: { not: null },
+              ...(decodedCursor ? imagePublishedFeedCursorWhere(decodedCursor) : {}),
+            },
+            orderBy: imageFeedPublishedOrderBy,
+            take: perTypeLimit,
+            select: {
+              id: true,
+              title: true,
+              images: true,
+              views: true,
+              isNsfw: true,
+              createdAt: true,
+              publishedAt: true,
+              uploader: { select: { id: true, nickname: true, username: true, avatar: true } },
+            },
+          }),
+          ctx.prisma.imagePost.findMany({
+            where: {
+              status: "PUBLISHED",
+              publishedAt: null,
+              ...(decodedCursor ? imageCreatedFallbackFeedCursorWhere(decodedCursor) : {}),
+            },
+            orderBy: imageFeedCreatedFallbackOrderBy,
+            take: perTypeLimit,
+            select: {
+              id: true,
+              title: true,
+              images: true,
+              views: true,
+              isNsfw: true,
+              createdAt: true,
+              publishedAt: true,
+              uploader: { select: { id: true, nickname: true, username: true, avatar: true } },
+            },
+          }),
+        ]);
+        for (const p of [...publishedPosts, ...fallbackPosts]) {
           items.push({
             type: "image",
             id: p.id,
@@ -1209,6 +1332,7 @@ export const openApiRouter = router({
             coverUrl: (p.images as string[])?.[0] ?? null,
             views: p.views,
             createdAt: p.createdAt,
+            publishedAt: p.publishedAt,
             uploader: {
               id: p.uploader.id,
               name: p.uploader.nickname || p.uploader.username,
@@ -1218,9 +1342,9 @@ export const openApiRouter = router({
         }
       }
 
-      items.sort((a, b) => b.createdAt.getTime() - a.createdAt.getTime());
+      items.sort(comparePublicationFeedItems);
       const sliced = items.slice(0, limit);
-      const nextCursor = sliced.length === limit ? sliced[sliced.length - 1]?.createdAt.toISOString() : undefined;
+      const nextCursor = items.length > limit ? encodePublicationFeedCursor(sliced[sliced.length - 1]!) : undefined;
 
       return { items: sliced, nextCursor };
     }),
@@ -1247,7 +1371,6 @@ export const openApiRouter = router({
         all: undefined,
       };
       const since = sinceMap[timeRange];
-      const dateWhere = since ? { createdAt: { gte: since } } : {};
 
       type TrendItem = {
         type: "video" | "game" | "image";
@@ -1264,7 +1387,7 @@ export const openApiRouter = router({
 
       if (types.includes("video")) {
         const videos = await ctx.prisma.video.findMany({
-          where: { status: "PUBLISHED", ...dateWhere },
+          where: { status: "PUBLISHED", ...(since ? videoPublicationDateWhere({ gte: since }) : {}) },
           orderBy:
             metric === "views"
               ? { views: "desc" }
@@ -1304,7 +1427,7 @@ export const openApiRouter = router({
 
       if (types.includes("game")) {
         const games = await ctx.prisma.game.findMany({
-          where: { status: "PUBLISHED", ...dateWhere },
+          where: { status: "PUBLISHED", ...(since ? gamePublicationDateWhere({ gte: since }) : {}) },
           orderBy:
             metric === "views"
               ? { views: "desc" }
@@ -1344,7 +1467,7 @@ export const openApiRouter = router({
 
       if (types.includes("image")) {
         const posts = await ctx.prisma.imagePost.findMany({
-          where: { status: "PUBLISHED", ...dateWhere },
+          where: { status: "PUBLISHED", ...(since ? imagePublicationDateWhere({ gte: since }) : {}) },
           orderBy:
             metric === "views"
               ? { views: "desc" }

@@ -19,6 +19,12 @@ import { meili, INDEX, safeSync } from "@/lib/meilisearch";
 import { syncImagePost, deleteImagePost } from "@/lib/search-sync";
 import { shouldMeiliListSearch, imageListMeiliFilter, imageListMeiliSort } from "@/lib/meili-filters";
 import { submitImagePostToIndexNow, submitImagePostsToIndexNow } from "@/lib/indexnow";
+import {
+  addWhereAnd,
+  imagePublicationDateWhere,
+  imagePublicationOrderBy,
+  shouldRefreshPublishedAt,
+} from "@/lib/publication";
 
 export const imageRouter = router({
   list: publicProcedure
@@ -74,7 +80,7 @@ export const imageRouter = router({
       }
 
       if (timeFilter) {
-        where.createdAt = { gte: timeFilter };
+        addWhereAnd(where, imagePublicationDateWhere({ gte: timeFilter }));
       }
 
       const listInclude = {
@@ -89,7 +95,7 @@ export const imageRouter = router({
 
       if (shouldMeiliListSearch(search)) {
         const q = search!.trim();
-        const filter = imageListMeiliFilter({ tagId, tagSlugs, excludeTagSlugs });
+        const filter = imageListMeiliFilter({ tagId, tagSlugs, excludeTagSlugs, timeFilter });
         const offset = (page - 1) * limit;
         const msRes = await meili.index(INDEX.image).search(q, {
           limit,
@@ -115,7 +121,7 @@ export const imageRouter = router({
       }
 
       const orderBy = {
-        latest: { createdAt: "desc" as const },
+        latest: imagePublicationOrderBy,
         views: { views: "desc" as const },
         likes: { likes: { _count: "desc" as const } },
         titleAsc: { title: "asc" as const },
@@ -164,7 +170,7 @@ export const imageRouter = router({
           where,
           skip: (page - 1) * limit,
           take: limit,
-          orderBy: { createdAt: "desc" },
+          orderBy: imagePublicationOrderBy,
           include: {
             uploader: {
               select: { id: true, username: true, nickname: true, avatar: true },
@@ -391,7 +397,7 @@ export const imageRouter = router({
 
       const post = await ctx.prisma.imagePost.findUnique({
         where: { id },
-        select: { uploaderId: true },
+        select: { uploaderId: true, status: true },
       });
       if (!post) {
         throw new TRPCError({ code: "NOT_FOUND", message: "图片帖不存在" });
@@ -401,6 +407,7 @@ export const imageRouter = router({
       const status = resolvePublishStatus(user.role);
 
       const updateData: Prisma.ImagePostUpdateInput = { status };
+      if (shouldRefreshPublishedAt(post.status, status)) updateData.publishedAt = new Date();
       if (data.title !== undefined) updateData.title = data.title;
       if (data.description !== undefined) updateData.description = data.description || null;
       if (data.images !== undefined) updateData.images = data.images;
@@ -410,14 +417,6 @@ export const imageRouter = router({
         where: { id },
         data: updateData,
       });
-
-      // 首次过审时记录 publishedAt（已发布过的保留原值）
-      if (status === "PUBLISHED") {
-        await ctx.prisma.imagePost.updateMany({
-          where: { id, publishedAt: null },
-          data: { publishedAt: new Date() },
-        });
-      }
 
       if (tagIds !== undefined || tagNames !== undefined) {
         const oldTags = await ctx.prisma.tagOnImagePost.findMany({

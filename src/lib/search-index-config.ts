@@ -17,8 +17,8 @@ const VIDEO_SETTINGS: Settings = {
     "author",
     "keywords",
   ],
-  filterableAttributes: ["status", "tagSlugs", "tagIds", "uploaderId", "isNsfw", "createdAtTs"],
-  sortableAttributes: ["createdAtTs", "views", "likes"],
+  filterableAttributes: ["status", "tagSlugs", "tagIds", "uploaderId", "isNsfw", "createdAtTs", "publishedAtTs"],
+  sortableAttributes: ["createdAtTs", "publishedAtTs", "views", "likes"],
   typoTolerance: TYPO_TOLERANCE_CN,
 };
 
@@ -34,15 +34,24 @@ const GAME_SETTINGS: Settings = {
     "uploaderUsername",
     "keywords",
   ],
-  filterableAttributes: ["status", "tagSlugs", "tagIds", "gameType", "isFree", "isNsfw", "createdAtTs"],
-  sortableAttributes: ["createdAtTs", "views", "downloads", "likes"],
+  filterableAttributes: [
+    "status",
+    "tagSlugs",
+    "tagIds",
+    "gameType",
+    "isFree",
+    "isNsfw",
+    "createdAtTs",
+    "publishedAtTs",
+  ],
+  sortableAttributes: ["createdAtTs", "publishedAtTs", "views", "downloads", "likes"],
   typoTolerance: TYPO_TOLERANCE_CN,
 };
 
 const IMAGE_SETTINGS: Settings = {
   searchableAttributes: ["title", "description", "tagNames", "uploaderNickname", "uploaderUsername"],
-  filterableAttributes: ["status", "tagSlugs", "tagIds", "isNsfw", "createdAtTs"],
-  sortableAttributes: ["createdAtTs", "views", "likes"],
+  filterableAttributes: ["status", "tagSlugs", "tagIds", "isNsfw", "createdAtTs", "publishedAtTs"],
+  sortableAttributes: ["createdAtTs", "publishedAtTs", "views", "likes"],
   typoTolerance: TYPO_TOLERANCE_CN,
 };
 

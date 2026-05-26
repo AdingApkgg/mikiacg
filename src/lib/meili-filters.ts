@@ -25,7 +25,7 @@ export function videoListMeiliFilter(opts: {
     parts.push(`(NOT tagSlugs = ${meiliQuoteFilterValue(s)})`);
   }
   if (opts.timeFilter) {
-    parts.push(`createdAtTs >= ${opts.timeFilter.getTime()}`);
+    parts.push(`publishedAtTs >= ${opts.timeFilter.getTime()}`);
   }
   return parts.join(" AND ");
 }
@@ -33,7 +33,7 @@ export function videoListMeiliFilter(opts: {
 export function videoListMeiliSort(sortBy: string): string[] {
   switch (sortBy) {
     case "latest":
-      return ["createdAtTs:desc"];
+      return ["publishedAtTs:desc", "createdAtTs:desc"];
     case "views":
       return ["views:desc"];
     case "likes":
@@ -43,7 +43,7 @@ export function videoListMeiliSort(sortBy: string): string[] {
     case "titleDesc":
       return ["title:desc"];
     default:
-      return ["createdAtTs:desc"];
+      return ["publishedAtTs:desc", "createdAtTs:desc"];
   }
 }
 
@@ -68,7 +68,7 @@ export function gameListMeiliFilter(opts: {
     parts.push(`gameType = ${meiliQuoteFilterValue(opts.gameType)}`);
   }
   if (opts.timeFilter) {
-    parts.push(`createdAtTs >= ${opts.timeFilter.getTime()}`);
+    parts.push(`publishedAtTs >= ${opts.timeFilter.getTime()}`);
   }
   return parts.join(" AND ");
 }
@@ -76,7 +76,7 @@ export function gameListMeiliFilter(opts: {
 export function gameListMeiliSort(sortBy: string): string[] {
   switch (sortBy) {
     case "latest":
-      return ["createdAtTs:desc"];
+      return ["publishedAtTs:desc", "createdAtTs:desc"];
     case "views":
       return ["views:desc"];
     case "downloads":
@@ -88,7 +88,7 @@ export function gameListMeiliSort(sortBy: string): string[] {
     case "titleDesc":
       return ["title:desc"];
     default:
-      return ["createdAtTs:desc"];
+      return ["publishedAtTs:desc", "createdAtTs:desc"];
   }
 }
 
@@ -96,6 +96,7 @@ export function imageListMeiliFilter(opts: {
   tagId?: string;
   tagSlugs?: string[];
   excludeTagSlugs?: string[];
+  timeFilter?: Date;
 }): string {
   const parts: string[] = [`status = ${meiliQuoteFilterValue("PUBLISHED")}`];
   if (opts.tagId) {
@@ -107,13 +108,16 @@ export function imageListMeiliFilter(opts: {
   for (const s of opts.excludeTagSlugs ?? []) {
     parts.push(`(NOT tagSlugs = ${meiliQuoteFilterValue(s)})`);
   }
+  if (opts.timeFilter) {
+    parts.push(`publishedAtTs >= ${opts.timeFilter.getTime()}`);
+  }
   return parts.join(" AND ");
 }
 
 export function imageListMeiliSort(sortBy: string): string[] {
   switch (sortBy) {
     case "latest":
-      return ["createdAtTs:desc"];
+      return ["publishedAtTs:desc", "createdAtTs:desc"];
     case "views":
       return ["views:desc"];
     case "likes":
@@ -123,7 +127,7 @@ export function imageListMeiliSort(sortBy: string): string[] {
     case "titleDesc":
       return ["title:desc"];
     default:
-      return ["createdAtTs:desc"];
+      return ["publishedAtTs:desc", "createdAtTs:desc"];
   }
 }
 
