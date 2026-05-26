@@ -2,23 +2,26 @@
 # Docker Compose 配置
 # ============================================================
 #
-# 全栈启动:
-#   docker compose up -d
+# 容器全栈启动（生产式镜像，app/socket 读取 .env.production）:
+#   docker compose --env-file .env.production up -d
 #
-# 仅启动基础服务（开发用）:
-#   docker compose up -d postgres redis
+# 仅启动基础服务（宿主机本地开发用，Next/Socket 仍在宿主机运行）:
+#   docker compose --env-file .env.development up -d postgres redis meilisearch
 #
-# 停止:
-#   docker compose down
+# 停止宿主机开发基础服务:
+#   docker compose --env-file .env.development down
 #
-# 查看日志:
-#   docker compose logs -f app socket
+# 停止容器全栈:
+#   docker compose --env-file .env.production down
 #
-# 重新构建并启动:
-#   docker compose up -d --build
+# 查看容器全栈日志:
+#   docker compose --env-file .env.production logs -f app socket
 #
-# 数据库迁移:
-#   docker compose run --rm --build migrate pnpm exec prisma db push
+# 重新构建容器全栈:
+#   docker compose --env-file .env.production up -d --build
+#
+# 容器内数据库迁移:
+#   docker compose --env-file .env.production run --rm --build migrate pnpm exec prisma db push
 #
 # ============================================================
 
@@ -41,8 +44,8 @@ services:
       POSTGRES_DB: ${POSTGRES_DB:-acgn}
     volumes:
       - postgres_data:/var/lib/postgresql
-    # ports:
-    #   - "${POSTGRES_PORT:-5432}:5432"
+    ports:
+      - "${POSTGRES_PORT:-5432}:5432"
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-postgres}"]
       interval: 10s
@@ -58,8 +61,8 @@ services:
     command: redis-server --appendonly yes --maxmemory 256mb --maxmemory-policy allkeys-lru
     volumes:
       - redis_data:/data
-    # ports:
-    #   - "${REDIS_PORT:-6379}:6379"
+    ports:
+      - "${REDIS_PORT:-6379}:6379"
     healthcheck:
       test: ["CMD", "redis-cli", "ping"]
       interval: 10s
@@ -74,11 +77,13 @@ services:
     logging: *default-logging
     environment:
       MEILI_ENV: production
-      MEILI_MASTER_KEY: ${MEILI_MASTER_KEY:?set MEILI_MASTER_KEY in .env}
+      MEILI_MASTER_KEY: ${MEILI_MASTER_KEY:?set MEILI_MASTER_KEY in the compose env file}
       MEILI_NO_ANALYTICS: "true"
       MEILI_HTTP_ADDR: 0.0.0.0:7700
     volumes:
       - meilisearch_data:/meili_data
+    ports:
+      - "${MEILISEARCH_PORT:-7700}:7700"
     healthcheck:
       test: ["CMD-SHELL", "wget -qO- http://127.0.0.1:7700/health >/dev/null 2>&1 || exit 1"]
       interval: 15s
