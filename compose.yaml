@@ -44,8 +44,10 @@ services:
       POSTGRES_DB: ${POSTGRES_DB:-acgn}
     volumes:
       - postgres_data:/var/lib/postgresql
+    # 默认绑定到宿主机 loopback，避免对外网开放数据库端口
+    # 需要对外可访问时，设置 POSTGRES_PORT="0.0.0.0:5432" 覆盖
     ports:
-      - "${POSTGRES_PORT:-5432}:5432"
+      - "${POSTGRES_PORT:-127.0.0.1:5432}:5432"
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-postgres}"]
       interval: 10s
@@ -61,8 +63,10 @@ services:
     command: redis-server --appendonly yes --maxmemory 256mb --maxmemory-policy allkeys-lru
     volumes:
       - redis_data:/data
+    # 默认绑定到宿主机 loopback，避免对外网开放 Redis 端口
+    # 需要对外可访问时，设置 REDIS_PORT="0.0.0.0:6379" 覆盖
     ports:
-      - "${REDIS_PORT:-6379}:6379"
+      - "${REDIS_PORT:-127.0.0.1:6379}:6379"
     healthcheck:
       test: ["CMD", "redis-cli", "ping"]
       interval: 10s
@@ -82,8 +86,10 @@ services:
       MEILI_HTTP_ADDR: 0.0.0.0:7700
     volumes:
       - meilisearch_data:/meili_data
+    # 默认绑定到宿主机 loopback，避免对外网开放搜索服务端口
+    # 需要对外可访问时，设置 MEILISEARCH_PORT="0.0.0.0:7700" 覆盖
     ports:
-      - "${MEILISEARCH_PORT:-7700}:7700"
+      - "${MEILISEARCH_PORT:-127.0.0.1:7700}:7700"
     healthcheck:
       test: ["CMD-SHELL", "wget -qO- http://127.0.0.1:7700/health >/dev/null 2>&1 || exit 1"]
       interval: 15s

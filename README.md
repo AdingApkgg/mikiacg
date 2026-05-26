@@ -154,7 +154,10 @@ MEILISEARCH_MASTER_KEY="dev-meili-master-key-change-me"
 MEILI_MASTER_KEY="dev-meili-master-key-change-me"
 ```
 
-`compose.yaml` 会把容器端口暴露到宿主机：PostgreSQL `5432`、Redis `6379`、Meilisearch `7700`。如需改端口，可在 `.env.development` 中设置 `POSTGRES_PORT`、`REDIS_PORT`、`MEILISEARCH_PORT`，并同步修改对应连接 URL。
+`compose.yaml` 默认把容器端口绑定到宿主机 **loopback**（`127.0.0.1`）：PostgreSQL `5432`、Redis `6379`、Meilisearch `7700`，只在本机可访问，不对外暴露。
+
+- 如需改端口，在 `.env.development` 中设置 `POSTGRES_PORT`、`REDIS_PORT`、`MEILISEARCH_PORT`，并同步修改对应连接 URL。
+- 如需对外暴露（例如其他机器访问），设成 `POSTGRES_PORT="0.0.0.0:5432"` 等显式覆盖默认 loopback 绑定。
 
 数据会持久化在 Compose named volumes：`postgres_data`、`redis_data`、`meilisearch_data`。`pnpm compose:down` 只停止并移除容器，不会删除这些 volumes。不要执行 `docker compose down -v`、`podman compose down -v` 或其他删除 volume 的命令，否则本地数据库和索引数据会丢失。
 
