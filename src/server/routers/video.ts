@@ -24,6 +24,13 @@ import { syncVideo, deleteVideo } from "@/lib/search-sync";
 import { shouldMeiliListSearch, videoListMeiliFilter, videoListMeiliSort } from "@/lib/meili-filters";
 import { suggestionTextRank } from "@/lib/search-text";
 import { getPublicSiteConfig } from "@/lib/site-config";
+import {
+  addWhereAnd,
+  gamePublicationDateWhere,
+  shouldRefreshPublishedAt,
+  videoPublicationDateWhere,
+  videoPublicationOrderBy,
+} from "@/lib/publication";
 
 const VIDEO_CACHE_TTL = 60; // 1 minute
 const STATS_CACHE_TTL = 15; // 15 seconds - 短缓存，仅防止并发请求
@@ -83,7 +90,7 @@ export const videoRouter = router({
             ctx.prisma.video.findMany({
               where: {
                 status: "PUBLISHED",
-                createdAt: { gte: sevenDaysAgo },
+                ...videoPublicationDateWhere({ gte: sevenDaysAgo }),
               },
               select: {
                 views: true,
@@ -98,7 +105,7 @@ export const videoRouter = router({
             ctx.prisma.game.findMany({
               where: {
                 status: "PUBLISHED",
-                createdAt: { gte: sevenDaysAgo },
+                ...gamePublicationDateWhere({ gte: sevenDaysAgo }),
               },
               select: {
                 views: true,
@@ -429,7 +436,7 @@ export const videoRouter = router({
       }
 
       if (timeFilter) {
-        baseWhere.createdAt = { gte: timeFilter };
+        addWhereAnd(baseWhere, videoPublicationDateWhere({ gte: timeFilter }));
       }
 
       if (author) {
@@ -438,7 +445,7 @@ export const videoRouter = router({
       }
 
       const orderBy = {
-        latest: { createdAt: "desc" as const },
+        latest: videoPublicationOrderBy,
         views: { views: "desc" as const },
         likes: { likes: { _count: "desc" as const } },
         titleAsc: { title: "asc" as const },
@@ -536,7 +543,7 @@ export const videoRouter = router({
             "extraInfo"->>'author' AS author,
             COUNT(*)::bigint AS video_count,
             COALESCE(SUM(views), 0)::bigint AS total_views,
-            MAX("createdAt") AS latest_at
+            MAX(COALESCE("publishedAt", "createdAt")) AS latest_at
           FROM "Video"
           WHERE status = 'PUBLISHED'
             AND "extraInfo" ? 'author'
@@ -569,7 +576,7 @@ export const videoRouter = router({
               extraInfo: { path: ["author"], equals: r.author },
             },
             select: { id: true, coverUrl: true, title: true },
-            orderBy: { createdAt: "desc" },
+            orderBy: videoPublicationOrderBy,
             take: 4,
           });
           return {
@@ -1139,7 +1146,7 @@ export const videoRouter = router({
 
       const video = await ctx.prisma.video.findUnique({
         where: { id },
-        select: { uploaderId: true },
+        select: { uploaderId: true, status: true },
       });
 
       if (!video) {
@@ -1155,6 +1162,7 @@ export const videoRouter = router({
       const updateData: Prisma.VideoUpdateInput = {
         ...data,
         status,
+        ...(shouldRefreshPublishedAt(video.status, status) ? { publishedAt: new Date() } : {}),
         ...(extraInfo !== undefined
           ? {
               extraInfo: extraInfo ? JSON.parse(JSON.stringify(extraInfo)) : Prisma.JsonNull,
@@ -1165,14 +1173,6 @@ export const videoRouter = router({
         where: { id },
         data: updateData,
       });
-
-      // 首次过审时记录 publishedAt（已发布过的保留原值，避免被覆盖）
-      if (status === "PUBLISHED") {
-        await ctx.prisma.video.updateMany({
-          where: { id, publishedAt: null },
-          data: { publishedAt: new Date() },
-        });
-      }
 
       if (tagIds !== undefined || tagNames !== undefined) {
         const oldTags = await ctx.prisma.tagOnVideo.findMany({
@@ -1564,18 +1564,22 @@ export const videoRouter = router({
       }),
     )
     .mutation(async ({ ctx, input }) => {
-      const video = await ctx.prisma.video.update({
-        where: { id: input.id },
-        data: { status: input.status },
-      });
+      const video = await ctx.prisma.$transaction(async (tx) => {
+        if (input.status === "PUBLISHED") {
+          await tx.video.updateMany({
+            where: { id: input.id, status: { not: "PUBLISHED" } },
+            data: { status: "PUBLISHED", publishedAt: new Date() },
+          });
+          const publishedVideo = await tx.video.findUnique({ where: { id: input.id } });
+          if (!publishedVideo) throw new TRPCError({ code: "NOT_FOUND", message: "视频不存在" });
+          return publishedVideo;
+        }
 
-      // 首次过审时记录 publishedAt（已设置则保留）
-      if (input.status === "PUBLISHED") {
-        await ctx.prisma.video.updateMany({
-          where: { id: input.id, publishedAt: null },
-          data: { publishedAt: new Date() },
+        return tx.video.update({
+          where: { id: input.id },
+          data: { status: input.status },
         });
-      }
+      });
 
       memDelete(`video:${input.id}`);
 
@@ -1583,6 +1587,7 @@ export const videoRouter = router({
       if (input.status === "PUBLISHED") {
         submitVideoToIndexNow(input.id).catch(() => {});
       }
+      void safeSync(syncVideo(input.id));
 
       return video;
     }),
@@ -1993,7 +1998,7 @@ export const videoRouter = router({
       const [videos, totalCount] = await Promise.all([
         ctx.prisma.video.findMany({
           where,
-          orderBy: { createdAt: "desc" },
+          orderBy: videoPublicationOrderBy,
           take: cfg.videoSelectorMaxCount,
           select: {
             id: true,
@@ -2031,7 +2036,7 @@ export const videoRouter = router({
       const [videos, totalCount] = await Promise.all([
         ctx.prisma.video.findMany({
           where,
-          orderBy: { createdAt: "desc" },
+          orderBy: videoPublicationOrderBy,
           take: cfg.videoSelectorMaxCount,
           select: {
             id: true,
@@ -2270,7 +2275,7 @@ export const videoRouter = router({
             return ctx.prisma.video.findMany({
               where: {
                 status: "PUBLISHED",
-                createdAt: { gte: since },
+                ...videoPublicationDateWhere({ gte: since }),
                 ...(input.excludeNsfw ? { isNsfw: false } : {}),
               },
               orderBy: { views: "desc" },

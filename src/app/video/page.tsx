@@ -6,6 +6,7 @@ import { cache } from "react";
 import { getPublicSiteConfig } from "@/lib/site-config";
 import { pickWeightedRandomAds, parseSponsorAds, resolveSlotPosition } from "@/lib/ads";
 import type { Metadata } from "next";
+import { videoPublicationOrderBy } from "@/lib/publication";
 
 export async function generateMetadata(): Promise<Metadata> {
   const config = await getPublicSiteConfig();
@@ -43,7 +44,7 @@ const getInitialData = cache(async () => {
           ? { title: "asc" as const }
           : sortKey === "titleDesc"
             ? { title: "desc" as const }
-            : { createdAt: "desc" as const };
+            : videoPublicationOrderBy;
 
   const [videos, siteConfig] = await Promise.all([
     // 获取首屏视频（排序跟随站点配置的默认排序）

@@ -1,6 +1,12 @@
 import { prisma } from "@/lib/prisma";
 import { getCoverFullUrl } from "@/lib/cover";
 import { getPublicSiteConfig } from "@/lib/site-config";
+import {
+  gamePublicationOrderBy,
+  imagePublicationOrderBy,
+  publicationDate,
+  videoPublicationOrderBy,
+} from "@/lib/publication";
 
 export const dynamic = "force-dynamic";
 
@@ -34,7 +40,7 @@ export async function GET() {
     const [videos, games, images] = await Promise.all([
       prisma.video.findMany({
         where: { status: "PUBLISHED" },
-        orderBy: { createdAt: "desc" },
+        orderBy: videoPublicationOrderBy,
         take: 50,
         include: {
           uploader: { select: { username: true, nickname: true } },
@@ -43,7 +49,7 @@ export async function GET() {
       }),
       prisma.game.findMany({
         where: { status: "PUBLISHED" },
-        orderBy: { createdAt: "desc" },
+        orderBy: gamePublicationOrderBy,
         take: 30,
         include: {
           uploader: { select: { username: true, nickname: true } },
@@ -52,7 +58,7 @@ export async function GET() {
       }),
       prisma.imagePost.findMany({
         where: { status: "PUBLISHED" },
-        orderBy: { createdAt: "desc" },
+        orderBy: imagePublicationOrderBy,
         take: 30,
         include: {
           uploader: { select: { username: true, nickname: true } },
@@ -69,7 +75,7 @@ export async function GET() {
       <link>${baseUrl}/video/${video.id}</link>
       <guid isPermaLink="true">${baseUrl}/video/${video.id}</guid>
       <description><![CDATA[${video.description || video.title}]]></description>
-      <pubDate>${new Date(video.publishedAt ?? video.createdAt).toUTCString()}</pubDate>
+      <pubDate>${publicationDate(video).toUTCString()}</pubDate>
       <author>${escapeXml(video.uploader.nickname || video.uploader.username)}</author>
       ${video.tags.map((t) => `<category>${escapeXml(t.tag.name)}</category>`).join("\n      ")}
       <media:thumbnail url="${escapeXml(getCoverFullUrl(video.id, video.coverUrl))}" />
@@ -96,7 +102,7 @@ export async function GET() {
       <link>${baseUrl}/game/${game.id}</link>
       <guid isPermaLink="true">${baseUrl}/game/${game.id}</guid>
       <description><![CDATA[${game.description || game.title}]]></description>
-      <pubDate>${new Date(game.publishedAt ?? game.createdAt).toUTCString()}</pubDate>
+      <pubDate>${publicationDate(game).toUTCString()}</pubDate>
       <author>${escapeXml(game.uploader.nickname || game.uploader.username)}</author>
       <category>游戏</category>
       ${game.tags.map((t) => `<category>${escapeXml(t.tag.name)}</category>`).join("\n      ")}
@@ -118,7 +124,7 @@ export async function GET() {
       <link>${baseUrl}/image/${image.id}</link>
       <guid isPermaLink="true">${baseUrl}/image/${image.id}</guid>
       <description><![CDATA[${image.description || image.title}（共 ${imageUrls.length} 张图片）]]></description>
-      <pubDate>${new Date(image.publishedAt ?? image.createdAt).toUTCString()}</pubDate>
+      <pubDate>${publicationDate(image).toUTCString()}</pubDate>
       <author>${escapeXml(image.uploader.nickname || image.uploader.username)}</author>
       <category>图片</category>
       ${image.tags.map((t) => `<category>${escapeXml(t.tag.name)}</category>`).join("\n      ")}
@@ -132,9 +138,9 @@ export async function GET() {
       date: Date;
     }
     const allItems: FeedItem[] = [
-      ...videoItems.map((xml, i) => ({ xml, date: videos[i].publishedAt ?? videos[i].createdAt })),
-      ...gameItems.map((xml, i) => ({ xml, date: games[i].publishedAt ?? games[i].createdAt })),
-      ...imageItems.map((xml, i) => ({ xml, date: images[i].publishedAt ?? images[i].createdAt })),
+      ...videoItems.map((xml, i) => ({ xml, date: publicationDate(videos[i]) })),
+      ...gameItems.map((xml, i) => ({ xml, date: publicationDate(games[i]) })),
+      ...imageItems.map((xml, i) => ({ xml, date: publicationDate(images[i]) })),
     ];
     allItems.sort((a, b) => b.date.getTime() - a.date.getTime());
 

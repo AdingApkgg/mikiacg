@@ -6,6 +6,14 @@ import { redis, REDIS_AVAILABLE } from "@/lib/redis";
 import { getPublicSiteConfig } from "@/lib/site-config";
 import { CompositeClient } from "@/components/composite/composite-client";
 import type { Metadata } from "next";
+import {
+  gamePublicationDateWhere,
+  gamePublicationOrderBy,
+  imagePublicationDateWhere,
+  imagePublicationOrderBy,
+  videoPublicationDateWhere,
+  videoPublicationOrderBy,
+} from "@/lib/publication";
 
 /** 综合页是否隐藏 NSFW 内容的 cookie 名；值 "1" = 隐藏，缺省或其它值 = 展示。 */
 const NSFW_COOKIE = "composite-hide-nsfw";
@@ -71,7 +79,7 @@ const getInitialData = cache(async (hideNsfw: boolean) => {
       ? prisma.video.findMany({
           take: LATEST_VIDEO_COUNT,
           where: { status: "PUBLISHED", ...nsfwFilter },
-          orderBy: { createdAt: "desc" },
+          orderBy: videoPublicationOrderBy,
           include: videoInclude,
         })
       : Promise.resolve([]),
@@ -80,7 +88,7 @@ const getInitialData = cache(async (hideNsfw: boolean) => {
       ? prisma.imagePost.findMany({
           take: LATEST_IMAGE_COUNT,
           where: { status: "PUBLISHED", ...nsfwFilter },
-          orderBy: { createdAt: "desc" },
+          orderBy: imagePublicationOrderBy,
           include: imageInclude,
         })
       : Promise.resolve([]),
@@ -89,7 +97,7 @@ const getInitialData = cache(async (hideNsfw: boolean) => {
       ? prisma.game.findMany({
           take: LATEST_GAME_COUNT,
           where: { status: "PUBLISHED", ...nsfwFilter },
-          orderBy: { createdAt: "desc" },
+          orderBy: gamePublicationOrderBy,
           include: gameInclude,
         })
       : Promise.resolve([]),
@@ -97,7 +105,7 @@ const getInitialData = cache(async (hideNsfw: boolean) => {
     cfg.sectionVideoEnabled
       ? prisma.video.findMany({
           take: WEEKLY_TOP_COUNT,
-          where: { status: "PUBLISHED", createdAt: { gte: hotSince }, ...nsfwFilter },
+          where: { status: "PUBLISHED", ...videoPublicationDateWhere({ gte: hotSince }), ...nsfwFilter },
           orderBy: { views: "desc" },
           include: videoInclude,
         })
@@ -105,7 +113,7 @@ const getInitialData = cache(async (hideNsfw: boolean) => {
     cfg.sectionImageEnabled
       ? prisma.imagePost.findMany({
           take: WEEKLY_TOP_COUNT,
-          where: { status: "PUBLISHED", createdAt: { gte: hotSince }, ...nsfwFilter },
+          where: { status: "PUBLISHED", ...imagePublicationDateWhere({ gte: hotSince }), ...nsfwFilter },
           orderBy: { views: "desc" },
           include: imageInclude,
         })
@@ -113,7 +121,7 @@ const getInitialData = cache(async (hideNsfw: boolean) => {
     cfg.sectionGameEnabled
       ? prisma.game.findMany({
           take: WEEKLY_TOP_COUNT,
-          where: { status: "PUBLISHED", createdAt: { gte: hotSince }, ...nsfwFilter },
+          where: { status: "PUBLISHED", ...gamePublicationDateWhere({ gte: hotSince }), ...nsfwFilter },
           orderBy: { views: "desc" },
           include: gameInclude,
         })

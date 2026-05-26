@@ -1,8 +1,8 @@
 /**
  * publishedAt 回填脚本
  *
- * 背景：新增 Video / Game / ImagePost 的 publishedAt 字段，用于记录"首次过审时间"。
- * 前台时间展示策略为 publishedAt ?? createdAt。
+ * 背景：Video / Game / ImagePost 的 publishedAt 字段用于记录内容发表时间。
+ * 内容从非 PUBLISHED 审核通过到 PUBLISHED 时会写入当前审核通过时间。
  * 本脚本为存量 status='PUBLISHED' 且 publishedAt 为空的记录，把 publishedAt 回填为 updatedAt
  * （updatedAt 通常近似首次过审时间，是最实用的近似）。
  *

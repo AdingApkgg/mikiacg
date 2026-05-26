@@ -5,6 +5,7 @@ import { cache } from "react";
 import { getPublicSiteConfig } from "@/lib/site-config";
 import { ImageListJsonLd } from "@/components/seo/json-ld";
 import type { Metadata } from "next";
+import { imagePublicationOrderBy } from "@/lib/publication";
 
 export async function generateMetadata(): Promise<Metadata> {
   const config = await getPublicSiteConfig();
@@ -40,7 +41,7 @@ const getInitialData = cache(async () => {
           ? { title: "asc" as const }
           : sortKey === "titleDesc"
             ? { title: "desc" as const }
-            : { createdAt: "desc" as const };
+            : imagePublicationOrderBy;
 
   const posts = await prisma.imagePost.findMany({
     take: 20,

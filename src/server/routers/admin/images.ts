@@ -80,18 +80,22 @@ export const adminImagesRouter = router({
       }),
     )
     .mutation(async ({ ctx, input }) => {
-      await ctx.prisma.imagePost.update({
-        where: { id: input.imageId },
-        data: { status: input.status },
-      });
+      await ctx.prisma.$transaction(async (tx) => {
+        if (input.status === "PUBLISHED") {
+          await tx.imagePost.updateMany({
+            where: { id: input.imageId, status: { not: "PUBLISHED" } },
+            data: { status: "PUBLISHED", publishedAt: new Date() },
+          });
+          const post = await tx.imagePost.findUnique({ where: { id: input.imageId }, select: { id: true } });
+          if (!post) throw new TRPCError({ code: "NOT_FOUND", message: "图片帖不存在" });
+          return;
+        }
 
-      // 首次过审时设置 publishedAt（已设置则保留原值）
-      if (input.status === "PUBLISHED") {
-        await ctx.prisma.imagePost.updateMany({
-          where: { id: input.imageId, publishedAt: null },
-          data: { publishedAt: new Date() },
+        await tx.imagePost.update({
+          where: { id: input.imageId },
+          data: { status: input.status },
         });
-      }
+      });
 
       void safeSync(syncImagePost(input.imageId));
 
@@ -147,17 +151,20 @@ export const adminImagesRouter = router({
       }),
     )
     .mutation(async ({ ctx, input }) => {
-      const result = await ctx.prisma.imagePost.updateMany({
-        where: { id: { in: input.imageIds } },
-        data: { status: input.status },
+      const [targetCount, result] = await ctx.prisma.$transaction(async (tx) => {
+        const count = await tx.imagePost.count({ where: { id: { in: input.imageIds } } });
+        const updateResult =
+          input.status === "PUBLISHED"
+            ? await tx.imagePost.updateMany({
+                where: { id: { in: input.imageIds }, status: { not: "PUBLISHED" } },
+                data: { status: "PUBLISHED", publishedAt: new Date() },
+              })
+            : await tx.imagePost.updateMany({
+                where: { id: { in: input.imageIds } },
+                data: { status: input.status },
+              });
+        return [count, updateResult] as const;
       });
-
-      if (input.status === "PUBLISHED") {
-        await ctx.prisma.imagePost.updateMany({
-          where: { id: { in: input.imageIds }, publishedAt: null },
-          data: { publishedAt: new Date() },
-        });
-      }
 
       for (const pid of input.imageIds) {
         void safeSync(syncImagePost(pid));
@@ -167,7 +174,7 @@ export const adminImagesRouter = router({
         submitImagePostsToIndexNow(input.imageIds).catch(() => {});
       }
 
-      return { success: true, count: result.count };
+      return { success: true, count: result.count, targetCount };
     }),
 
   batchDeleteImages: adminProcedure
