@@ -1,5 +1,7 @@
 # Next-Auth → Better Auth 迁移说明
 
+> **历史记录**：本文档记录当初从 next-auth 迁移到 Better Auth 的过程与决策，仅作存档参考，不代表当前实现的全貌。下文「账号切换」一节已更新，反映现状。
+
 ## 已完成的修改
 
 - **认证库**：移除 `next-auth`、`@auth/prisma-adapter`，接入 `better-auth`。
@@ -32,9 +34,11 @@
    - 建议设置 `BETTER_AUTH_BASE_URL`（或 `NEXT_PUBLIC_APP_URL`），与站点实际访问地址一致，避免回调/重定向异常。
    - `AUTH_SECRET` 可继续使用，Better Auth 会读；若用 `BETTER_AUTH_SECRET` 则与文档一致。
 
-## 账号切换（/api/auth/switch）
+## 账号切换
 
-当前实现返回 501，即「无密码切换账号」暂不可用。多账号场景请先登出再用目标账号登录。若需恢复切换，需在 Better Auth 下实现「以目标用户创建 session 并写 cookie」的逻辑（或等官方/社区方案）。
+> **现状（已更新）**：登录页（`src/app/(auth)/login/page.tsx`）已提供「添加账号 / 切换账号」流程——基于**重新输入密码鉴权**实现，而非无密码即时切换。迁移初期的 `/api/auth/switch`（返回 501 的无密码切换端点）已不再使用。
+
+历史说明：当初 Better Auth 下没有现成的「以目标用户创建 session 并写 cookie」的无密码切换方案，因此切换账号统一走重新登录鉴权的流程。
 
 ## 登录行为
 

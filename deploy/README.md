@@ -12,6 +12,7 @@
     |-- Socket.io (:3001)       ← 实时通信 (私信/频道/通知/在线状态)
     |-- PostgreSQL (:5432)
     |-- Redis (:6379)           ← 缓存 + Socket.io Pub/Sub adapter
+    |-- Meilisearch (:7700)     ← 全文搜索
 ```
 
 ## 技术栈
@@ -19,8 +20,10 @@
 - **前端**: Next.js 16, React 19, TypeScript, Tailwind CSS v4, shadcn/ui
 - **后端**: tRPC, Prisma 7, Better Auth, Socket.io (实时通信)
 - **数据库**: PostgreSQL 18, Redis 8 (缓存 + Socket.io Pub/Sub)
-- **内容渲染**: MDX (next-mdx-remote + @next/mdx)
-- **部署**: Podman Compose (rootless) / Docker Compose / PM2 / deploy.sh
+- **搜索**: Meilisearch (全文搜索)
+- **内容渲染**: Tiptap (编辑器), MDX (next-mdx-remote + @next/mdx)
+- **运行时**: Node.js 24
+- **部署**: Podman Compose (rootless) / Docker Compose / PM2 / systemd / deploy.sh
 
 ## 服务组成
 
@@ -30,6 +33,7 @@
 | Socket.io | 3001 | 实时通信服务（私信、频道、通知、在线状态） |
 | PostgreSQL | 5432 | 主数据库 |
 | Redis | 6379 | 缓存、速率限制、Socket.io Pub/Sub |
+| Meilisearch | 7700 | 全文搜索引擎 |
 
 ---
 
@@ -95,6 +99,11 @@ cp .env.production.example .env.production
 DATABASE_URL="postgresql://postgres:your_strong_password@postgres:5432/acgn?schema=public"
 REDIS_URL="redis://redis:6379"
 
+# Meilisearch（容器内连接，无需修改 URL；密钥两处需一致）
+MEILISEARCH_URL="http://meilisearch:7700"
+MEILISEARCH_MASTER_KEY="$(openssl rand -base64 32)"
+MEILI_MASTER_KEY="（与 MEILISEARCH_MASTER_KEY 相同的值）"
+
 # 认证
 BETTER_AUTH_SECRET="$(openssl rand -base64 32)"
 BETTER_AUTH_BASE_URL="https://your-domain.com"
@@ -105,6 +114,12 @@ NEXT_PUBLIC_APP_NAME="你的站点名称"
 
 # PostgreSQL 密码（与 DATABASE_URL 一致）
 POSTGRES_PASSWORD="your_strong_password"
+```
+
+首次启动后，初始化搜索索引（容器内执行）：
+
+```bash
+podman compose exec app pnpm meili:reindex:prod
 ```
 
 ### 5. 构建并启动
@@ -127,10 +142,10 @@ podman compose logs -f socket   # 仅 Socket.io
 
 ### 6. 仅启动基础设施（开发模式）
 
-应用在宿主机运行，只用容器运行 PostgreSQL 和 Redis：
+应用在宿主机运行，只用容器运行 PostgreSQL、Redis 和 Meilisearch：
 
 ```bash
-podman compose up -d postgres redis
+podman compose up -d postgres redis meilisearch
 ```
 
 ### Rootless 常见问题
@@ -160,6 +175,7 @@ cat /etc/containers/registries.conf
 # 手动拉取
 podman pull docker.io/library/postgres:18-alpine
 podman pull docker.io/library/redis:8-alpine
+podman pull docker.io/getmeili/meilisearch:v1.12
 podman pull docker.io/library/node:24-alpine
 ```
 
@@ -172,9 +188,9 @@ podman pull docker.io/library/node:24-alpine
 ### 1. 安装依赖
 
 ```bash
-# Node.js 22 + pnpm
+# Node.js 24 + pnpm
 curl -fsSL https://get.pnpm.io/install.sh | sh -
-pnpm env use --global 22
+pnpm env use --global 24
 
 # PostgreSQL 18
 sudo apt install -y postgresql-18  # Debian/Ubuntu
@@ -182,9 +198,15 @@ sudo apt install -y postgresql-18  # Debian/Ubuntu
 # Redis 8
 sudo apt install -y redis-server
 
+# Meilisearch（参考官方文档安装，或用容器运行）
+curl -L https://install.meilisearch.com | sh
+# 也可仅用容器跑搜索引擎：podman compose up -d meilisearch
+
 # PM2
 pnpm add -g pm2
 ```
+
+裸金属部署初始化数据库后，记得初始化搜索索引：`pnpm meili:init && pnpm meili:reindex:prod`。
 
 ### 2. 从 GitHub 克隆项目
 
@@ -219,8 +241,10 @@ PM2 会同时管理两个进程：
 
 | PM2 进程名 | 说明 |
 |------------|------|
-| `app` | Next.js 应用（端口 80） |
+| `app` | Next.js 应用（端口 3000） |
 | `app-socket` | Socket.io 服务（端口 3001） |
+
+> 进程名前缀可用 `APP_NAME` 覆盖。Next.js 监听 3000，对外 80/443 由 Nginx 反代。
 
 ### 5. PM2 常用命令
 
@@ -452,6 +476,9 @@ tar -czvf uploads-backup-$(date +%Y%m%d).tar.gz uploads/
 |------|------|------|--------|
 | `DATABASE_URL` | 是 | PostgreSQL 连接串 | — |
 | `REDIS_URL` | 是 | Redis 连接串 | — |
+| `MEILISEARCH_URL` | 是 | Meilisearch 地址 | — |
+| `MEILISEARCH_MASTER_KEY` | 是 | Meilisearch API 密钥 | — |
+| `MEILI_MASTER_KEY` | 否 | Compose 中 meilisearch 容器读取（与上一项一致） | — |
 | `BETTER_AUTH_SECRET` | 是 | Auth 密钥 | — |
 | `BETTER_AUTH_BASE_URL` | 是 | 站点地址 | — |
 | `NEXT_PUBLIC_APP_URL` | 是 | 前端访问地址 | — |
@@ -473,9 +500,9 @@ tar -czvf uploads-backup-$(date +%Y%m%d).tar.gz uploads/
 |------|------|------|
 | `/sitemap.xml` | 动态站点地图 | 1h |
 | `/robots.txt` | 爬虫规则 | 1d |
-| `/feed.xml` | RSS 订阅 | 1h |
-| `/llms.txt` | AI/LLM 友好说明 | 1d |
-| `/llms-full.txt` | AI/LLM 完整说明 | 1d |
+| `/feed.xml`、`/rss` | RSS 订阅 | 1h |
+| `/llms.txt`、`/llms-full.txt` | AI/LLM 友好说明 | 1d |
+| `/api-docs` | 在线 API 文档 | — |
 | `/.well-known/ai-plugin.json` | ChatGPT 插件发现 | 1d |
 | `/.well-known/openapi.yaml` | OpenAPI 规范 | 1d |
 | `/.well-known/security.txt` | 安全联络信息 | 1d |

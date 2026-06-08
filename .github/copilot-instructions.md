@@ -18,6 +18,8 @@
 - **Prisma**: 查询用 `select` 限制字段，从 `@/lib/prisma` 导入
 - **认证**: `useSession()`（`@/lib/auth-client`，非 next-auth）
 - **表单**: `react-hook-form` + `zod` 验证
+- **搜索**: 全文搜索走 Meilisearch（`@/lib/meilisearch`），写入后用 `@/lib/search-sync` 增量同步索引
+- **富文本**: 编辑用 Tiptap（`@/components/editor`），渲染用 react-markdown（`@/components/ui/markdown`），持久化为 Markdown
 
 ## 文件命名
 
