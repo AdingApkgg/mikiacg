@@ -5,13 +5,15 @@
 ## 技术栈
 
 - **Next.js 16.2** (App Router, Turbopack, `output: "standalone"`)、**React 19.2**、**TypeScript 6.0** (`strict`)
-- **tRPC 11.15** + **Zod 4.3** (API)、**TanStack Query 5.95** (数据获取)、**superjson** (序列化)
-- **Prisma 7.6** + **PostgreSQL** (ORM，适配器 `@prisma/adapter-pg`，客户端输出到 `src/generated/prisma`)
-- **Better Auth 1.5** (认证，JWT + 邮箱验证码 + 2FA/Passkey)
+- **tRPC 11.17** + **Zod 4.4** (API)、**TanStack Query 5.100** (数据获取)、**superjson** (序列化)
+- **Prisma 7.8** + **PostgreSQL** (ORM，适配器 `@prisma/adapter-pg`，客户端输出到 `src/generated/prisma`)
+- **Better Auth 1.6** (认证，JWT + 邮箱验证码 + 2FA/Passkey + Telegram 登录)
+- **Meilisearch** (全文搜索，客户端 `@/lib/meilisearch`，增量同步在 `@/lib/search-sync`)
 - **Tailwind CSS v4.2** + **shadcn/ui** (new-york 风格, Radix 原语) + **Framer Motion 12**
 - **Zustand 5** (全局状态，`src/stores/`)、**React Context** (`src/contexts/`)
 - **Socket.io 4.8** (实时通信，独立进程)、**Redis** (`ioredis 5`)
-- **pnpm 10** (包管理)、**Biome 2.4** (格式化)、**ESLint 9** (lint)、**Vitest 4** (测试)
+- **Tiptap 3** (富文本编辑器，`src/components/editor/`)、**MDX** (`@next/mdx` + `next-mdx-remote`)
+- **pnpm 10** (包管理)、**Biome 2.4** (格式化)、**ESLint 9** (lint)、**Vitest 4** (测试)、**Tauri 2** (桌面/Android 客户端)
 
 ## 关键版本差异（AI 常见错误）
 
@@ -69,9 +71,11 @@
 - `ownerProcedure` — 仅 OWNER
 - `requireScope(scope)` — 管理员权限范围检查，链式使用：`.use(requireScope("manage_videos"))`
 
-Context 可用字段：`ctx.prisma`、`ctx.redis`、`ctx.session`、`ctx.ipv4Address`、`ctx.ipv6Address`、`ctx.userAgent`
+Context 可用字段：`ctx.prisma`、`ctx.redis`、`ctx.session`、`ctx.ipv4Address`、`ctx.ipv6Address`、`ctx.userAgent`、`ctx.apiKeyScopes`
 
-新路由在 `src/server/routers/_app.ts` 的 `appRouter` 中注册。管理后台路由放 `admin/` 子目录。
+鉴权优先级：先尝试 API Key（请求头 `Authorization: Bearer sk-...`，命中时 `ctx.apiKeyScopes` 为该密钥的 scope 列表），否则回退到 cookie session。开放平台路由在 `api-key` / `open-api` 中定义，scope 定义在 `@/lib/api-scopes`。
+
+新路由在 `src/server/routers/_app.ts` 的 `appRouter` 中注册。管理后台路由放 `admin/` 子目录（通过 `mergeRouters` 合并）。
 
 ## Prisma 约定
 
@@ -91,8 +95,12 @@ Context 可用字段：`ctx.prisma`、`ctx.redis`、`ctx.session`、`ctx.ipv4Add
 - `pnpm dev` — 启动开发（Next + Socket）
 - `pnpm db:generate` — 生成 Prisma 客户端
 - `pnpm db:push` — 推送 schema 到数据库
-- `pnpm lint` — ESLint + TypeScript 检查
+- `pnpm meili:init` / `pnpm meili:reindex` — 初始化 / 重建 Meilisearch 索引
+- `pnpm lint` — 仅 ESLint
+- `pnpm typecheck` — 仅 TypeScript 类型检查（`tsc --noEmit`）
+- `pnpm check` — ESLint + TypeScript 类型检查（提交前完整校验）
 - `pnpm biome check .` — Biome 格式 & lint 检查
+- `pnpm test` — 运行 Vitest 测试
 - `pnpm build` — 构建生产版本（Prisma Generate → Next Build → Serwist Build）
 
 ## 代码风格
